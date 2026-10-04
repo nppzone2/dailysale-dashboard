@@ -1,4 +1,4 @@
-/* Dựng dashboard Daily Sale by Distributor.
+/* Dựng dashboard Distributor Sales Performance.
  *
  *  1. Mở kho dữ liệu mã hoá input/vault/state.enc (khoá từ ADMIN_PASSWORD).
  *  2. Nạp các file mới (build/aoa/*.json do engine/read_xlsx.py đọc từ input/*.xlsx): tự nhận loại file,
@@ -123,7 +123,7 @@ const rd = f => fs.readFileSync(path.join(__dirname, f), 'utf8');
 const safe = s => s.replace(/<\/(script)/gi, '<\\/$1');
 const page = `<!doctype html><html lang="vi"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="robots" content="noindex,nofollow"><title>Daily Sale by Distributor</title>
+<meta name="robots" content="noindex,nofollow"><title>Distributor Sales Performance</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap">
 <link rel="icon" href="${rd('logo.b64').trim()}">
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}img{max-width:100%}[hidden]{display:none!important}

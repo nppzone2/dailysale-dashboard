@@ -42,7 +42,7 @@
   function loginView(msg) {
     app.innerHTML = `<div class="login"><form class="login-card" id="login-form" autocomplete="on">
       <img class="logo lg" src="${LOGO}" alt="EverGreen" width="84" height="84">
-      <div><div class="brand-t">Daily Sale by Distributor</div><div class="brand-s"><b>RTC - Future Fit</b> · HCM Zone 2</div></div>
+      <div><div class="brand-t">Distributor Sales Performance</div><div class="brand-s"><b>RTC - Future Fit</b> · HCM Zone 2</div></div>
       <label for="lg-u">Tên đăng nhập</label><input id="lg-u" autocomplete="username" placeholder="UserName" required>
       <label for="lg-p">Mật khẩu</label><div class="pwbox"><input id="lg-p" type="password" autocomplete="current-password" required><button type="button" id="lg-eye" class="eye" aria-label="Hiện mật khẩu" aria-pressed="false"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path class="slash" d="M3 3l18 18"/></svg></button></div>
       <div class="lg-err" id="lg-err">${esc(msg || '')}</div>
@@ -204,7 +204,7 @@
     <header class="band"><div class="band-in">
       <div class="brandrow">
         <div class="brand"><img class="logo" src="${LOGO}" alt="EverGreen" width="52" height="52">
-          <div><div class="brand-t">Daily Sale by Distributor</div><div class="brand-s"><b>RTC - Future Fit</b> · HCM Zone 2 · ${esc(fM(cur.month))}</div></div></div>
+          <div><div class="brand-t">Distributor Sales Performance</div><div class="brand-s"><b>RTC - Future Fit</b> · HCM Zone 2 · ${esc(fM(cur.month))}</div></div></div>
         <div class="fresh"><span>Sale In <b>${fD(siD)}</b></span><span>Sale Out <b>${fD(soD)}</b></span><span>Allocation <b>${esc(wk || '—')}</b></span><span class="who">${esc(ROLE.type === 'npp' ? ROLE.id : ROLE.label)}<button id="logout" class="linkbtn">Đăng xuất</button></span></div>
       </div>
       <nav class="tabs" role="tablist">${TABS.map(([k, l]) => `<button class="tab" role="tab" data-tab="${k}" aria-selected="${ui.tab === k || (ui.tab === 'pending' && k === 'progress')}">${l}</button>`).join('')}</nav>
@@ -438,7 +438,7 @@
     const wkTot = sumBy(bySku, s => s.w[wk]); const pwTot = pw ? sumBy(bySku, s => s.w[pw]) : null;
     const bTot = i => sumBy(bySku, s => bval(s.sc, wk, i));
     const bHead = i => { const d = (AD[wk] || [])[i]; const done = d && d <= today;
-      return `<th class="bh">${esc(BC[i])}<span class="bd">${d ? fd(d) : 'Chưa có ngày'}</span><span class="pill ${done ? 'good' : 'info'}">${done ? 'Đã Upload' : 'Chờ Upload'}</span></th>`; };
+      return `<th class="bh"><span class="bd">${d ? fd(d) : 'Chưa có ngày'}</span><span class="bn">${esc(BC[i])}</span><span class="pill ${done ? 'good' : 'info'}">${done ? 'Đã Upload' : 'Chờ Upload'}</span></th>`; };
     const wkRange = (AD[wk] || []).filter(Boolean); const rangeTxt = wkRange.length ? `Lịch Upload Portal ${wkRange.map(fd).join(' · ')}` : '';
     const nextTxt = nw && (AD[nw] || []).some(Boolean) ? `Tuần tới <b>${esc(nw)}</b>: ${BC.map((b, i) => (AD[nw] || [])[i] ? `${esc(b)} ngày ${fd(AD[nw][i])}` : '').filter(Boolean).join(' · ')}` : '';
     // Sale In trong tuần hiện tại: từ ngày Upload đầu tiên của tuần đến trước ngày Upload đầu tiên của tuần sau
@@ -674,6 +674,19 @@
     const tAll = sumBy(brs, ([, o]) => o.t); const brT = brs.filter(([b, o]) => b !== 'Khác' && o.t > 0 && o.t >= tAll * 0.01).map(([b, o]) => [b, o.si / o.t, o]);
     const brBest = [...brT].sort((a, b) => b[1] - a[1])[0], brWorst = [...brT].sort((a, b) => a[1] - b[1])[0];
     const gm = {}; full.forEach(d => d.rows.forEach(r => { const g = grp(r[1]); gm[g] = gm[g] || { t: 0, si: 0, so: 0 }; gm[g].t += ui.unit === 'hl' ? r[3] : r[2]; gm[g].si += ui.unit === 'hl' ? r[5] : r[4]; gm[g].so += ui.unit === 'hl' ? r[7] : r[6]; }));
+    // Drill down: Tháng → Khu vực → NPP
+    const hv = (rows) => { const hl = ui.unit === 'hl'; return { t: sumBy(rows, r => hl ? r[3] : r[2]), si: sumBy(rows, r => hl ? r[5] : r[4]), so: sumBy(rows, r => hl ? r[7] : r[6]) }; };
+    const mCells = rows => { const o = hv(rows); return `<td>${fmt(o.t)}</td><td>${fmt(o.si)}</td><td>${o.t ? pctA(o.si / o.t) : '—'}</td><td>${fmt(o.so)}</td><td>${o.t ? pctA(o.so / o.t) : '—'}</td><td>${fmt(o.si - o.so)}</td>`; };
+    const multiN = new Set(full.flatMap(d => d.rows.map(r => r[0]))).size > 1;
+    const drill = (key, label, rows, cls, cellsF) => {
+      if (!multiN) return `<tr class="${cls}"><td>${label}</td>${cellsF(rows)}</tr>`;
+      const op = isOpen(key, false);
+      let h = `<tr class="${cls} lv0 click${op ? ' open' : ''}" data-fold="${esc(key)}"><td><span class="caret">▸</span> ${label}</td>${cellsF(rows)}</tr>`;
+      if (!op) return h;
+      byArea([...new Set(rows.map(r => r[0]))]).forEach(([a, cs]) => { const ak = key + ':' + a, aop = isOpen(ak, false);
+        h += `<tr class="lv1 click${aop ? ' open' : ''}" data-fold="${esc(ak)}"><td><span class="caret">▸</span> ${esc(a)}</td>${cellsF(rows.filter(r => cs.includes(r[0])))}</tr>`;
+        if (aop) cs.forEach(c => { h += `<tr class="lv2"><td><span class="click-npp" data-npp="${esc(c)}">${esc(c)}</span></td>${cellsF(rows.filter(r => r[0] === c))}</tr>`; }); });
+      return h; };
     return `
     <section class="lead"><div><div class="eyebrow">YTD as of ${fM(asOf)}</div><h1>${esc(scopeLabel())}</h1>
       <p>Lũy kế từ T1 đến ${fM(asOf)} (tháng đã chốt gần nhất): target, Sale In, Sale Out và tỷ lệ đạt từng tháng.</p></div></section>
@@ -684,18 +697,18 @@
       <div class="card c3 kpi"><div class="kpi-l">Tháng đạt cao nhất</div><div class="kpi-v">${best[0] ? fM(best[0].m) : '—'}</div><div class="kpi-f">${best[0] ? 'Sale In ' + pctA(best[0].si / best[0].t) : ''}</div></div>
       <div class="card c12"><div class="card-h"><div><h2>Target, Sale In, Sale Out theo tháng</h2><p class="sub">Đơn vị ${U()}</p></div>${legend([['Target', cT, 'sq'], ['Sale In', cSi], ['Sale Out', cSo]])}</div>
         ${chart({ labels: data.map(d => fM(d.m).replace(/\/\d{4}$/, '')), bars: [{ name: 'Target', color: cT, values: data.map(d => d.t) }], lines: [{ name: 'Sale In', color: cSi, values: data.map(d => d.si) }, { name: 'Sale Out', color: cSo, values: data.map(d => d.so) }], height: 230, tipTitle: i => fM(data[i].m), aria: 'Target, Sale In và Sale Out theo tháng' })}</div>
-      <div class="card c12"><h2>Chi tiết theo tháng</h2><p class="sub">Đơn vị ${U()}</p><div class="tw"><table><thead><tr><th>Tháng</th><th>Target</th><th>Sale In</th><th>% SI</th><th>Sale Out</th><th>% SO</th><th>SI − SO</th></tr></thead><tbody>
-        ${data.map(d => `<tr><td><b>${fM(d.m)}</b></td><td>${fmt(d.t)}</td><td>${fmt(d.si)}</td><td>${pctA(d.si / d.t)}</td><td>${fmt(d.so)}</td><td>${pctA(d.so / d.t)}</td><td>${fmt(d.si - d.so)}</td></tr>`).join('')}
-        ${full.length ? `<tr class="tot"><td>Tổng YTD</td><td>${fmt(tT)}</td><td>${fmt(tSi)}</td><td>${pctA(tSi / tT)}</td><td>${fmt(tSo)}</td><td>${pctA(tSo / tT)}</td><td>${fmt(tSi - tSo)}</td></tr>` : ''}
+      <div class="card c12"><h2>Chi tiết theo tháng</h2><p class="sub">Đơn vị ${U()}${multiN ? ' · bấm mũi tên để xem theo Khu vực / NPP' : ''}</p><div class="tw"><table class="yd"><thead><tr><th>Tháng</th><th>Target</th><th>Sale In</th><th>% SI</th><th>Sale Out</th><th>% SO</th><th>SI − SO</th></tr></thead><tbody>
+        ${data.map(d => drill('ym:' + d.m, `<b>${fM(d.m)}</b>`, d.rows, '', mCells)).join('')}
+        ${full.length ? drill('ym:tot', 'Tổng YTD', full.flatMap(d => d.rows), 'tot', mCells) : ''}
       </tbody></table></div></div>
       ${(() => { const gs = GROUPS.filter(g => gm[g] && gm[g].t);
         const v = (rows, g) => { const o = { t: 0, si: 0, so: 0 }; rows.forEach(r => { if (grp(r[1]) !== g) return; const hl = ui.unit === 'hl'; o.t += hl ? r[3] : r[2]; o.si += hl ? r[5] : r[4]; o.so += hl ? r[7] : r[6]; }); return o; };
         const cells = o => `<td>${fmt(o.t)}</td><td>${o.t ? pctA(o.si / o.t) : '—'}</td><td class="gsep">${o.t ? pctA(o.so / o.t) : '—'}</td>`;
-        return `<div class="card c12"><h2>Theo BrandGroup · từng tháng</h2><p class="sub">Target và tỷ lệ đạt Sale In / Sale Out · đơn vị ${U()}</p><div class="tw"><table class="bgm"><thead>
+        return `<div class="card c12"><h2>Theo BrandGroup · từng tháng</h2><p class="sub">Target và tỷ lệ đạt Sale In / Sale Out · đơn vị ${U()}${multiN ? ' · bấm mũi tên để xem theo Khu vực / NPP' : ''}</p><div class="tw"><table class="bgm yd"><thead>
           <tr><th rowspan="2">Tháng</th>${gs.map(g => `<th colspan="3" class="gh">${esc(g)}</th>`).join('')}</tr>
           <tr>${gs.map(() => '<th>Target</th><th>% SI</th><th class="gsep">% SO</th>').join('')}</tr></thead><tbody>
-          ${full.map(d => `<tr><td><b>${fM(d.m)}</b></td>${gs.map(g => cells(v(d.rows, g))).join('')}</tr>`).join('')}
-          <tr class="tot"><td>Tổng YTD</td>${gs.map(g => cells(gm[g])).join('')}</tr>
+          ${full.map(d => drill('yg:' + d.m, `<b>${fM(d.m)}</b>`, d.rows, '', rr => gs.map(g => cells(v(rr, g))).join(''))).join('')}
+          ${drill('yg:tot', 'Tổng YTD', full.flatMap(d => d.rows), 'tot', rr => gs.map(g => cells(v(rr, g))).join(''))}
         </tbody></table></div></div>`; })()}
       ${brandChart}
       ${brandCard}
@@ -860,7 +873,7 @@
   }
   function buildDocument(state) {
     const json = JSON.stringify(state).replace(/</g, '\\u003c');
-    const title = document.querySelector('title') ? document.querySelector('title').textContent : 'Daily Sale by Distributor';
+    const title = document.querySelector('title') ? document.querySelector('title').textContent : 'Distributor Sales Performance';
     const cssText = document.getElementById('page-css').textContent;
     const logoTag = `<script id="logo-src" type="text/plain">${LOGO}</scr` + `ipt>`;
     const scripts = ['engine', 'main'].map(id => `<script id="${id}">${document.getElementById(id).textContent}</scr` + `ipt>`).join('');

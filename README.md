@@ -1,4 +1,4 @@
-# Daily Sale by Distributor
+# Distributor Sales Performance
 
 Dashboard theo dõi Target, Sale In, Sale Out và Allocation của các NPP vùng HCM Zone 2, kèm số YTD. Do RTC - Future Fit phụ trách. Dashboard tự cập nhật mỗi khi có file dữ liệu mới.
 
