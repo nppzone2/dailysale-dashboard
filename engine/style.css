@@ -317,3 +317,4 @@ select:disabled{opacity:1;color:var(--ink);background:var(--brand-soft);border-c
 .wkbar-d span.on{color:var(--ink);border-top-color:var(--brand)}
 .wkbar-d small{font-weight:500;font-size:11px;color:var(--muted)}
 .wb-mk.r em{left:auto;right:0;transform:none}.wb-mk.l em{left:0;transform:none}
+.ov{background:var(--good-bg);color:var(--good)}
