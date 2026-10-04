@@ -548,7 +548,11 @@
     const deliv = (cur.orders || []).filter(o => /deliver/i.test(o[2]) && inScope(o[0]) && inBrand(o[3]) && (hasSbd ? !(orderDateKey(o[8]) && orderDateKey(o[8]) < D) : !invSet.has(String(o[1]))));
     deliv.forEach(o => lines.push({ c: o[0], sc: o[3], q: o[4], d: orderDateKey(o[5]), byOrder: true, deliv: true }));
     const lastData = hasSbd ? addDay(todayKey(), -1) : (Object.keys(cur.si || {}).sort().pop() || todayKey());
-    const span = wStart ? dayDiff(wStart, wEnd) + 1 : 7; const gone = wStart ? Math.max(0, Math.min(span, dayDiff(wStart, lastData) + 1)) / span : 1;
+    // Tiến độ tuần chỉ tính ngày làm việc thứ 2 – thứ 7 (bỏ Chủ nhật)
+    const isWork = d => new Date(Date.UTC(+d.slice(0, 4), +d.slice(4, 6) - 1, +d.slice(6, 8))).getUTCDay() !== 0;
+    const workDays = (a, b) => { let n = 0; for (let d = a; d <= b; d = addDay(d, 1)) if (isWork(d)) n++; return n; };
+    const span = wStart ? workDays(wStart, wEnd) || 1 : 6; const goneDays = wStart && lastData >= wStart ? workDays(wStart, lastData < wEnd ? lastData : wEnd) : 0;
+    const gone = wStart ? Math.min(1, goneDays / span) : 1;
     const skus = [...new Set(A.map(r => r[2]))].map(sc => ({ sc, al: sumBy(A.filter(r => r[2] === sc && r[0] === wk), r => r[3]) })).sort((a, b) => b.al - a.al).map(x => x.sc);
     if (ui.trSku !== 'all' && !skus.includes(ui.trSku)) ui.trSku = 'all';
     const shown = ui.trSku === 'all' ? skus : [ui.trSku];
@@ -578,7 +582,7 @@
     const byOrd = lines.filter(l => inWk(l.d) && l.byOrder).length, allWk = lines.filter(l => inWk(l.d)).length;
     return `
     <section class="lead"><div><div class="eyebrow">Tracking Allocation · Current Week ${esc(wk)}</div><h1>${esc(scopeLabel())}</h1>
-      <p>${wStart ? `Tuần ${fd(wStart)} → ${fd(wEnd)} · đã qua ${Math.round(gone * span)}/${span} ngày (tiến độ tuần ${pct(gone)}). ` : ''}Sale In thực tế = Dis Sale by Date đến D-1 (theo ngày order) + đơn Delivery; dòng tô đỏ là chậm hơn tiến độ tuần, ô vàng là vượt allocation.</p></div>${chips}</section>
+      <p>${wStart ? `Tuần ${fd(wStart)} → ${fd(wEnd)} · đã qua ${goneDays}/${span} ngày làm việc T2–T7 đến D-1 (tiến độ tuần ${pct(gone)}). ` : ''}Sale In thực tế = Dis Sale by Date đến D-1 (theo ngày order) + đơn Delivery; dòng tô đỏ là chậm hơn tiến độ tuần, ô vàng là vượt allocation.</p></div>${chips}</section>
     <div class="grid">
       <div class="card c3 kpi"><div class="kpi-l">Allocation ${esc(wk)}</div><div class="kpi-v">${fmt(T.al)}<small>${U()}</small></div><div class="kpi-f">${wStart ? 'Upload ' + (AD[wk] || []).filter(Boolean).map(fd).join(' · ') : ''}</div></div>
       <div class="card c3 kpi"><div class="kpi-l">Sale In ${esc(wk)}</div><div class="kpi-v">${fmt(T.si)}<small>${U()}</small></div><div class="kpi-f"><span class="${T.ps < gone ? 'lo' : 'hi'}">${pct(T.ps)}</span> allocation · tiến độ ${pct(gone)}</div></div>
