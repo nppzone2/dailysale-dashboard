@@ -278,3 +278,4 @@ select:disabled{opacity:1;color:var(--ink);background:var(--brand-soft);border-c
 .bp-axis{margin-top:-4px}.bp-t0{position:relative;height:14px}
 .bp-ml{position:absolute;transform:translateX(-50%);font-size:11px;color:var(--muted);white-space:nowrap}
 @media (max-width:600px){.bp-row{grid-template-columns:84px minmax(0,1fr) 72px;gap:8px}.bp-l .note{display:none}}
+.concl .lo,.concl .hi{background:none;color:inherit;padding:0;font-weight:700}
