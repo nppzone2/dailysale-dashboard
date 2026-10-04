@@ -3,7 +3,7 @@
   const $ = (s, el = document) => el.querySelector(s);
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const GROUPS = ['Group AA', 'Group BB', 'Khác'];
-    const TABS = [['target', 'Target tháng'], ['progress', 'MTD Sale In - Out'], ['alloc', 'Allocation'], ['tracking', 'Tracking Allocation'], ['history', 'YTD as of M-1']];
+    const TABS = [['target', 'Target tháng'], ['progress', 'Sale In-Out MTD'], ['alloc', 'Allocation'], ['tracking', 'Tracking Allocation'], ['history', 'YTD as of M-1']];
 
   let STATE = null; const ENC = window.ENC || { blobs: {} };
   let PUBLISHED = STATE; let previewing = false;
@@ -372,7 +372,7 @@
     const behind = gl.filter(x => x.gap > 0).slice(0, 2);
     const soGap = SI - SO;
     return `
-    <section class="lead"><div><div class="eyebrow">MTD Sale In - Out · ${fM(M.m)} · cập nhật đến ${fD(M.lastSi)}</div><h1>${esc(scopeLabel())}</h1>
+    <section class="lead"><div><div class="eyebrow">Sale In-Out MTD · ${fM(M.m)} · cập nhật đến ${fD(M.lastSi)}</div><h1>${esc(scopeLabel())}</h1>
 </div>
       <div class="btns"><button class="btn" id="xl-invoice">Tải SO Invoice</button><button class="btn" id="xl-progress">Tải Excel tiến độ</button></div></section>
     <div class="wkbar card mbar">
@@ -530,7 +530,7 @@
     const nppRows = Object.entries(byN).sort((a, b) => nppCmp(a[0], b[0]));
     const list = [...P].sort((a, b) => nppCmp(a[0], b[0]) || String(a[1]).localeCompare(String(b[1])));
     return `
-    <section class="lead"><div><button class="linkback" data-go="progress">← MTD Sale In - Out</button><div class="eyebrow">SO Pending · chờ giao hàng</div><h1>${esc(scopeLabel())}</h1>
+    <section class="lead"><div><button class="linkback" data-go="progress">← Sale In-Out MTD</button><div class="eyebrow">SO Pending · chờ giao hàng</div><h1>${esc(scopeLabel())}</h1>
       <p>Online Order trừ ${nBo} đơn Backorder. Đơn Delivery: ${nInv} đơn đã có trong SO Invoice (loại), ${nDel} đơn chưa có (cộng vào Sale In). Pending là các đơn Order Approve / Schedule chưa giao.</p></div>
       <button class="btn" id="xl-pending">Tải Excel Pending</button></section>
     <div class="grid">
