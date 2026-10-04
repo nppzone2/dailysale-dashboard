@@ -475,13 +475,13 @@
   /* ---------- SO Pending: Online Order trừ Backorder và đơn đã có hoá đơn ---------- */
   function pendingOrders() {
     const cur = STATE.cur || {}; const inv = new Set((cur.lines || []).map(l => String(l[2])));
-    return (cur.orders || []).filter(o => !/back\s*-?\s*order/i.test(o[2]) && !inv.has(String(o[1])) && inScope(o[0]) && inBrand(o[3]));
+    return (cur.orders || []).filter(o => !/back\s*-?\s*order/i.test(o[2]) && !/deliver/i.test(o[2]) && !inv.has(String(o[1])) && inScope(o[0]) && inBrand(o[3]));
   }
   function pendingCard() {
     const P = pendingOrders(); const n = new Set(P.map(o => o[1])).size; if (!(STATE.cur.orders || []).length) return '';
     const cs = sumBy(P, o => o[4]), hl = sumBy(P, o => o[4] * (item(o[3]).hl || 0));
     return `<div class="card c12 pend" role="button" tabindex="0" data-go="pending"><div><div class="kpi-l">SO Pending · chờ giao hàng</div>
-      <div class="pend-v"><b>${fmtC(cs)}</b><small>Case</small><b>${nf1.format(hl)}</b><small>HL</small><span class="note">${n} đơn${P.some(o => /deliver/i.test(o[2])) ? ` (gồm ${new Set(P.filter(o => /deliver/i.test(o[2])).map(o => o[1])).size} đơn Delivery)` : ''} · ${new Set(P.map(o => o[3])).size} SKU · cập nhật ${fTs((STATE.updatedAt || {}).orders)}</span></div></div>
+      <div class="pend-v"><b>${fmtC(cs)}</b><small>Case</small><b>${nf1.format(hl)}</b><small>HL</small><span class="note">${n} đơn Order Approve / Schedule · ${new Set(P.map(o => o[3])).size} SKU · cập nhật ${fTs((STATE.updatedAt || {}).orders)}</span></div></div>
       <span class="pend-go">Xem theo SKU →</span></div>`;
   }
   function viewPending() {
@@ -503,7 +503,7 @@
     const list = [...P].sort((a, b) => (a[0] + a[1]).localeCompare(b[0] + b[1]));
     return `
     <section class="lead"><div><button class="linkback" data-go="progress">← MTD Sale In - Out</button><div class="eyebrow">SO Pending · chờ giao hàng</div><h1>${esc(scopeLabel())}</h1>
-      <p>Online Order đã loại ${nBo} đơn Backorder và ${nInv} đơn đã có hoá đơn trong SO Invoice. Còn lại là đơn chưa có hoá đơn, gồm ${nDel} đơn Delivery (đã giao, chờ xuất hoá đơn) và các đơn Order Approve / Schedule.</p></div>
+      <p>Online Order trừ ${nBo} đơn Backorder. Đơn Delivery: ${nInv} đơn đã có trong SO Invoice (loại), ${nDel} đơn chưa có (cộng vào Sale In). Pending là các đơn Order Approve / Schedule chưa giao.</p></div>
       <button class="btn" id="xl-pending">Tải Excel Pending</button></section>
     <div class="grid">
       <div class="card c3 kpi"><div class="kpi-l">Pending (Case)</div><div class="kpi-v">${fmtC(tc)}<small>Case</small></div></div>
@@ -554,7 +554,9 @@
     const lines = hasSbd ? cur.sbd.filter(r => r[1] < D && inScope(r[0]) && inBrand(r[3])).map(r => ({ c: r[0], sc: r[3], q: r[4], d: r[2], byOrder: true }))
       : (cur.lines || []).filter(l => inScope(l[1]) && inBrand(l[5])).map(l => ({ c: l[1], sc: l[5], q: l[6], d: oDate[String(l[2])] || l[0], byOrder: !!oDate[String(l[2])] }));
     // đơn Delivery: cộng vào Sale In; bỏ đơn đã xuất hoá đơn trước hôm nay (đã nằm trong số D-1)
-    const deliv = (cur.orders || []).filter(o => /deliver/i.test(o[2]) && inScope(o[0]) && inBrand(o[3]) && (hasSbd ? !(orderDateKey(o[8]) && orderDateKey(o[8]) < D) : !invSet.has(String(o[1]))));
+    // Delivery: Order Number chưa có trong SO Invoice -> cộng Sale In; đã có trong SO Invoice -> đã nằm trong hoá đơn (trừ hoá đơn hôm nay, chưa vào số D-1)
+    const invDate = {}; (cur.lines || []).forEach(l => { invDate[String(l[2])] = l[0]; });
+    const deliv = (cur.orders || []).filter(o => /deliver/i.test(o[2]) && inScope(o[0]) && inBrand(o[3]) && (!invSet.has(String(o[1])) || (hasSbd && invDate[String(o[1])] >= D)));
     const delivNo = new Set(deliv.map(o => String(o[1])));
     deliv.forEach(o => lines.push({ c: o[0], sc: o[3], q: o[4], d: orderDateKey(o[5]), byOrder: true, deliv: true }));
     const lastData = hasSbd ? addDay(todayKey(), -1) : (Object.keys(cur.si || {}).sort().pop() || todayKey());
@@ -608,7 +610,7 @@
       <div class="card c3 kpi" role="button" tabindex="0" data-go="pending" style="cursor:pointer"><div class="kpi-l">SO Pending ${esc(wk)}</div><div class="kpi-v">${fmt(T.pd)}<small>${U()}</small></div><div class="kpi-f">Xem theo SKU →</div></div>
       <div class="card c3 kpi"><div class="kpi-l">Còn lại ${esc(wk)}</div><div class="kpi-v" style="color:${T.rem < 0 ? 'var(--good)' : 'inherit'}">${fmt(T.rem)}<small>${U()}</small></div><div class="kpi-f">Đã dùng <b>${pct(T.use)}</b> (Sale In + Pending)</div><div class="bar"><i style="width:${Math.min(100, (T.use || 0) * 100)}%;background:${T.use > 1 ? 'var(--good)' : 'var(--si)'}"></i></div></div>
       <div class="card c12"><h2>Theo khu vực / NPP / SKU · ${esc(wk)}</h2><p class="sub">Đơn vị ${U()}</p><div class="tw"><table class="sticky1 trk"><thead><tr><th>Khu vực / NPP</th><th>SKU</th><th>Allocation ${esc(wk)}</th><th>Sale In ${esc(wk)}</th><th>% Sale In</th><th>SO Pending</th><th>% đã dùng</th><th>Còn lại</th></tr></thead><tbody>${body}</tbody></table></div>
-        <p class="note" style="margin:8px 0 0">${hasSbd ? `Dis Sale by Date tính đến ${fd(addDay(D, -1))} (D-1).` : `Chưa có file Dis Sale by Date: ${byOrd}/${allWk} dòng hoá đơn lấy được ngày order từ Online Order, số còn lại tính theo ngày hoá đơn.`}${deliv.length ? ` Cộng ${fmt(sumBy(deliv.filter(o => inWk(orderDateKey(o[5])) && shown.includes(o[3])), o => conv(o[4], o[3])))} ${U()} từ ${new Set(deliv.map(o => o[1])).size} đơn Delivery (Online Order); các đơn này cũng nằm trong cột SO Pending vì chưa có hoá đơn, % đã dùng và Còn lại chỉ tính một lần.` : ''}</p></div>
+        <p class="note" style="margin:8px 0 0">${hasSbd ? `Dis Sale by Date tính đến ${fd(addDay(D, -1))} (D-1).` : `Chưa có file Dis Sale by Date: ${byOrd}/${allWk} dòng hoá đơn lấy được ngày order từ Online Order, số còn lại tính theo ngày hoá đơn.`}${deliv.length ? ` Cộng ${fmt(sumBy(deliv.filter(o => inWk(orderDateKey(o[5])) && shown.includes(o[3])), o => conv(o[4], o[3])))} ${U()} từ ${new Set(deliv.map(o => o[1])).size} đơn Delivery chưa vào số D-1 (kiểm tra Order Number trong SO Invoice).` : ''}</p></div>
     </div>
     ${conclusion([
       `Current Week <b>${esc(wk)}</b>: Sale In đạt <b>${pct(T.ps)}</b> allocation so với tiến độ tuần ${pct(gone)}; tính cả Pending đã dùng <b>${pct(T.use)}</b>, ${T.rem >= 0 ? `còn <b>${fmt(T.rem)} ${U()}</b>` : `vượt allocation <b>${fmt(-T.rem)} ${U()}</b>`}.`,
