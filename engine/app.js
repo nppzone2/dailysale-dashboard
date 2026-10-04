@@ -68,7 +68,20 @@
   const fmt = v => ui.unit === 'hl' ? nf1.format(v || 0) : nf0.format(Math.round(v || 0));
   const fmtC = v => nf0.format(Math.round(v || 0));
   const pct = v => isFinite(v) ? nf1.format(v * 100) + '%' : '—';
-  const pctA = v => isFinite(v) && v < 1 ? `<span class="lo">${pct(v)}</span>` : pct(v);
+  const pctA = v => !isFinite(v) ? pct(v) : `<span class="${v < 1 ? 'lo' : 'hi'}">${pct(v)}</span>`;
+  /* Biểu đồ tiến độ theo BrandFamily: mỗi brand 2 thanh (Sale In, Sale Out) so với mốc (time gone hoặc 100%) */
+  function brandProgress(list, mark, markLabel) {
+    const rows = list.filter(r => r.t > 0).sort((a, b) => b.t - a.t);
+    if (!rows.length) return '<p class="note">Chưa có target theo BrandFamily.</p>';
+    const max = Math.max(1.1, mark * 1.1, ...rows.map(r => Math.max(r.si, r.so) / r.t)) ;
+    const w = v => Math.max(0, Math.min(100, v / max * 100));
+    return `<div class="bp">${rows.map(r => { const a = r.si / r.t, b = r.so / r.t; const ok = a >= mark;
+      return `<div class="bp-row"><div class="bp-l"><b>${esc(r.k)}</b><span class="note">${fmt(r.t)} ${U()}</span></div>
+        <div class="bp-t" title="${esc(r.k)}"><span class="bp-m" style="left:${w(mark)}%"></span>
+          <i class="bp-si" style="width:${w(a)}%"></i><i class="bp-so" style="width:${w(b)}%"></i></div>
+        <div class="bp-v"><span class="${ok ? 'hi' : 'lo'}">${pct(a)}</span><span class="note">SO ${pct(b)}</span></div></div>`; }).join('')}
+      <div class="bp-row bp-axis"><div></div><div class="bp-t0"><span class="bp-ml" style="left:${w(mark)}%">${esc(markLabel)}</span></div><div></div></div></div>`;
+  }
   const U = () => ui.unit === 'hl' ? 'HL' : 'Case';
   const item = sc => STATE.items[sc] || { b: '', bg: '', g: '', hl: null };
   const brandOf = sc => item(sc).b || 'Khác';
@@ -353,6 +366,8 @@
         ${M.soDays.length < 2 ? '<p class="note" style="margin:8px 0 0">Sale Out lấy số lũy kế tại ngày cập nhật; xu hướng theo ngày hiển thị từ lần cập nhật thứ hai.</p>' : ''}
       </div>
       ${cover}
+      <div class="card c12"><div class="card-h"><div><h2>Tiến độ theo BrandFamily</h2><p class="sub">% đạt target tháng · vạch đứng là time gone ${pct(M.tgSi)}</p></div>${legend([['Sale In', cSi], ['Sale Out', cSo]])}</div>
+        ${brandProgress(Object.values(aggregate(L, r => brandOf(r.sc))).filter(o => o.k !== 'Khác'), M.tgSi, 'Time gone ' + pct(M.tgSi))}</div>
       ${board}
     </div>
     ${conclusion([
@@ -455,6 +470,7 @@
     const brs = Object.entries(bm).filter(([, o]) => o.t || o.si).sort((a, b) => b[1].si - a[1].si);
     const siAll = sumBy(brs, ([, o]) => o.si);
     const lastM = full.length ? full[full.length - 1].m : '';
+    const brandChart = brs.length ? `<div class="card c12"><div class="card-h"><div><h2>Tiến độ BrandFamily · YTD</h2><p class="sub">% đạt target lũy kế T1–${fM(lastM)} · vạch đứng là mốc 100%</p></div>${legend([['Sale In', css('--si')], ['Sale Out', css('--so')]])}</div>${brandProgress(brs.filter(([b]) => b !== 'Khác').map(([k, o]) => ({ k, t: o.t, si: o.si, so: o.so })), 1, '100%')}</div>` : '';
     const brandCard = brs.length ? `<div class="card c12"><h2>Theo BrandFamily · YTD</h2><p class="sub">Đơn vị ${U()} · xếp theo Sale In · cột cuối là % đạt Sale In tháng gần nhất (${fM(lastM)})</p><div class="tw"><table><thead><tr><th>BrandFamily</th><th>Target</th><th>Sale In</th><th>% SI</th><th>Sale Out</th><th>% SO</th><th>Tỷ trọng SI</th><th>% SI ${fM(lastM).replace(/\/\d{4}$/, '')}</th></tr></thead><tbody>
       ${brs.map(([b, o]) => { const lm = o.mo[lastM]; return `<tr><td><b>${esc(b)}</b></td><td>${fmt(o.t)}</td><td>${fmt(o.si)}</td><td>${o.t ? pctA(o.si / o.t) : '—'}${o.t ? `<span class="mini"><i style="width:${Math.min(100, o.si / o.t * 100)}%;background:${o.si >= o.t ? 'var(--si)' : 'var(--warn)'}"></i></span>` : ''}</td><td>${fmt(o.so)}</td><td>${o.t ? pctA(o.so / o.t) : '—'}</td><td>${pct(siAll ? o.si / siAll : 0)}</td><td>${lm && lm.t ? pctA(lm.si / lm.t) : '—'}</td></tr>`; }).join('')}
     </tbody></table></div></div>` : '';
@@ -484,6 +500,7 @@
           ${full.map(d => `<tr><td><b>${fM(d.m)}</b></td>${gs.map(g => cells(v(d.rows, g))).join('')}</tr>`).join('')}
           <tr class="tot"><td>Tổng YTD</td>${gs.map(g => cells(gm[g])).join('')}</tr>
         </tbody></table></div></div>`; })()}
+      ${brandChart}
       ${brandCard}
     </div>
     ${conclusion([
