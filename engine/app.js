@@ -105,8 +105,18 @@
     if (r >= 0.9) return '<span class="pill warn">Sát tiến độ</span>';
     return '<span class="pill bad">Chậm tiến độ</span>';
   };
-  const npAll = () => Object.keys(STATE.npps).sort((a, b) => ((STATE.npps[a].area || '') + a).localeCompare((STATE.npps[b].area || '') + b, 'vi', { numeric: true }));
+  // Thứ tự cố định: Area HCM 11 → HCM 3 → HCM 4 → HCM 5; NPP HM12 → P444 → P461 → P467 → P449 → P468 → P450 → P69 (mã mới xếp sau)
+  const AREA_ORDER = ['HCM11', 'HCM3', 'HCM4', 'HCM5'];
+  const NPP_ORDER = ['HM12', 'P444', 'P461', 'P467', 'P449', 'P468', 'P450', 'P69'];
+  const rk = (list, k) => { const i = list.indexOf(String(k || '').replace(/\s+/g, '').toUpperCase()); return i < 0 ? 999 : i; };
+  const areaCmp = (a, b) => rk(AREA_ORDER, a) - rk(AREA_ORDER, b) || String(a).localeCompare(String(b), 'vi', { numeric: true });
+  const areaOf = c => (STATE.npps[c] || {}).area || '—';
+  const nppCmp = (a, b) => areaCmp(areaOf(a), areaOf(b)) || rk(NPP_ORDER, a) - rk(NPP_ORDER, b) || String(a).localeCompare(String(b), 'vi', { numeric: true });
+  const npAll = () => Object.keys(STATE.npps).sort(nppCmp);
+  const byArea = cs => { const m = new Map(); [...cs].sort(nppCmp).forEach(c => { const a = areaOf(c); if (!m.has(a)) m.set(a, []); m.get(a).push(c); }); return [...m.entries()]; };
   const missingHl = new Set();
+  ui.flip = new Set(); // các mục đã đổi trạng thái mở/đóng so với mặc định
+  const isOpen = (k, def) => def !== ui.flip.has(k);
 
   /* ---------- current month model ---------- */
   function curModel() {
@@ -183,7 +193,7 @@
   const app = document.getElementById('app');
   const LOGO = (document.getElementById('logo-src') || {}).textContent || '';
   function shell() {
-    const npps = npAll(); const areas = [...new Set(npps.map(c => STATE.npps[c].area).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'vi', { numeric: true }));
+    const npps = npAll(); const areas = [...new Set(npps.map(c => STATE.npps[c].area).filter(Boolean))].sort(areaCmp);
     const cur = STATE.cur || {}; const siD = Object.keys(cur.si || {}).sort().pop(); const soD = Object.keys(cur.so || {}).sort().pop();
     const wk = currentWeek([...new Set((cur.alloc || []).map(r => r[0]))].sort(wkSort));
     const used = new Set([...(cur.target || []).map(r => r[1]), ...Object.values(cur.si || {}).flat().map(r => r[1]), ...Object.values(STATE.months || {}).flatMap(x => x.rows.map(r => r[1]))]);
@@ -244,19 +254,24 @@
     const m = ui.tMonth; const rows = targetRows(m).filter(r => r.tc);
     rows.forEach(r => { if (item(r.sc).hl == null && m === STATE.cur.month) missingHl.add(r.sc); });
     const tv = r => ui.unit === 'hl' ? r.th : r.tc;
-    const npps = [...new Set(rows.map(r => r.c))].sort((a, b) => npAll().indexOf(a) - npAll().indexOf(b));
+    const npps = [...new Set(rows.map(r => r.c))].sort(nppCmp);
     const multi = npps.length > 1;
     const byG = {}; rows.forEach(r => { const g = grp(r.sc); (byG[g] = byG[g] || {})[r.sc] = (byG[g][r.sc] || {}); byG[g][r.sc][r.c] = (byG[g][r.sc][r.c] || 0) + tv(r); });
     const total = sumBy(rows, tv); const gTot = g => sumBy(rows.filter(r => grp(r.sc) === g), tv);
-    const head = multi ? `<tr><th>BrandFamily</th><th>SKU</th>${npps.map(c => `<th>${esc(c)}</th>`).join('')}<th>Tổng</th><th>Tỷ trọng</th></tr>` : `<tr><th>BrandFamily</th><th>SKU</th><th>Target (Case)</th><th>Target (HL)</th><th>Tỷ trọng</th></tr>`;
+    // Cột NPP nhóm theo Khu vực; bấm tên khu vực để thu gọn thành 1 cột tổng
+    const AG = byArea(npps); const cols = [];
+    AG.forEach(([a, cs]) => { if (isOpen('tg:' + a, true)) cs.forEach(c => cols.push({ cs: [c], h: esc(c) })); else cols.push({ cs, h: 'Tổng', sum: true }); });
+    const cv = (cs, f) => sumBy(cs, f);
+    const head = multi ? `<tr class="ah"><th rowspan="2">BrandFamily</th><th rowspan="2">SKU</th>${AG.map(([a, cs]) => { const op = isOpen('tg:' + a, true); return `<th class="agh click${op ? ' open' : ''}" colspan="${op ? cs.length : 1}" data-fold="${esc('tg:' + a)}"><span class="caret">▸</span> ${esc(a)}</th>`; }).join('')}<th rowspan="2">Tổng</th><th rowspan="2">Tỷ trọng</th></tr>
+      <tr class="nh">${cols.map(x => `<th class="${x.sum ? 'asum' : ''}">${x.h}</th>`).join('')}</tr>` : `<tr><th>BrandFamily</th><th>SKU</th><th>Target (Case)</th><th>Target (HL)</th><th>Tỷ trọng</th></tr>`;
     let body = '';
     GROUPS.filter(g => byG[g]).forEach(g => {
       const bo = ['Heineken', 'Tiger', 'Bia Viet', 'Larue', 'Bivina', 'Strongbow', 'Edelweiss']; const bi = sc => (bo.indexOf(brandOf(sc)) + 1) || 99;
       const skus = Object.keys(byG[g]).sort((a, b) => bi(a) - bi(b) || sumBy(Object.values(byG[g][b]), x => x) - sumBy(Object.values(byG[g][a]), x => x));
       const gv = gTot(g);
       if (multi) {
-        body += `<tr class="grp"><td colspan="2">${esc(g)}</td>${npps.map(c => `<td>${fmt(sumBy(skus, sc => byG[g][sc][c] || 0))}</td>`).join('')}<td>${fmt(gv)}</td><td>${pct(gv / total)}</td></tr>`;
-        skus.forEach(sc => { const tt = sumBy(npps, c => byG[g][sc][c] || 0); body += `<tr class="sku"><td>${esc(item(sc).b || '—')}</td><td class="skuc">${esc(sc)}</td>${npps.map(c => `<td>${byG[g][sc][c] ? fmt(byG[g][sc][c]) : '<span class="note">–</span>'}</td>`).join('')}<td>${fmt(tt)}</td><td>${pct(tt / total)}</td></tr>`; });
+        body += `<tr class="grp"><td colspan="2">${esc(g)}</td>${cols.map(x => `<td class="${x.sum ? 'asum' : ''}">${fmt(sumBy(skus, sc => cv(x.cs, c => byG[g][sc][c] || 0)))}</td>`).join('')}<td>${fmt(gv)}</td><td>${pct(gv / total)}</td></tr>`;
+        skus.forEach(sc => { const tt = sumBy(npps, c => byG[g][sc][c] || 0); body += `<tr class="sku"><td>${esc(item(sc).b || '—')}</td><td class="skuc">${esc(sc)}</td>${cols.map(x => { const v = cv(x.cs, c => byG[g][sc][c] || 0); return `<td class="${x.sum ? 'asum' : ''}">${v ? fmt(v) : '<span class="note">–</span>'}</td>`; }).join('')}<td>${fmt(tt)}</td><td>${pct(tt / total)}</td></tr>`; });
       } else {
         const gc = sumBy(rows.filter(r => grp(r.sc) === g), r => r.tc), gh = sumBy(rows.filter(r => grp(r.sc) === g), r => r.th);
         body += `<tr class="grp"><td colspan="2">${esc(g)}</td><td>${fmtC(gc)}</td><td>${nf1.format(gh)}</td><td>${pct(gv / total)}</td></tr>`;
@@ -264,7 +279,7 @@
       }
     });
     const tc = sumBy(rows, r => r.tc), th = sumBy(rows, r => r.th);
-    body += multi ? `<tr class="tot"><td colspan="2">Tổng</td>${npps.map(c => `<td>${fmt(sumBy(rows.filter(r => r.c === c), tv))}</td>`).join('')}<td>${fmt(total)}</td><td>100%</td></tr>` : `<tr class="tot"><td colspan="2">Tổng</td><td>${fmtC(tc)}</td><td>${nf1.format(th)}</td><td>100%</td></tr>`;
+    body += multi ? `<tr class="tot"><td colspan="2">Tổng</td>${cols.map(x => `<td class="${x.sum ? 'asum' : ''}">${fmt(sumBy(rows.filter(r => x.cs.includes(r.c)), tv))}</td>`).join('')}<td>${fmt(total)}</td><td>100%</td></tr>` : `<tr class="tot"><td colspan="2">Tổng</td><td>${fmtC(tc)}</td><td>${nf1.format(th)}</td><td>100%</td></tr>`;
     const gs = GROUPS.filter(g => byG[g]).map(g => [g, gTot(g)]).sort((a, b) => b[1] - a[1]);
     const prev = months[months.indexOf(m) + 1]; let prevNote = '';
     if (prev) { const pr = targetRows(prev); const pv = sumBy(pr, tv); if (pv) { const d = total / pv - 1; prevNote = `So với ${fM(prev)}: <b>${d >= 0 ? '+' : ''}${pct(d)}</b>.`; } }
@@ -284,7 +299,7 @@
     <div class="grid">
       <div class="card c3 kpi"><div class="kpi-l">Tổng target</div><div class="kpi-v">${fmt(total)}<small>${U()}</small></div><div class="kpi-f">${ui.unit === 'hl' ? fmtC(tc) + ' case' : nf1.format(th) + ' HL'}</div></div>
       ${gs.slice(0, 3).map(([g, v]) => `<div class="card c3 kpi"><div class="kpi-l">${esc(g)}</div><div class="kpi-v">${fmt(v)}<small>${U()}</small></div><div class="kpi-f">${pct(v / total)} tổng target</div></div>`).join('')}
-      <div class="card c12"><div class="card-h"><div><h2>Target theo BrandGroup / SKU</h2><p class="sub">Đơn vị: ${U()}${multi ? ' · cột theo NPP' : ''}</p></div></div>
+      <div class="card c12"><div class="card-h"><div><h2>Target theo BrandGroup / SKU</h2><p class="sub">Đơn vị: ${U()}${multi ? ' · cột theo Khu vực / NPP, bấm tên khu vực để thu gọn hoặc mở rộng' : ''}</p></div></div>
         ${hlNote()}<div class="tw"><table class="sticky1 tgt"><thead>${head}</thead><tbody>${body}</tbody></table></div></div>
     </div>
     ${conclusion([
@@ -305,9 +320,9 @@
     const cSi = css('--si'), cSo = css('--so'), cT = css('--target');
     let body = '';
     GROUPS.filter(g => groups[g] && (groups[g].t || groups[g].si || groups[g].so)).forEach(g => {
-      const o = groups[g]; const isOpen = ui.open.has(g);
-      body += rowHtml(`<span class="caret">▸</span> ${esc(g)}`, o, 'grp click' + (isOpen ? ' open' : ''), `data-g="${esc(g)}"`);
-      if (isOpen) { const sk = aggregate(o.rows, r => r.sc); const bo = ['Heineken', 'Tiger', 'Bia Viet', 'Larue', 'Bivina', 'Strongbow', 'Edelweiss']; const bi = sc => (bo.indexOf(brandOf(sc)) + 1) || 99; Object.values(sk).sort((a, b) => bi(a.k) - bi(b.k) || b.t - a.t).forEach(s => { body += rowHtml(s.k, s, 'sku'); }); }
+      const o = groups[g]; const gOpen = ui.open.has(g);
+      body += rowHtml(`<span class="caret">▸</span> ${esc(g)}`, o, 'grp click' + (gOpen ? ' open' : ''), `data-g="${esc(g)}"`);
+      if (gOpen) { const sk = aggregate(o.rows, r => r.sc); const bo = ['Heineken', 'Tiger', 'Bia Viet', 'Larue', 'Bivina', 'Strongbow', 'Edelweiss']; const bi = sc => (bo.indexOf(brandOf(sc)) + 1) || 99; Object.values(sk).sort((a, b) => bi(a.k) - bi(b.k) || b.t - a.t).forEach(s => { body += rowHtml(s.k, s, 'sku'); }); }
     });
     body += rowHtml('Tổng', { t: T, si: SI, so: SO }, 'tot');
     function rowHtml(label, o, cls, attr = '') {
@@ -326,11 +341,20 @@
     const npps = [...new Set(L.map(r => r.c))];
     if (npps.length > 1) {
       const byN = aggregate(L, r => r.c);
-      const rowsN = Object.values(byN).filter(o => o.t).sort((a, b) => (b.si / b.t) - (a.si / a.t));
-      board = `<div class="card c12"><div class="card-h"><div><h2>Xếp hạng NPP theo % đạt Sale In</h2><p class="sub">Bấm vào NPP để xem chi tiết · time gone ${pct(M.tgSi)} · đơn vị ${U()}</p></div></div>
-      <div class="tw"><table class="rank"><thead><tr><th>Khu vực</th><th>NPP</th><th class="gs">Target</th><th class="gs">Sale In</th><th>% đạt SI</th><th>Còn lại SI</th><th class="gs">Sale Out</th><th>% đạt SO</th><th>Còn lại SO</th><th class="gs">Trạng thái SI</th></tr></thead><tbody>
-      ${rowsN.map(o => `<tr class="click" data-npp="${esc(o.k)}"><td>${esc((STATE.npps[o.k] || {}).area || '')}</td><td><b>${esc(o.k)}</b></td><td class="gs">${fmt(o.t)}</td><td class="gs">${fmt(o.si)}</td><td>${pctT(o.si / o.t, M.tgSi)}</td><td class="rem">${fmt(Math.max(0, o.t - o.si))}</td><td class="gs">${fmt(o.so)}</td><td>${pctT(o.so / o.t, M.tgSo)}</td><td class="rem">${fmt(Math.max(0, o.t - o.so))}</td><td class="gs">${status(o.si / o.t, M.tgSi)}</td></tr>`).join('')}
-      </tbody></table></div></div>`;
+      const cells = o => `<td class="gs">${fmt(o.t)}</td><td class="gs">${fmt(o.si)}</td><td>${o.t ? pctT(o.si / o.t, M.tgSi) : '—'}</td><td class="rem">${fmt(Math.max(0, o.t - o.si))}</td><td class="gs">${fmt(o.so)}</td><td>${o.t ? pctT(o.so / o.t, M.tgSo) : '—'}</td><td class="rem">${fmt(Math.max(0, o.t - o.so))}</td><td class="gs">${status(o.t ? o.si / o.t : NaN, M.tgSi)}</td>`;
+      const sumO = os => ({ t: sumBy(os, o => o.t), si: sumBy(os, o => o.si), so: sumBy(os, o => o.so) });
+      const groupsA = byArea(Object.keys(byN).filter(c => byN[c].t || byN[c].si || byN[c].so));
+      let rb = '';
+      groupsA.forEach(([a, cs]) => { const ak = 'rk:a:' + a, aOpen = isOpen(ak, true);
+        rb += `<tr class="grp area click${aOpen ? ' open' : ''}" data-fold="${esc(ak)}"><td><span class="caret">▸</span> ${esc(a)}</td><td>${cs.length} NPP</td>${cells(sumO(cs.map(c => byN[c])))}</tr>`;
+        if (!aOpen) return;
+        cs.forEach((c, i) => { const nk = 'rk:n:' + c, nOpen = isOpen(nk, false); const o = byN[c];
+          rb += `<tr class="npp click${nOpen ? ' open' : ''}${i === 0 ? ' first' : ''}" data-fold="${esc(nk)}"><td></td><td><span class="caret">▸</span> <span class="click-npp" data-npp="${esc(c)}" title="Lọc theo ${esc(c)}">${esc(c)}</span></td>${cells(o)}</tr>`;
+          if (nOpen) { const g = aggregate(o.rows, r => grp(r.sc)); GROUPS.filter(k => g[k] && (g[k].t || g[k].si || g[k].so)).forEach(k => { rb += `<tr class="sku"><td></td><td class="skuc">${esc(k)}</td>${cells(g[k])}</tr>`; }); }
+        }); });
+      rb += `<tr class="tot"><td>Tổng</td><td></td>${cells({ t: T, si: SI, so: SO })}</tr>`;
+      board = `<div class="card c12"><div class="card-h"><div><h2>Tiến độ theo Khu vực / NPP</h2><p class="sub">Bấm mũi tên để xem chi tiết từng khu vực, NPP · bấm mã NPP để lọc · time gone ${pct(M.tgSi)} · đơn vị ${U()}</p></div></div>
+      <div class="tw"><table class="rank ag"><thead><tr><th>Khu vực</th><th>NPP</th><th class="gs">Target</th><th class="gs">Sale In</th><th>% đạt SI</th><th>Còn lại SI</th><th class="gs">Sale Out</th><th>% đạt SO</th><th>Còn lại SO</th><th class="gs">Trạng thái SI</th></tr></thead><tbody>${rb}</tbody></table></div></div>`;
     }
     let cover = '';
     if (M.lastSo) {
@@ -396,7 +420,7 @@
     const siMap = {}; M.list.forEach(r => { siMap[r.c + '|' + r.sc] = (siMap[r.c + '|' + r.sc] || 0) + r.si; });
     const aSum = f => sumBy(A.filter(f), r => conv(r[3], r[2]));
     const skus = [...new Set(A.map(r => r[2]))].map(sc => ({ sc, al: aSum(r => r[2] === sc) })).sort((a, b) => b.al - a.al).map(x => x.sc);
-    const npps = [...new Set(A.map(r => r[1]))].sort((a, b) => npAll().indexOf(a) - npAll().indexOf(b));
+    const npps = [...new Set(A.map(r => r[1]))].sort(nppCmp);
     const siOf = (c, sc) => conv(siMap[c + '|' + sc] || 0, sc);
     const bySku = skus.map(sc => { const w = {}; weeks.forEach(k => w[k] = aSum(r => r[2] === sc && r[0] === k));
       const al = sumBy(Object.values(w), x => x); const si = sumBy([...new Set(A.filter(r => r[2] === sc).map(r => r[1]))], c => siOf(c, sc));
@@ -444,20 +468,24 @@
     if (npps.length > 1) {
       if (ui.allocSku !== 'all' && !skus.includes(ui.allocSku)) ui.allocSku = 'all';
       const chips = `<div class="chips" role="group" aria-label="Chọn SKU">${['all', ...skus].map(k => `<button data-asku="${esc(k)}" aria-pressed="${ui.allocSku === k}">${k === 'all' ? 'Tất cả SKU' : esc(k)}</button>`).join('')}</div>`;
-      let table;
+      let table; const AG = byArea(npps);
+      const aRow = (a, cs, inner) => { const k = 'al:' + a, op = isOpen(k, true); return { op, html: `<tr class="grp area click${op ? ' open' : ''}" data-fold="${esc(k)}"><td><span class="caret">▸</span> ${esc(a)}</td><td>${cs.length} NPP</td>${inner}</tr>` }; };
+      const nRow = (c, i, inner) => `<tr class="npp${i === 0 ? ' first' : ''}"><td></td><td><span class="click-npp" data-npp="${esc(c)}" title="Lọc theo ${esc(c)}">${esc(c)}</span></td>${inner}</tr>`;
       if (ui.allocSku === 'all') {
-        table = `<table class="sticky1"><thead><tr><th>NPP</th>${skus.map(sc => `<th>${esc(sc)}</th>`).join('')}<th>Tổng còn lại</th></tr></thead><tbody>
-          ${npps.map(c => { let tr = 0; const cells = skus.map(sc => { const al = aSum(r => r[1] === c && r[2] === sc), si = siOf(c, sc); tr += al - si; const p = al ? si / al : 0;
-            return al || si ? `<td><div class="mx"><b class="${al - si < 0 ? 'over' : ''}">${al - si < 0 ? '−' + fmt(si - al) : fmt(al - si)}</b><span class="mini"><i style="width:${Math.min(100, p * 100)}%;background:${p > 1 ? 'var(--bad)' : 'var(--si)'}"></i></span></div></td>` : '<td><span class="note">–</span></td>'; }).join('');
-            return `<tr class="click" data-npp="${esc(c)}"><td><b>${esc(c)}</b></td>${cells}<td class="rem">${fmt(tr)}</td></tr>`; }).join('')}</tbody></table>
-          <p class="note" style="margin:8px 0 0">Mỗi ô: allocation còn lại; thanh nhỏ là % đã sử dụng. Số âm (đỏ) là đã vượt allocation.</p>`;
+        const cell = cs => { let tr = 0; const html = skus.map(sc => { const al = aSum(r => cs.includes(r[1]) && r[2] === sc), si = sumBy(cs, c => siOf(c, sc)); tr += al - si; const p = al ? si / al : 0;
+          return al || si ? `<td><div class="mx"><b class="${al - si < 0 ? 'over' : ''}">${al - si < 0 ? '−' + fmt(si - al) : fmt(al - si)}</b><span class="mini"><i style="width:${Math.min(100, p * 100)}%;background:${p >= 1 ? 'var(--good)' : 'var(--si)'}"></i></span></div></td>` : '<td><span class="note">–</span></td>'; }).join('');
+          return html + `<td class="rem">${fmt(tr)}</td>`; };
+        let tb = ''; AG.forEach(([a, cs]) => { const r = aRow(a, cs, cell(cs)); tb += r.html; if (r.op) cs.forEach((c, i) => { tb += nRow(c, i, cell([c])); }); });
+        table = `<table class="sticky1 ag"><thead><tr><th>Khu vực</th><th>NPP</th>${skus.map(sc => `<th>${esc(sc)}</th>`).join('')}<th>Tổng còn lại</th></tr></thead><tbody>${tb}</tbody></table>
+          <p class="note" style="margin:8px 0 0">Mỗi ô: allocation còn lại; thanh nhỏ là % đã sử dụng. Số âm là đã vượt allocation.</p>`;
       } else {
         const sc = ui.allocSku;
-        table = `<table class="sticky1"><thead><tr><th>NPP</th>${weeks.map(w => `<th>${esc(w)}</th>`).join('')}<th>Tổng allocation</th><th>Sale In MTD</th><th>% sử dụng</th><th>Còn lại</th></tr></thead><tbody>
-          ${npps.map(c => { const w = weeks.map(k => aSum(r => r[1] === c && r[2] === sc && r[0] === k)); const al = sumBy(w, x => x), si = siOf(c, sc);
-            return `<tr class="click" data-npp="${esc(c)}"><td><b>${esc(c)}</b></td>${w.map(v => `<td>${fmt(v)}</td>`).join('')}<td>${fmt(al)}</td><td>${fmt(si)}</td><td>${usedBar(si, al)}</td>${remTd(al, si)}</tr>`; }).join('')}</tbody></table>`;
+        const cell = cs => { const w = weeks.map(k => aSum(r => cs.includes(r[1]) && r[2] === sc && r[0] === k)); const al = sumBy(w, x => x), si = sumBy(cs, c => siOf(c, sc));
+          return `${w.map(v => `<td>${fmt(v)}</td>`).join('')}<td>${fmt(al)}</td><td>${fmt(si)}</td><td>${usedBar(si, al)}</td>${remTd(al, si)}`; };
+        let tb = ''; AG.forEach(([a, cs]) => { const r = aRow(a, cs, cell(cs)); tb += r.html; if (r.op) cs.forEach((c, i) => { tb += nRow(c, i, cell([c])); }); });
+        table = `<table class="sticky1 ag"><thead><tr><th>Khu vực</th><th>NPP</th>${weeks.map(w => `<th>${esc(w)}</th>`).join('')}<th>Tổng allocation</th><th>Sale In MTD</th><th>% sử dụng</th><th>Còn lại</th></tr></thead><tbody>${tb}</tbody></table>`;
       }
-      byNpp = `<div class="card c12"><div class="card-h"><div><h2>Theo NPP</h2><p class="sub">Đơn vị ${U()} · chọn SKU để xem chi tiết theo tuần</p></div>${chips}</div><div class="tw">${table}</div></div>`;
+      byNpp = `<div class="card c12"><div class="card-h"><div><h2>Theo Khu vực / NPP</h2><p class="sub">Đơn vị ${U()} · bấm mũi tên để mở từng khu vực · chọn SKU để xem chi tiết theo tuần</p></div>${chips}</div><div class="tw">${table}</div></div>`;
     }
     const over = bySku.filter(s => s.si > s.al);
     const main = bySku[0];
@@ -499,8 +527,8 @@
       body += `<tr class="grp"><td colspan="2">${esc(g)}</td><td>${fmtC(sumBy(rr, r => r.c))}</td><td>${nf1.format(sumBy(rr, r => r.h))}</td><td></td><td></td></tr>`;
       rr.forEach(r => { body += `<tr class="sku"><td>${esc(item(r.sc).b || '—')}</td><td class="skuc">${esc(r.sc)}</td><td>${fmtC(r.c)}</td><td>${nf1.format(r.h)}</td><td>${r.ord.size}</td><td>${tc ? pct(r.c / tc) : '—'}</td></tr>`; }); });
     body += `<tr class="tot"><td colspan="2">Tổng</td><td>${fmtC(tc)}</td><td>${nf1.format(th)}</td><td>${new Set(P.map(o => o[1])).size}</td><td>100%</td></tr>`;
-    const nppRows = Object.entries(byN).sort((a, b) => b[1].c - a[1].c);
-    const list = [...P].sort((a, b) => (a[0] + a[1]).localeCompare(b[0] + b[1]));
+    const nppRows = Object.entries(byN).sort((a, b) => nppCmp(a[0], b[0]));
+    const list = [...P].sort((a, b) => nppCmp(a[0], b[0]) || String(a[1]).localeCompare(String(b[1])));
     return `
     <section class="lead"><div><button class="linkback" data-go="progress">← MTD Sale In - Out</button><div class="eyebrow">SO Pending · chờ giao hàng</div><h1>${esc(scopeLabel())}</h1>
       <p>Online Order trừ ${nBo} đơn Backorder. Đơn Delivery: ${nInv} đơn đã có trong SO Invoice (loại), ${nDel} đơn chưa có (cộng vào Sale In). Pending là các đơn Order Approve / Schedule chưa giao.</p></div>
@@ -511,21 +539,21 @@
       <div class="card c3 kpi"><div class="kpi-l">Số đơn</div><div class="kpi-v">${new Set(P.map(o => o[1])).size}</div><div class="kpi-f">${Object.keys(byN).length} NPP</div></div>
       <div class="card c3 kpi"><div class="kpi-l">Số SKU</div><div class="kpi-v">${rows.length}</div></div>
       <div class="card c12"><h2>Pending theo SKU</h2><p class="sub">Case và HL chờ giao</p>${P.length ? `<div class="tw"><table class="sticky1 tgt"><thead><tr><th>BrandFamily</th><th>SKU</th><th>Case</th><th>HL</th><th>Số đơn</th><th>Tỷ trọng</th></tr></thead><tbody>${body}</tbody></table></div>` : '<p class="note">Không có đơn Pending trong phạm vi này.</p>'}</div>
-      ${nppRows.length > 1 ? `<div class="card c5"><h2>Theo NPP</h2><p class="sub">Bấm để xem từng NPP</p><div class="tw"><table><thead><tr><th>NPP</th><th>Case</th><th>HL</th><th>Số đơn</th></tr></thead><tbody>
-        ${nppRows.map(([c, x]) => `<tr class="click" data-npp="${esc(c)}"><td><b>${esc(c)}</b></td><td>${fmtC(x.c)}</td><td>${nf1.format(x.h)}</td><td>${x.ord.size}</td></tr>`).join('')}</tbody></table></div></div>` : ''}
+      ${nppRows.length > 1 ? `<div class="card c5"><h2>Theo NPP</h2><p class="sub">Bấm để xem từng NPP</p><div class="tw"><table><thead><tr><th>Khu vực</th><th>NPP</th><th>Case</th><th>HL</th><th>Số đơn</th></tr></thead><tbody>
+        ${nppRows.map(([c, x]) => `<tr class="click" data-npp="${esc(c)}"><td style="text-align:left">${esc(areaOf(c))}</td><td style="text-align:left"><b>${esc(c)}</b></td><td>${fmtC(x.c)}</td><td>${nf1.format(x.h)}</td><td>${x.ord.size}</td></tr>`).join('')}</tbody></table></div></div>` : ''}
       ${P.length ? `<div class="card ${nppRows.length > 1 ? 'c7' : 'c12'}"><h2>Danh sách đơn</h2><p class="sub">Ngày đặt · ngày hẹn giao · trạng thái</p><div class="tw"><table><thead><tr><th>NPP</th><th>Số đơn</th><th>Trạng thái</th><th>Ngày đặt</th><th>Hẹn giao</th><th>SKU</th><th>Case</th></tr></thead><tbody>
         ${list.map(o => `<tr><td>${esc(o[0])}</td><td>${esc(o[1])}</td><td>${esc(o[2])}</td><td>${esc(o[5])}</td><td>${esc(o[6])}</td><td><b>${esc(o[3])}</b></td><td>${fmtC(o[4])}</td></tr>`).join('')}</tbody></table></div></div>` : ''}
     </div>
     ${conclusion([
       `Đang chờ giao <b>${fmtC(tc)} case</b> (${nf1.format(th)} HL) từ ${new Set(P.map(o => o[1])).size} đơn.`,
       rows[0] ? `SKU chờ giao nhiều nhất: <b>${esc(rows[0].sc)}</b> (${fmtC(rows[0].c)} case, ${pct(tc ? rows[0].c / tc : 0)}).` : '',
-      nppRows.length > 1 ? `NPP có nhiều hàng chờ giao nhất: <b>${esc(nppRows[0][0])}</b> (${fmtC(nppRows[0][1].c)} case).` : ''
+      nppRows.length > 1 ? `NPP có nhiều hàng chờ giao nhất: <b>${esc([...nppRows].sort((a, b) => b[1].c - a[1].c)[0][0])}</b> (${fmtC([...nppRows].sort((a, b) => b[1].c - a[1].c)[0][1].c)} case).` : ''
     ])}`;
   }
   function exportPending(ev) {
     const P = pendingOrders();
     const rows = [['Khu vực', 'Mã NPP', 'Số đơn', 'Trạng thái', 'Ngày đặt', 'Hẹn giao', 'BrandFamily', 'BrandGroup', 'ShortCode', 'Case', 'HL']];
-    P.forEach(o => rows.push([(STATE.npps[o[0]] || {}).area || '', o[0], o[1], o[2], o[5], o[6], item(o[3]).b || '', grp(o[3]), o[3], o[4], Math.round(o[4] * (item(o[3]).hl || 0) * 100) / 100]));
+    [...P].sort((a, b) => nppCmp(a[0], b[0])).forEach(o => rows.push([(STATE.npps[o[0]] || {}).area || '', o[0], o[1], o[2], o[5], o[6], item(o[3]).b || '', grp(o[3]), o[3], o[4], Math.round(o[4] * (item(o[3]).hl || 0) * 100) / 100]));
     if (rows.length === 1) { toastBtn(ev.currentTarget, 'Không có đơn Pending'); return; }
     saveXlsx(`SO_Pending_${todayKey()}_${scopeTag()}.xlsx`, [['SO Pending', rows, [9, 9, 12, 14, 10, 10, 12, 11, 10, 9, 9]]], ev.currentTarget);
   }
@@ -571,7 +599,7 @@
     if (ui.trSku !== 'all' && !skus.includes(ui.trSku)) ui.trSku = 'all';
     const shown = ui.trSku === 'all' ? skus : [ui.trSku];
     const P = (cur.orders || []).filter(o => /approve|schedule/i.test(o[2]) && inScope(o[0]) && inBrand(o[3]) && shown.includes(o[3]));
-    const npps = [...new Set(A.map(r => r[1]))].sort((a, b) => npAll().indexOf(a) - npAll().indexOf(b));
+    const npps = [...new Set(A.map(r => r[1]))].sort(nppCmp);
     const calc = (cs, ss) => {
       const al = sumBy(A.filter(r => cs.includes(r[1]) && ss.includes(r[2]) && r[0] === wk), r => conv(r[3], r[2]));
       const si = sumBy(lines.filter(l => cs.includes(l.c) && ss.includes(l.sc) && (l.w ? l.w === wk : inWk(l.d))), l => conv(l.q, l.sc));
@@ -581,14 +609,15 @@
     };
     const bar = (v, col) => `<span class="mini"><i style="width:${Math.min(100, (v || 0) * 100)}%;background:${col}"></i></span>`;
     const tdv = x => `<td>${fmt(x.al)}</td><td>${fmt(x.si)}</td><td>${!isFinite(x.ps) ? '—' : `<span class="${x.ps < gone ? 'lo' : 'hi'}">${pct(x.ps)}</span>`}</td><td>${fmt(x.pd)}</td><td>${isFinite(x.use) ? pct(x.use) : '—'}${bar(x.use, x.use > 1 ? 'var(--good)' : 'var(--si)')}</td><td class="rem">${x.rem >= 0 ? fmt(x.rem) : `<span class="ov">Vượt ${fmt(-x.rem)}</span>`}</td>`;
-    const areas = [...new Set(npps.map(c => (STATE.npps[c] || {}).area || '—'))];
-    ui.trOpen = ui.trOpen || new Set(areas);
     let body = ''; const flat = [];
-    areas.forEach(a => { const cs = npps.filter(c => ((STATE.npps[c] || {}).area || '—') === a); const open = ui.trOpen.has(a) || areas.length === 1;
-      const ax = calc(cs, shown); body += `<tr class="grp area click${open ? ' open' : ''}" data-area="${esc(a)}"><td><span class="caret">▸</span> ${esc(a)}</td><td>${shown.length > 1 ? '' : esc(shown[0])}</td>${tdv(ax)}</tr>`;
+    byArea(npps).forEach(([a, cs]) => { const ak = 'tr:a:' + a, open = isOpen(ak, true);
+      const ax = calc(cs, shown); body += `<tr class="grp area click${open ? ' open' : ''}" data-fold="${esc(ak)}"><td><span class="caret">▸</span> ${esc(a)}</td><td>${shown.length > 1 ? cs.length + ' NPP' : esc(shown[0])}</td>${tdv(ax)}</tr>`;
       cs.forEach(c => { const y = calc([c], shown); flat.push([c, y]); if (!open) return;
         const ss = shown.filter(sc => A.some(r => r[1] === c && r[2] === sc && r[0] === wk));
-        ss.forEach((sc, i) => { const z = calc([c], [sc]); body += `<tr class="sku${i === 0 ? ' first' : ''}${isFinite(z.ps) && z.ps < gone ? ' slow' : ''}"><td>${i === 0 ? `<span class="click-npp" data-npp="${esc(c)}">${esc(c)}</span>` : ''}</td><td class="skuc">${esc(sc)}</td>${tdv(z)}</tr>`; });
+        const nk = 'tr:n:' + c, nOpen = isOpen(nk, true) || ss.length < 2;
+        const nm = `${ss.length > 1 ? `<span class="caret fold${nOpen ? ' on' : ''}" data-fold="${esc(nk)}" role="button" aria-label="Mở/thu gọn ${esc(c)}">▸</span> ` : ''}<span class="click-npp" data-npp="${esc(c)}">${esc(c)}</span>`;
+        if (!nOpen) { body += `<tr class="sku first${isFinite(y.ps) && y.ps < gone ? ' slow' : ''}"><td>${nm}</td><td class="note">${ss.length} SKU</td>${tdv(y)}</tr>`; return; }
+        ss.forEach((sc, i) => { const z = calc([c], [sc]); body += `<tr class="sku${i === 0 ? ' first' : ''}${isFinite(z.ps) && z.ps < gone ? ' slow' : ''}"><td>${i === 0 ? nm : ''}</td><td class="skuc">${esc(sc)}</td>${tdv(z)}</tr>`; });
         }); });
     const T = calc(npps, shown); body += `<tr class="tot"><td>Tổng</td><td>${shown.length > 1 ? '' : esc(shown[0])}</td>${tdv(T)}</tr>`;
     const slow = flat.filter(([, y]) => isFinite(y.ps) && y.ps < gone).sort((a, b) => a[1].ps - b[1].ps);
@@ -684,7 +713,8 @@
   function bindView() {
     const v = $('#view');
     v.querySelectorAll('tr[data-g]').forEach(tr => tr.onclick = () => { const g = tr.dataset.g; ui.open.has(g) ? ui.open.delete(g) : ui.open.add(g); render(); });
-    v.querySelectorAll('tr[data-npp], .click-npp').forEach(tr => tr.onclick = () => { if (ROLE.type === 'npp') return; const c = tr.dataset.npp; ui.npp = c; ui.area = (STATE.npps[c] || {}).area || ui.area; applyRole(); shell(); window.scrollTo({ top: 0, behavior: 'smooth' }); render(); });
+    v.querySelectorAll('[data-fold]').forEach(el => el.onclick = e => { e.stopPropagation(); const k = el.dataset.fold; ui.flip.has(k) ? ui.flip.delete(k) : ui.flip.add(k); render(); });
+    v.querySelectorAll('tr[data-npp], .click-npp').forEach(tr => tr.onclick = e => { e.stopPropagation(); if (ROLE.type === 'npp') return; const c = tr.dataset.npp; ui.npp = c; ui.area = (STATE.npps[c] || {}).area || ui.area; applyRole(); shell(); window.scrollTo({ top: 0, behavior: 'smooth' }); render(); });
     const tm = $('#tmonth'); if (tm) tm.onchange = () => { ui.tMonth = tm.value; render(); };
     v.querySelectorAll('[data-asku]').forEach(b => b.onclick = () => { ui.allocSku = b.dataset.asku; render(); });
     const xt = $('#xl-target'); if (xt) xt.onclick = exportTarget;
@@ -692,7 +722,6 @@
     const xi = $('#xl-invoice'); if (xi) xi.onclick = exportInvoice;
     v.querySelectorAll('[data-go]').forEach(b => { const go = () => { ui.tab = b.dataset.go; saveUi(); shell(); window.scrollTo({ top: 0 }); render(); }; b.onclick = go; b.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } }; });
     v.querySelectorAll('[data-tsku]').forEach(b => b.onclick = () => { ui.trSku = b.dataset.tsku; render(); });
-    v.querySelectorAll('tr[data-area]').forEach(tr => tr.onclick = () => { const a = tr.dataset.area; ui.trOpen = ui.trOpen || new Set(); ui.trOpen.has(a) ? ui.trOpen.delete(a) : ui.trOpen.add(a); render(); });
     const xpd = $('#xl-pending'); if (xpd) xpd.onclick = exportPending;
   }
 
@@ -730,7 +759,7 @@
   function exportTarget(ev) {
     const m = ui.tMonth; const rows = targetRows(m).filter(r => r.tc);
     const long = [['Tháng', 'Khu vực', 'Mã NPP', 'ShortCode', 'BrandFamily', 'BrandGroup', 'Target (Case)', 'Target (HL)']];
-    rows.sort((a, b) => (a.c + GROUPS.indexOf(grp(a.sc)) + a.sc).localeCompare(b.c + GROUPS.indexOf(grp(b.sc)) + b.sc)).forEach(r => long.push([fM(m), (STATE.npps[r.c] || {}).area || '', r.c, r.sc, item(r.sc).b || '', grp(r.sc), Math.round(r.tc), Math.round(r.th * 100) / 100]));
+    rows.sort((a, b) => nppCmp(a.c, b.c) || GROUPS.indexOf(grp(a.sc)) - GROUPS.indexOf(grp(b.sc)) || a.sc.localeCompare(b.sc)).forEach(r => long.push([fM(m), (STATE.npps[r.c] || {}).area || '', r.c, r.sc, item(r.sc).b || '', grp(r.sc), Math.round(r.tc), Math.round(r.th * 100) / 100]));
     const npps = [...new Set(rows.map(r => r.c))];
     const piv = [['BrandGroup', ...npps.flatMap(c => [c + ' (Case)', c + ' (HL)']), 'Tổng (Case)', 'Tổng (HL)']];
     GROUPS.forEach(g => { const rr = rows.filter(r => grp(r.sc) === g); if (!rr.length) return;
@@ -748,7 +777,7 @@
   function exportProgress(ev) {
     const M = curModel(); const left = M.D - M.dSi;
     const rows = [['Tháng', 'Đến ngày', 'Mã NPP', 'ShortCode', 'BrandFamily', 'BrandGroup', 'Target (Case)', 'Sale In (Case)', '% SI', 'Còn lại SI (Case)', 'Sale Out (Case)', '% SO', 'Còn lại SO (Case)', 'hl/case', 'Target (HL)', 'Sale In (HL)', 'Sale Out (HL)']];
-    M.list.filter(r => r.t || r.si || r.so).sort((a, b) => (a.c + GROUPS.indexOf(grp(a.sc)) + a.sc).localeCompare(b.c + GROUPS.indexOf(grp(b.sc)) + b.sc)).forEach(r => { const hl = item(r.sc).hl || 0; const rem = Math.max(0, r.t - r.si);
+    M.list.filter(r => r.t || r.si || r.so).sort((a, b) => nppCmp(a.c, b.c) || GROUPS.indexOf(grp(a.sc)) - GROUPS.indexOf(grp(b.sc)) || a.sc.localeCompare(b.sc)).forEach(r => { const hl = item(r.sc).hl || 0; const rem = Math.max(0, r.t - r.si);
       rows.push([fM(M.m), fD(M.lastSi), r.c, r.sc, item(r.sc).b || '', grp(r.sc), r.t, r.si, r.t ? Math.round(r.si / r.t * 1000) / 10 : null, rem, r.so, r.t ? Math.round(r.so / r.t * 1000) / 10 : null, Math.max(0, r.t - r.so), hl, Math.round(r.t * hl * 100) / 100, Math.round(r.si * hl * 100) / 100, Math.round(r.so * hl * 100) / 100]); });
     const g = aggregate(M.list, r => grp(r.sc)); const sum = [['BrandGroup', 'Target', 'Sale In', '% SI', 'Còn lại SI', 'Sale Out', '% SO', 'Còn lại SO', 'Đơn vị']];
     GROUPS.filter(k => g[k]).forEach(k => { const o = g[k]; sum.push([k, round(o.t), round(o.si), o.t ? Math.round(o.si / o.t * 1000) / 10 : null, round(Math.max(0, o.t - o.si)), round(o.so), o.t ? Math.round(o.so / o.t * 1000) / 10 : null, round(Math.max(0, o.t - o.so)), U()]); });
