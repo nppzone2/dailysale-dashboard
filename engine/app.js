@@ -168,7 +168,7 @@
       <div class="brandrow">
         <div class="brand"><img class="logo" src="${LOGO}" alt="EverGreen" width="52" height="52">
           <div><div class="brand-t">Daily Sale by Distributor</div><div class="brand-s"><b>RTC - Future Fit</b> · HCM Zone 2 · ${esc(fM(cur.month))}</div></div></div>
-        <div class="fresh"><span class="who">${esc(ROLE.label)}<button id="logout" class="linkbtn">Đăng xuất</button></span><span>Sale In <b>${fD(siD)}</b></span><span>Sale Out <b>${fD(soD)}</b></span><span>Allocation <b>${esc(wk || '—')}</b></span></div>
+        <div class="fresh"><span>Sale In <b>${fD(siD)}</b></span><span>Sale Out <b>${fD(soD)}</b></span><span>Allocation <b>${esc(wk || '—')}</b></span><span class="who">${esc(ROLE.type === 'npp' ? ROLE.id : ROLE.label)}<button id="logout" class="linkbtn">Đăng xuất</button></span></div>
       </div>
       <nav class="tabs" role="tablist">${TABS.map(([k, l]) => `<button class="tab" role="tab" data-tab="${k}" aria-selected="${ui.tab === k}">${l}</button>`).join('')}</nav>
     </div></header>
