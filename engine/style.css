@@ -265,3 +265,4 @@ select:disabled{opacity:1;color:var(--ink);background:var(--brand-soft);border-c
 .bgm th.gh+th.gh,.bgm .gsep{border-right:1px solid var(--line)}
 .bgm th.gh{border-left:1px solid var(--line)}
 .bgm tr>td:nth-child(2),.bgm tr:nth-child(2)>th:nth-child(1){border-left:1px solid var(--line)}
+.lo{color:var(--bad);background:var(--bad-bg);font-weight:700;border-radius:4px;padding:1px 6px}

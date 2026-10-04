@@ -68,6 +68,7 @@
   const fmt = v => ui.unit === 'hl' ? nf1.format(v || 0) : nf0.format(Math.round(v || 0));
   const fmtC = v => nf0.format(Math.round(v || 0));
   const pct = v => isFinite(v) ? nf1.format(v * 100) + '%' : '—';
+  const pctA = v => isFinite(v) && v < 1 ? `<span class="lo">${pct(v)}</span>` : pct(v);
   const U = () => ui.unit === 'hl' ? 'HL' : 'Case';
   const item = sc => STATE.items[sc] || { b: '', bg: '', g: '', hl: null };
   const brandOf = sc => item(sc).b || 'Khác';
@@ -455,7 +456,7 @@
     const siAll = sumBy(brs, ([, o]) => o.si);
     const lastM = full.length ? full[full.length - 1].m : '';
     const brandCard = brs.length ? `<div class="card c12"><h2>Theo BrandFamily · YTD</h2><p class="sub">Đơn vị ${U()} · xếp theo Sale In · cột cuối là % đạt Sale In tháng gần nhất (${fM(lastM)})</p><div class="tw"><table><thead><tr><th>BrandFamily</th><th>Target</th><th>Sale In</th><th>% SI</th><th>Sale Out</th><th>% SO</th><th>Tỷ trọng SI</th><th>% SI ${fM(lastM).replace(/\/\d{4}$/, '')}</th></tr></thead><tbody>
-      ${brs.map(([b, o]) => { const lm = o.mo[lastM]; return `<tr><td><b>${esc(b)}</b></td><td>${fmt(o.t)}</td><td>${fmt(o.si)}</td><td>${o.t ? pct(o.si / o.t) : '—'}${o.t ? `<span class="mini"><i style="width:${Math.min(100, o.si / o.t * 100)}%;background:${o.si >= o.t ? 'var(--si)' : 'var(--warn)'}"></i></span>` : ''}</td><td>${fmt(o.so)}</td><td>${o.t ? pct(o.so / o.t) : '—'}</td><td>${pct(siAll ? o.si / siAll : 0)}</td><td>${lm && lm.t ? pct(lm.si / lm.t) : '—'}</td></tr>`; }).join('')}
+      ${brs.map(([b, o]) => { const lm = o.mo[lastM]; return `<tr><td><b>${esc(b)}</b></td><td>${fmt(o.t)}</td><td>${fmt(o.si)}</td><td>${o.t ? pctA(o.si / o.t) : '—'}${o.t ? `<span class="mini"><i style="width:${Math.min(100, o.si / o.t * 100)}%;background:${o.si >= o.t ? 'var(--si)' : 'var(--warn)'}"></i></span>` : ''}</td><td>${fmt(o.so)}</td><td>${o.t ? pctA(o.so / o.t) : '—'}</td><td>${pct(siAll ? o.si / siAll : 0)}</td><td>${lm && lm.t ? pctA(lm.si / lm.t) : '—'}</td></tr>`; }).join('')}
     </tbody></table></div></div>` : '';
     const tAll = sumBy(brs, ([, o]) => o.t); const brT = brs.filter(([b, o]) => b !== 'Khác' && o.t > 0 && o.t >= tAll * 0.01).map(([b, o]) => [b, o.si / o.t, o]);
     const brBest = [...brT].sort((a, b) => b[1] - a[1])[0], brWorst = [...brT].sort((a, b) => a[1] - b[1])[0];
@@ -465,18 +466,18 @@
       <p>Lũy kế từ T1 đến ${fM(asOf)} (tháng đã chốt gần nhất): target, Sale In, Sale Out và tỷ lệ đạt từng tháng.</p></div></section>
     <div class="grid">
       <div class="card c3 kpi"><div class="kpi-l">Target YTD</div><div class="kpi-v">${fmt(tT)}<small>${U()}</small></div></div>
-      <div class="card c3 kpi"><div class="kpi-l">Sale In YTD</div><div class="kpi-v">${fmt(tSi)}<small>${U()}</small></div><div class="kpi-f"><b>${pct(tSi / tT)}</b> target</div></div>
-      <div class="card c3 kpi"><div class="kpi-l">Sale Out YTD</div><div class="kpi-v">${fmt(tSo)}<small>${U()}</small></div><div class="kpi-f"><b>${pct(tSo / tT)}</b> target</div></div>
-      <div class="card c3 kpi"><div class="kpi-l">Tháng đạt cao nhất</div><div class="kpi-v">${best[0] ? fM(best[0].m) : '—'}</div><div class="kpi-f">${best[0] ? 'Sale In ' + pct(best[0].si / best[0].t) : ''}</div></div>
+      <div class="card c3 kpi"><div class="kpi-l">Sale In YTD</div><div class="kpi-v">${fmt(tSi)}<small>${U()}</small></div><div class="kpi-f"><b>${pctA(tSi / tT)}</b> target</div></div>
+      <div class="card c3 kpi"><div class="kpi-l">Sale Out YTD</div><div class="kpi-v">${fmt(tSo)}<small>${U()}</small></div><div class="kpi-f"><b>${pctA(tSo / tT)}</b> target</div></div>
+      <div class="card c3 kpi"><div class="kpi-l">Tháng đạt cao nhất</div><div class="kpi-v">${best[0] ? fM(best[0].m) : '—'}</div><div class="kpi-f">${best[0] ? 'Sale In ' + pctA(best[0].si / best[0].t) : ''}</div></div>
       <div class="card c12"><div class="card-h"><div><h2>Target, Sale In, Sale Out theo tháng</h2><p class="sub">Đơn vị ${U()}</p></div>${legend([['Target', cT, 'sq'], ['Sale In', cSi], ['Sale Out', cSo]])}</div>
         ${chart({ labels: data.map(d => fM(d.m).replace(/\/\d{4}$/, '')), bars: [{ name: 'Target', color: cT, values: data.map(d => d.t) }], lines: [{ name: 'Sale In', color: cSi, values: data.map(d => d.si) }, { name: 'Sale Out', color: cSo, values: data.map(d => d.so) }], height: 230, tipTitle: i => fM(data[i].m), aria: 'Target, Sale In và Sale Out theo tháng' })}</div>
       <div class="card c12"><h2>Chi tiết theo tháng</h2><p class="sub">Đơn vị ${U()}</p><div class="tw"><table><thead><tr><th>Tháng</th><th>Target</th><th>Sale In</th><th>% SI</th><th>Sale Out</th><th>% SO</th><th>SI − SO</th></tr></thead><tbody>
-        ${data.map(d => `<tr><td><b>${fM(d.m)}</b></td><td>${fmt(d.t)}</td><td>${fmt(d.si)}</td><td>${pct(d.si / d.t)}</td><td>${fmt(d.so)}</td><td>${pct(d.so / d.t)}</td><td>${fmt(d.si - d.so)}</td></tr>`).join('')}
-        ${full.length ? `<tr class="tot"><td>Tổng YTD</td><td>${fmt(tT)}</td><td>${fmt(tSi)}</td><td>${pct(tSi / tT)}</td><td>${fmt(tSo)}</td><td>${pct(tSo / tT)}</td><td>${fmt(tSi - tSo)}</td></tr>` : ''}
+        ${data.map(d => `<tr><td><b>${fM(d.m)}</b></td><td>${fmt(d.t)}</td><td>${fmt(d.si)}</td><td>${pctA(d.si / d.t)}</td><td>${fmt(d.so)}</td><td>${pctA(d.so / d.t)}</td><td>${fmt(d.si - d.so)}</td></tr>`).join('')}
+        ${full.length ? `<tr class="tot"><td>Tổng YTD</td><td>${fmt(tT)}</td><td>${fmt(tSi)}</td><td>${pctA(tSi / tT)}</td><td>${fmt(tSo)}</td><td>${pctA(tSo / tT)}</td><td>${fmt(tSi - tSo)}</td></tr>` : ''}
       </tbody></table></div></div>
       ${(() => { const gs = GROUPS.filter(g => gm[g] && gm[g].t);
         const v = (rows, g) => { const o = { t: 0, si: 0, so: 0 }; rows.forEach(r => { if (grp(r[1]) !== g) return; const hl = ui.unit === 'hl'; o.t += hl ? r[3] : r[2]; o.si += hl ? r[5] : r[4]; o.so += hl ? r[7] : r[6]; }); return o; };
-        const cells = o => `<td>${fmt(o.t)}</td><td>${o.t ? pct(o.si / o.t) : '—'}</td><td class="gsep">${o.t ? pct(o.so / o.t) : '—'}</td>`;
+        const cells = o => `<td>${fmt(o.t)}</td><td>${o.t ? pctA(o.si / o.t) : '—'}</td><td class="gsep">${o.t ? pctA(o.so / o.t) : '—'}</td>`;
         return `<div class="card c12"><h2>Theo BrandGroup · từng tháng</h2><p class="sub">Target và tỷ lệ đạt Sale In / Sale Out · đơn vị ${U()}</p><div class="tw"><table class="bgm"><thead>
           <tr><th rowspan="2">Tháng</th>${gs.map(g => `<th colspan="3" class="gh">${esc(g)}</th>`).join('')}</tr>
           <tr>${gs.map(() => '<th>Target</th><th>% SI</th><th class="gsep">% SO</th>').join('')}</tr></thead><tbody>
@@ -488,7 +489,7 @@
     ${conclusion([
       `YTD as of ${fM(asOf)}: Sale In đạt <b>${pct(tSi / tT)}</b>, Sale Out đạt <b>${pct(tSo / tT)}</b> tổng target.`,
       best.length > 1 ? `Cao nhất <b>${fM(best[0].m)}</b> (${pct(best[0].si / best[0].t)}), thấp nhất <b>${fM(best[best.length - 1].m)}</b> (${pct(best[best.length - 1].si / best[best.length - 1].t)}).` : '',
-      brs.length ? `BrandFamily đóng góp lớn nhất: <b>${esc(brs[0][0])}</b> (${pct(siAll ? brs[0][1].si / siAll : 0)} Sale In YTD, đạt ${brs[0][1].t ? pct(brs[0][1].si / brs[0][1].t) : '—'} target).` : '',
+      brs.length ? `BrandFamily đóng góp lớn nhất: <b>${esc(brs[0][0])}</b> (${pct(siAll ? brs[0][1].si / siAll : 0)} Sale In YTD, đạt ${brs[0][1].t ? pctA(brs[0][1].si / brs[0][1].t) : '—'} target).` : '',
       brBest && brWorst && brBest[0] !== brWorst[0] ? `BrandFamily đạt cao nhất: <b>${esc(brBest[0])}</b> (${pct(brBest[1])}); thấp nhất: <b>${esc(brWorst[0])}</b> (${pct(brWorst[1])}, thiếu ${fmt(Math.max(0, brWorst[2].t - brWorst[2].si))} ${U()}).` : '',
       (() => { const w = GROUPS.filter(g => g !== 'Khác' && gm[g] && gm[g].t > 0).map(g => [g, gm[g].si / gm[g].t]).sort((a, b) => a[1] - b[1])[0]; return w ? `BrandGroup đạt thấp nhất: <b>${esc(w[0])}</b> (${pct(w[1])}), cần ưu tiên cải thiện.` : ''; })()
     ])}`;
