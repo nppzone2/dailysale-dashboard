@@ -404,16 +404,25 @@
     const wkTot = sumBy(bySku, s => s.w[wk]); const pwTot = pw ? sumBy(bySku, s => s.w[pw]) : null;
     const bTot = i => sumBy(bySku, s => bval(s.sc, wk, i));
     const bHead = i => { const d = (AD[wk] || [])[i]; const done = d && d <= today;
-      return `<th class="bh">${esc(BC[i])}<span class="bd">${d ? fd(d) : 'Chưa có ngày'}</span><span class="pill ${done ? 'good' : 'info'}">${done ? 'Đã chia' : 'Dự kiến'}</span></th>`; };
-    const wkRange = (AD[wk] || []).filter(Boolean); const rangeTxt = wkRange.length ? `Lịch chia ${wkRange.map(fd).join(' · ')}` : '';
+      return `<th class="bh">${esc(BC[i])}<span class="bd">${d ? fd(d) : 'Chưa có ngày'}</span><span class="pill ${done ? 'good' : 'info'}">${done ? 'Đã Upload' : 'Chờ Upload'}</span></th>`; };
+    const wkRange = (AD[wk] || []).filter(Boolean); const rangeTxt = wkRange.length ? `Lịch Upload Portal ${wkRange.map(fd).join(' · ')}` : '';
     const nextTxt = nw && (AD[nw] || []).some(Boolean) ? `Tuần tới <b>${esc(nw)}</b>: ${BC.map((b, i) => (AD[nw] || [])[i] ? `${esc(b)} ngày ${fd(AD[nw][i])}` : '').filter(Boolean).join(' · ')}` : '';
+    // Sale In trong tuần hiện tại: từ ngày Upload đầu tiên của tuần đến trước ngày Upload đầu tiên của tuần sau
+    const addD = (d, n) => { const t = new Date(Date.UTC(+d.slice(0, 4), +d.slice(4, 6) - 1, +d.slice(6, 8)) + n * 864e5); return t.toISOString().slice(0, 10).replace(/-/g, ''); };
+    const wStart = wkRange[0] || null; const nStart = nw ? ((AD[nw] || []).find(Boolean) || null) : null;
+    const wEnd = wStart ? (nStart ? addD(nStart, -1) : addD(wStart, 6)) : null;
+    const wDays = wStart ? Object.keys(cur.si || {}).filter(d => d >= wStart && d <= wEnd).sort() : [];
+    const siWk = sc => sumBy(wDays, d => sumBy(cur.si[d].filter(r => r[1] === sc && inScope(r[0]) && inBrand(r[1])), r => conv(r[2], r[1])));
+    const siWkTot = sumBy(bySku, x => siWk(x.sc));
+    const prog = (si, al) => { const p = al ? si / al : 0; return `<td><b>${fmt(si)}</b></td><td>${al ? pct(p) : '—'}<span class="mini"><i style="width:${Math.min(100, p * 100)}%;background:${p > 1 ? 'var(--bad)' : 'var(--si)'}"></i></span></td>`; };
+    const siNote = wStart && wDays.length ? `Sale In tuần ${esc(wk)}: ${fd(wDays[0])} → ${fd(wDays[wDays.length - 1])}${wDays[0] > wStart ? ` (dữ liệu Sale In từ ${fd(wDays[0])}, ngày trước đó thuộc tháng trước)` : ''}` : '';
     const latest = `<div class="card c12 wk-card"><div class="card-h"><div><div class="eyebrow">Current Week</div><h2 style="font-size:18px">${esc(wk)}<span class="note" style="font-weight:500;margin-left:8px">${esc(rangeTxt)}</span></h2></div>
         <div class="wk-total"><span class="kpi-l">Tổng allocation ${esc(wk)}</span><b>${fmt(wkTot)}</b><small>${U()}</small> ${pw ? delta(wkTot, pwTot) + `<span class="note">so với ${esc(pw)}</span>` : ''}</div></div>
-      ${bIdx.length ? `<div class="tw" style="margin-top:10px"><table class="sticky1 tgt batch"><thead><tr><th>BrandFamily</th><th>SKU</th>${bIdx.map(bHead).join('')}<th>Tổng ${esc(wk)}</th><th>So với ${esc(pw || '—')}</th></tr></thead><tbody>
-        ${bySku.map(s => `<tr class="sku"><td>${esc(item(s.sc).b || '—')}</td><td class="skuc">${esc(s.sc)}</td>${bIdx.map(i => `<td>${fmt(bval(s.sc, wk, i))}</td>`).join('')}<td><b>${fmt(s.w[wk])}</b></td><td>${delta(s.w[wk], pw ? s.w[pw] : null)}</td></tr>`).join('')}
-        ${bySku.length > 1 ? `<tr class="tot"><td colspan="2">Tổng</td>${bIdx.map(i => `<td>${fmt(bTot(i))}</td>`).join('')}<td>${fmt(wkTot)}</td><td>${delta(wkTot, pwTot)}</td></tr>` : ''}
+      ${bIdx.length ? `<div class="tw" style="margin-top:10px"><table class="sticky1 tgt batch"><thead><tr><th>BrandFamily</th><th>SKU</th>${bIdx.map(bHead).join('')}<th>Tổng ${esc(wk)}</th><th>Sale In tuần</th><th>Tiến độ SI</th><th>So với ${esc(pw || '—')}</th></tr></thead><tbody>
+        ${bySku.map(s => `<tr class="sku"><td>${esc(item(s.sc).b || '—')}</td><td class="skuc">${esc(s.sc)}</td>${bIdx.map(i => `<td>${fmt(bval(s.sc, wk, i))}</td>`).join('')}<td><b>${fmt(s.w[wk])}</b></td>${prog(siWk(s.sc), s.w[wk])}<td>${delta(s.w[wk], pw ? s.w[pw] : null)}</td></tr>`).join('')}
+        ${bySku.length > 1 ? `<tr class="tot"><td colspan="2">Tổng</td>${bIdx.map(i => `<td>${fmt(bTot(i))}</td>`).join('')}<td>${fmt(wkTot)}</td>${prog(siWkTot, wkTot)}<td>${delta(wkTot, pwTot)}</td></tr>` : ''}
       </tbody></table></div>` : `<div class="wk-grid">${bySku.map(s => `<div class="wk-item"><div class="wk-sku">${esc(s.sc)}<span class="wk-b">${esc(item(s.sc).b || '')}</span></div><div class="wk-v num">${fmt(s.w[wk])}</div><div>${delta(s.w[wk], pw ? s.w[pw] : null)}</div></div>`).join('')}</div>`}
-      ${nextTxt ? `<p class="note" style="margin:10px 0 0">${nextTxt}</p>` : ''}</div>`;
+      ${nextTxt || siNote ? `<p class="note" style="margin:10px 0 0">${[siNote, nextTxt].filter(Boolean).join(' · ')}</p>` : ''}</div>`;
     // 2) cumulative by SKU
     const totAl = sumBy(bySku, s => s.al), totSi = sumBy(bySku, s => s.si);
     const cum = `<div class="card c12"><h2>Lũy kế tháng theo SKU</h2><p class="sub">Allocation các tuần đã chốt vs. Sale In MTD · đơn vị ${U()}</p><div class="tw"><table class="sticky1 tgt"><thead><tr><th>BrandFamily</th><th>SKU</th>${weeks.map(w => `<th>${esc(w)}</th>`).join('')}<th>Tổng allocation</th><th>Sale In MTD</th><th>% sử dụng</th><th>Còn lại</th></tr></thead><tbody>
