@@ -520,48 +520,68 @@
     saveXlsx(`SO_Pending_${todayKey()}_${scopeTag()}.xlsx`, [['SO Pending', rows, [9, 9, 12, 14, 10, 10, 12, 11, 10, 9, 9]]], ev.currentTarget);
   }
 
-  /* ---------- TAB: Tracking Allocation theo Khu vực / NPP ---------- */
+  /* ---------- TAB: Tracking Allocation (tuần hiện tại) theo Khu vực / NPP / SKU ---------- */
+  const addDay = (d, n) => new Date(Date.UTC(+d.slice(0, 4), +d.slice(4, 6) - 1, +d.slice(6, 8)) + n * 864e5).toISOString().slice(0, 10).replace(/-/g, '');
+  const dayDiff = (a, b) => Math.round((Date.UTC(+b.slice(0, 4), +b.slice(4, 6) - 1, +b.slice(6, 8)) - Date.UTC(+a.slice(0, 4), +a.slice(4, 6) - 1, +a.slice(6, 8))) / 864e5);
+  function orderDateKey(s) { // '02/10' hoặc '2/10/2026' -> YYYYMMDD (năm theo tháng hiện hành)
+    const m = String(s || '').match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?/); if (!m) return null;
+    const cm = STATE.cur.month || ''; let y = m[3] ? +m[3] : +cm.slice(0, 4); if (!m[3] && +m[2] > +cm.slice(4, 6) + 1) y -= 1;
+    return y + m[2].padStart(2, '0') + m[1].padStart(2, '0');
+  }
   function viewTracking() {
-    const M = curModel(); const A = (STATE.cur.alloc || []).filter(r => inScope(r[1]) && inBrand(r[2]));
+    const cur = STATE.cur || {}; const A = (cur.alloc || []).filter(r => inScope(r[1]) && inBrand(r[2]));
     if (!A.length) return '<div class="card empty">Chưa có dữ liệu Allocation cho phạm vi này.</div>';
-    const weeks = [...new Set(A.map(r => r[0]))].sort(wkSort); const wk = currentWeek(weeks); const upTo = weeks.slice(0, weeks.indexOf(wk) + 1);
-    const skus = [...new Set(A.map(r => r[2]))].map(sc => ({ sc, al: sumBy(A.filter(r => r[2] === sc), r => r[3]) })).sort((a, b) => b.al - a.al).map(x => x.sc);
+    const weeks = [...new Set(A.map(r => r[0]))].sort(wkSort); const wk = currentWeek(weeks); const nw = weeks[weeks.indexOf(wk) + 1];
+    const AD = cur.allocDates || {}; const fd = d => d ? d.slice(6, 8) + '/' + d.slice(4, 6) : '';
+    const wStart = (AD[wk] || []).find(Boolean) || null; const nStart = nw ? ((AD[nw] || []).find(Boolean) || null) : null;
+    const wEnd = wStart ? (nStart ? addDay(nStart, -1) : addDay(wStart, 6)) : null; const inWk = d => d && wStart && d >= wStart && d <= wEnd;
+    // ngày order của từng hoá đơn (ghép InvoiceNumber = Order Number trong Online Order); không ghép được thì dùng ngày hoá đơn
+    const oDate = {}; (cur.orders || []).forEach(o => { const k = orderDateKey(o[5]); if (k) oDate[String(o[1])] = k; });
+    const lines = (cur.lines || []).filter(l => inScope(l[1]) && inBrand(l[5])).map(l => ({ c: l[1], sc: l[5], q: l[6], d: oDate[String(l[2])] || l[0], byOrder: !!oDate[String(l[2])] }));
+    const lastData = Object.keys(cur.si || {}).sort().pop() || todayKey();
+    const span = wStart ? dayDiff(wStart, wEnd) + 1 : 7; const gone = wStart ? Math.max(0, Math.min(span, dayDiff(wStart, lastData) + 1)) / span : 1;
+    const skus = [...new Set(A.map(r => r[2]))].map(sc => ({ sc, al: sumBy(A.filter(r => r[2] === sc && r[0] === wk), r => r[3]) })).sort((a, b) => b.al - a.al).map(x => x.sc);
     if (ui.trSku !== 'all' && !skus.includes(ui.trSku)) ui.trSku = 'all';
-    const okSku = sc => ui.trSku === 'all' ? skus.includes(sc) : sc === ui.trSku;
-    const P = pendingOrders().filter(o => okSku(o[3]));
+    const shown = ui.trSku === 'all' ? skus : [ui.trSku];
+    const P = pendingOrders().filter(o => shown.includes(o[3]) && (!orderDateKey(o[5]) || inWk(orderDateKey(o[5]))));
     const npps = [...new Set(A.map(r => r[1]))].sort((a, b) => npAll().indexOf(a) - npAll().indexOf(b));
-    const calc = cs => {
-      const al = sumBy(A.filter(r => cs.includes(r[1]) && okSku(r[2]) && upTo.includes(r[0])), r => conv(r[3], r[2]));
-      const aw = sumBy(A.filter(r => cs.includes(r[1]) && okSku(r[2]) && r[0] === wk), r => conv(r[3], r[2]));
-      const si = sumBy(M.list.filter(r => cs.includes(r.c) && okSku(r.sc)), r => conv(r.si, r.sc));
-      const pd = sumBy(P.filter(o => cs.includes(o[0])), o => conv(o[4], o[3]));
-      return { al, aw, si, pd, rem: al - si - pd, use: al ? (si + pd) / al : NaN };
+    const calc = (cs, ss) => {
+      const al = sumBy(A.filter(r => cs.includes(r[1]) && ss.includes(r[2]) && r[0] === wk), r => conv(r[3], r[2]));
+      const si = sumBy(lines.filter(l => cs.includes(l.c) && ss.includes(l.sc) && inWk(l.d)), l => conv(l.q, l.sc));
+      const pd = sumBy(P.filter(o => cs.includes(o[0]) && ss.includes(o[3])), o => conv(o[4], o[3]));
+      return { al, si, pd, rem: al - si - pd, ps: al ? si / al : NaN, use: al ? (si + pd) / al : NaN };
     };
-    const tdv = x => `<td>${fmt(x.al)}</td><td>${fmt(x.aw)}</td><td>${fmt(x.si)}</td><td>${fmt(x.pd)}</td><td>${isFinite(x.use) ? pct(x.use) : '—'}<span class="mini"><i style="width:${Math.min(100, (x.use || 0) * 100)}%;background:${x.use > 1 ? 'var(--bad)' : 'var(--si)'}"></i></span></td><td class="rem">${x.rem >= 0 ? fmt(x.rem) : `<span style="color:var(--bad)">Vượt ${fmt(-x.rem)}</span>`}</td>`;
+    const bar = (v, col) => `<span class="mini"><i style="width:${Math.min(100, (v || 0) * 100)}%;background:${col}"></i></span>`;
+    const tdv = x => `<td>${fmt(x.al)}</td><td>${fmt(x.si)}</td><td>${!isFinite(x.ps) ? '—' : `<span class="${x.ps < gone ? 'lo' : 'hi'}">${pct(x.ps)}</span>`}</td><td>${fmt(x.pd)}</td><td>${isFinite(x.use) ? pct(x.use) : '—'}${bar(x.use, x.use > 1 ? 'var(--bad)' : 'var(--si)')}</td><td class="rem">${x.rem >= 0 ? fmt(x.rem) : `<span style="color:var(--bad)">Vượt ${fmt(-x.rem)}</span>`}</td>`;
     const areas = [...new Set(npps.map(c => (STATE.npps[c] || {}).area || '—'))];
     ui.trOpen = ui.trOpen || new Set(areas);
     let body = ''; const flat = [];
-    areas.forEach(a => { const cs = npps.filter(c => ((STATE.npps[c] || {}).area || '—') === a); const x = calc(cs); const open = ui.trOpen.has(a) || areas.length === 1;
-      body += `<tr class="grp click${open ? ' open' : ''}" data-area="${esc(a)}"><td><span class="caret">▸</span> ${esc(a)}</td>${tdv(x)}</tr>`;
-      cs.forEach(c => { const y = calc([c]); flat.push([c, y]); if (open) body += `<tr class="sku click" data-npp="${esc(c)}"><td>${esc(c)}</td>${tdv(y)}</tr>`; }); });
-    const T = calc(npps); body += `<tr class="tot"><td>Tổng</td>${tdv(T)}</tr>`;
-    const over = flat.filter(([, y]) => y.rem < 0).sort((a, b) => a[1].rem - b[1].rem);
-    const most = [...flat].sort((a, b) => b[1].rem - a[1].rem)[0];
+    areas.forEach(a => { const cs = npps.filter(c => ((STATE.npps[c] || {}).area || '—') === a); const open = ui.trOpen.has(a) || areas.length === 1;
+      body += `<tr class="grp click${open ? ' open' : ''}" data-area="${esc(a)}"><td><span class="caret">▸</span> ${esc(a)}</td><td>${shown.length > 1 ? 'Tất cả' : esc(shown[0])}</td>${tdv(calc(cs, shown))}</tr>`;
+      cs.forEach(c => { const y = calc([c], shown); flat.push([c, y]); if (!open) return;
+        const ss = shown.filter(sc => A.some(r => r[1] === c && r[2] === sc && r[0] === wk));
+        ss.forEach((sc, i) => { body += `<tr class="sku${i === 0 ? ' first' : ''}"><td>${i === 0 ? `<span class="click-npp" data-npp="${esc(c)}">${esc(c)}</span>` : ''}</td><td class="skuc">${esc(sc)}</td>${tdv(calc([c], [sc]))}</tr>`; });
+        if (ss.length > 1) body += `<tr class="sku sub"><td></td><td class="skuc">Cộng ${esc(c)}</td>${tdv(y)}</tr>`; }); });
+    const T = calc(npps, shown); body += `<tr class="tot"><td>Tổng</td><td>${shown.length > 1 ? 'Tất cả' : esc(shown[0])}</td>${tdv(T)}</tr>`;
+    const slow = flat.filter(([, y]) => isFinite(y.ps) && y.ps < gone).sort((a, b) => a[1].ps - b[1].ps);
+    const over = flat.filter(([, y]) => y.rem < 0);
     const chips = `<div class="chips" role="group" aria-label="Chọn SKU">${['all', ...skus].map(k => `<button data-tsku="${esc(k)}" aria-pressed="${ui.trSku === k}">${k === 'all' ? 'Tất cả SKU' : esc(k)}</button>`).join('')}</div>`;
+    const byOrd = lines.filter(l => inWk(l.d) && l.byOrder).length, allWk = lines.filter(l => inWk(l.d)).length;
     return `
-    <section class="lead"><div><div class="eyebrow">Tracking Allocation · đến ${esc(wk)}</div><h1>${esc(scopeLabel())}</h1>
-      <p>Allocation đã Upload Portal (${esc(upTo.join(', '))}) so với Sale In MTD và SO Pending. Còn lại = Allocation − Sale In − Pending.</p></div>${chips}</section>
+    <section class="lead"><div><div class="eyebrow">Tracking Allocation · Current Week ${esc(wk)}</div><h1>${esc(scopeLabel())}</h1>
+      <p>${wStart ? `Tuần ${fd(wStart)} → ${fd(wEnd)} · đã qua ${Math.round(gone * span)}/${span} ngày (tiến độ tuần ${pct(gone)}). ` : ''}Sale In tính theo ngày order trong tuần; ô % Sale In tô đỏ khi chậm hơn tiến độ tuần.</p></div>${chips}</section>
     <div class="grid">
-      <div class="card c3 kpi"><div class="kpi-l">Allocation đến ${esc(wk)}</div><div class="kpi-v">${fmt(T.al)}<small>${U()}</small></div><div class="kpi-f">Current Week ${esc(wk)}: <b>${fmt(T.aw)}</b></div></div>
-      <div class="card c3 kpi"><div class="kpi-l">Sale In MTD</div><div class="kpi-v">${fmt(T.si)}<small>${U()}</small></div><div class="kpi-f">${isFinite(T.al) && T.al ? pct(T.si / T.al) + ' allocation' : ''}</div></div>
-      <div class="card c3 kpi" role="button" tabindex="0" data-go="pending" style="cursor:pointer"><div class="kpi-l">SO Pending</div><div class="kpi-v">${fmt(T.pd)}<small>${U()}</small></div><div class="kpi-f">Xem theo SKU →</div></div>
-      <div class="card c3 kpi"><div class="kpi-l">Còn lại</div><div class="kpi-v" style="color:${T.rem < 0 ? 'var(--bad)' : 'inherit'}">${fmt(T.rem)}<small>${U()}</small></div><div class="kpi-f">Đã dùng <b>${pct(T.use)}</b></div><div class="bar"><i style="width:${Math.min(100, (T.use || 0) * 100)}%;background:${T.use > 1 ? 'var(--bad)' : 'var(--si)'}"></i></div></div>
-      <div class="card c12"><h2>Theo khu vực / NPP</h2><p class="sub">Bấm khu vực để mở/đóng · bấm NPP để xem riêng · đơn vị ${U()}${ui.trSku !== 'all' ? ' · SKU ' + esc(ui.trSku) : ''}</p><div class="tw"><table class="sticky1"><thead><tr><th>Khu vực / NPP</th><th>Allocation đến ${esc(wk)}</th><th>Alloc ${esc(wk)}</th><th>Sale In MTD</th><th>SO Pending</th><th>% đã dùng</th><th>Còn lại</th></tr></thead><tbody>${body}</tbody></table></div></div>
+      <div class="card c3 kpi"><div class="kpi-l">Allocation ${esc(wk)}</div><div class="kpi-v">${fmt(T.al)}<small>${U()}</small></div><div class="kpi-f">${wStart ? 'Upload ' + (AD[wk] || []).filter(Boolean).map(fd).join(' · ') : ''}</div></div>
+      <div class="card c3 kpi"><div class="kpi-l">Sale In tuần</div><div class="kpi-v">${fmt(T.si)}<small>${U()}</small></div><div class="kpi-f"><span class="${T.ps < gone ? 'lo' : 'hi'}">${pct(T.ps)}</span> allocation · tiến độ ${pct(gone)}</div></div>
+      <div class="card c3 kpi" role="button" tabindex="0" data-go="pending" style="cursor:pointer"><div class="kpi-l">SO Pending tuần</div><div class="kpi-v">${fmt(T.pd)}<small>${U()}</small></div><div class="kpi-f">Xem theo SKU →</div></div>
+      <div class="card c3 kpi"><div class="kpi-l">Còn lại ${esc(wk)}</div><div class="kpi-v" style="color:${T.rem < 0 ? 'var(--bad)' : 'inherit'}">${fmt(T.rem)}<small>${U()}</small></div><div class="kpi-f">Đã dùng <b>${pct(T.use)}</b> (Sale In + Pending)</div><div class="bar"><i style="width:${Math.min(100, (T.use || 0) * 100)}%;background:${T.use > 1 ? 'var(--bad)' : 'var(--si)'}"></i></div></div>
+      <div class="card c12"><h2>Theo khu vực / NPP / SKU · ${esc(wk)}</h2><p class="sub">Bấm khu vực để mở/đóng · bấm mã NPP để xem riêng · đơn vị ${U()}</p><div class="tw"><table class="sticky1 trk"><thead><tr><th>Khu vực / NPP</th><th>SKU</th><th>Allocation ${esc(wk)}</th><th>Sale In tuần</th><th>% Sale In</th><th>SO Pending</th><th>% đã dùng</th><th>Còn lại</th></tr></thead><tbody>${body}</tbody></table></div>
+        <p class="note" style="margin:8px 0 0">${allWk ? `${byOrd}/${allWk} dòng hoá đơn trong tuần lấy được ngày order từ Online Order, số còn lại tính theo ngày hoá đơn.` : 'Chưa có Sale In trong tuần.'}${wStart && Object.keys(cur.si || {}).sort()[0] > wStart ? ` Sale In có dữ liệu từ ${fd(Object.keys(cur.si).sort()[0])}.` : ''}</p></div>
     </div>
     ${conclusion([
-      `Đã dùng <b>${pct(T.use)}</b> allocation đến ${esc(wk)} (Sale In ${fmt(T.si)} + Pending ${fmt(T.pd)} ${U()}), còn <b>${fmt(Math.max(0, T.rem))} ${U()}</b>.`,
-      over.length ? `Vượt allocation: ${over.slice(0, 3).map(([c, y]) => `<b>${esc(c)}</b> (${fmt(-y.rem)} ${U()})`).join(', ')}.` : '',
-      most && most[1].rem > 0 ? `Còn nhiều allocation nhất: <b>${esc(most[0])}</b> (${fmt(most[1].rem)} ${U()}).` : ''
+      `Current Week <b>${esc(wk)}</b>: Sale In đạt <b>${pct(T.ps)}</b> allocation so với tiến độ tuần ${pct(gone)}; tính cả Pending đã dùng <b>${pct(T.use)}</b>, ${T.rem >= 0 ? `còn <b>${fmt(T.rem)} ${U()}</b>` : `vượt allocation <b>${fmt(-T.rem)} ${U()}</b>`}.`,
+      slow.length ? `Chậm hơn tiến độ: ${slow.slice(0, 4).map(([c, y]) => `<b>${esc(c)}</b> (${pct(y.ps)})`).join(', ')}.` : 'Tất cả NPP đều đúng tiến độ tuần.',
+      over.length ? `Vượt allocation: ${over.map(([c, y]) => `<b>${esc(c)}</b> (${fmt(-y.rem)} ${U()})`).join(', ')}.` : ''
     ])}`;
   }
 
@@ -628,7 +648,7 @@
   function bindView() {
     const v = $('#view');
     v.querySelectorAll('tr[data-g]').forEach(tr => tr.onclick = () => { const g = tr.dataset.g; ui.open.has(g) ? ui.open.delete(g) : ui.open.add(g); render(); });
-    v.querySelectorAll('tr[data-npp]').forEach(tr => tr.onclick = () => { if (ROLE.type === 'npp') return; const c = tr.dataset.npp; ui.npp = c; ui.area = (STATE.npps[c] || {}).area || ui.area; applyRole(); shell(); window.scrollTo({ top: 0, behavior: 'smooth' }); render(); });
+    v.querySelectorAll('tr[data-npp], .click-npp').forEach(tr => tr.onclick = () => { if (ROLE.type === 'npp') return; const c = tr.dataset.npp; ui.npp = c; ui.area = (STATE.npps[c] || {}).area || ui.area; applyRole(); shell(); window.scrollTo({ top: 0, behavior: 'smooth' }); render(); });
     const tm = $('#tmonth'); if (tm) tm.onchange = () => { ui.tMonth = tm.value; render(); };
     v.querySelectorAll('[data-asku]').forEach(b => b.onclick = () => { ui.allocSku = b.dataset.asku; render(); });
     const xt = $('#xl-target'); if (xt) xt.onclick = exportTarget;

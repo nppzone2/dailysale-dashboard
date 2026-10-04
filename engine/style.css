@@ -285,3 +285,8 @@ select:disabled{opacity:1;color:var(--ink);background:var(--brand-soft);border-c
 .pend-v b{font-size:22px;font-weight:700}.pend-v small{color:var(--muted);font-weight:600;margin-right:10px}
 .pend-go{font-weight:700;color:var(--brand);white-space:nowrap}
 .linkback{background:none;border:0;padding:0;color:var(--brand);font-weight:600;cursor:pointer;margin-bottom:6px;display:block}
+.trk tr.sku td:first-child{padding-left:22px}
+.trk tr.sku:not(.first) td{border-top-color:transparent}
+.trk tr.sub td{font-weight:600;color:var(--ink-2);background:var(--surface-2)}
+.trk td:nth-child(2),.trk th:nth-child(2){text-align:left}
+.click-npp{font-weight:700;color:var(--brand);cursor:pointer;text-decoration:underline;text-decoration-color:var(--line)}
