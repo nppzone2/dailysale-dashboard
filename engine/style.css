@@ -340,3 +340,7 @@ select:disabled{opacity:1;color:var(--ink);background:var(--brand-soft);border-c
 .mb-days>div span{border-top:2px solid var(--line);font-size:10px;color:var(--muted);text-align:center;padding-top:1px;min-height:14px}
 .mb-days>div span.on{border-top-color:var(--brand)}
 .mb-days>div span.cur{color:var(--ink);font-weight:700}
+.kpi .srcnote{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:-4px;min-height:16px}
+.grid>.kpi.c3{min-height:150px}
+.grid>.kpi.c3 .bar{margin-top:auto}
+.grid>.kpi.c3 .kpi-f{min-height:24px}
