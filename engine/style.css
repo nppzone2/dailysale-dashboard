@@ -318,3 +318,9 @@ select:disabled{opacity:1;color:var(--ink);background:var(--brand-soft);border-c
 .wkbar-d small{font-weight:500;font-size:11px;color:var(--muted)}
 .wb-mk.r em{left:auto;right:0;transform:none}.wb-mk.l em{left:0;transform:none}
 .ov{background:var(--good-bg);color:var(--good)}
+.wkbar{gap:6px;padding:10px 16px}
+.wkbar-h b{font-size:14px}
+.wkbar-t{height:12px;margin-top:4px}
+.wb-mk{top:-4px;bottom:-4px}.wb-mk em{display:none}
+.wkbar-d span{flex-direction:row;justify-content:center;gap:4px;font-size:11px;padding-top:2px;border-top-width:2px}
+.wkbar-d small{font-size:10.5px}
