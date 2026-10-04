@@ -8,7 +8,7 @@ const KINDS = {
   alloc:   { label: 'Allocation Current Month', need: ['WEEK', 'Alpha_Name', 'Allocation'] },
   allocdates: { label: 'Allocation · Upload Date', need: ['WEEK', 'WEEK No'] },
   orders:  { label: 'Online Order (SO chờ giao)', need: ['Order Number', 'Status', 'ShortCode', 'Sum of Case'] },
-  sbd:     { label: 'Dis Sale by Date (Sale In theo ngày order)', need: ['Invoice Date', 'Order Date', 'ShortCode', 'Unit'] }
+  sbd:     { label: 'Dis Sale by Date (Sale In theo ngày order)', need: [['Order Date', 'OrderDate'], ['Calendar_Day_Name', 'ConfirmDate', 'Invoice Date', 'InvoiceDate'], 'ShortCode', 'Unit'] }
 };
 const KIND_ORDER = ['items', 'hist', 'si', 'sbd', 'so', 'orders', 'alloc', 'allocdates', 'target'];
 
@@ -22,7 +22,7 @@ function detect(aoa) {
   for (let r = 0; r < Math.min(15, aoa.length); r++) {
     const row = (aoa[r] || []).map(cleanStr);
     for (const k of Object.keys(KINDS)) {
-      if (KINDS[k].need.every(n => row.includes(n))) {
+      if (KINDS[k].need.every(n => Array.isArray(n) ? n.some(x => row.includes(x)) : row.includes(n))) {
         const idx = {}; row.forEach((h, i) => { if (h && !(h in idx)) idx[h] = i; });
         const rows = aoa.slice(r + 1).filter(x => x && x.some(v => v != null && v !== ''));
         return { kind: k, idx, rows };
@@ -162,14 +162,18 @@ function applyParsed(state, p, opts = {}) {
   }
 
   if (p.kind === 'sbd') {
+    // Calendar_Day_Name = ConfirmDate (ngày ghi nhận), Order Date = OrderDate, WeekOrder nếu có
+    const col = (...names) => names.find(n => has(n));
+    const cN = col('Distributor_Name', 'Alpha_Name'), cA = col('Zone_Name', 'Area_Name'), cC = col('Calendar_Day_Name', 'ConfirmDate', 'Invoice Date', 'InvoiceDate'),
+      cO = col('Order Date', 'OrderDate'), cW = col('WeekOrder', 'Week Order');
     const agg = {};
     p.rows.forEach(r => {
-      const c = touchNpp(state, g(r, 'Distributor_Name'), has('Zone_Name') ? g(r, 'Zone_Name') : ''); const sc = cleanStr(g(r, 'ShortCode'));
-      const iv = dateKey(g(r, 'Invoice Date')), od = dateKey(g(r, 'Order Date'));
-      if (!c || !sc || !iv) return;
-      const k = [c, iv, od || iv, sc].join('|'); agg[k] = (agg[k] || 0) + num(g(r, 'Unit'));
+      const c = touchNpp(state, g(r, cN), cA ? g(r, cA) : ''); const sc = cleanStr(g(r, 'ShortCode'));
+      const cd = dateKey(g(r, cC)), od = dateKey(g(r, cO)); const w = cW ? cleanStr(g(r, cW)).replace(/^w?/i, '') : '';
+      if (!c || !sc || !cd) return;
+      const k = [c, cd, od || cd, sc, w ? 'W' + w : ''].join('|'); agg[k] = (agg[k] || 0) + num(g(r, 'Unit'));
     });
-    state.cur.sbd = Object.entries(agg).map(([k, v]) => { const [c, iv, od, sc] = k.split('|'); return [c, iv, od, sc, v]; });
+    state.cur.sbd = Object.entries(agg).map(([k, v]) => { const [c, cd, od, sc, w] = k.split('|'); return [c, cd, od, sc, v, w]; });
     const ods = state.cur.sbd.map(x => x[2]).sort();
     msg.note = ods.length ? 'Ngày order ' + fmtDate(ods[0]) + ' → ' + fmtDate(ods[ods.length - 1]) : 'Không có dòng';
   }
@@ -180,8 +184,10 @@ function applyParsed(state, p, opts = {}) {
       if (!c || !sc) return null;
       if (!state.npps[c]) state.npps[c] = { name: '', area: '' };
       if (has('Area') && g(r, 'Area') && !state.npps[c].area) state.npps[c].area = cleanStr(g(r, 'Area'));
+      const od = ['Order Date', 'OrderDate'].find(h => has(h)), iv = ['Invoice Date', 'InvoiceDate'].find(h => has(h)), sy = Object.keys(p.idx).find(h => /sync/i.test(h));
+      const dd = v => { const k = dateKey(v); return k ? k.slice(6, 8) + '/' + k.slice(4, 6) + '/' + k.slice(0, 4) : cleanStr(v); };
       return [c, cleanStr(g(r, 'Order Number')), cleanStr(g(r, 'Status')), sc, num(g(r, 'Sum of Case')),
-        has('Order Date') ? cleanStr(g(r, 'Order Date')) : '', has('Promised Delivery') ? cleanStr(g(r, 'Promised Delivery')) : '', has('Item B.O') ? cleanStr(g(r, 'Item B.O')) : '', has('Invoice Date') ? cleanStr(g(r, 'Invoice Date')) : ''];
+        od ? dd(g(r, od)) : '', has('Promised Delivery') ? cleanStr(g(r, 'Promised Delivery')) : '', has('Item B.O') ? cleanStr(g(r, 'Item B.O')) : '', iv ? dd(g(r, iv)) : '', sy ? cleanStr(g(r, sy)) : null];
     }).filter(Boolean);
     msg.note = new Set(state.cur.orders.map(o => o[1])).size + ' đơn';
   }
