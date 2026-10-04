@@ -470,12 +470,19 @@
       <div class="card c3 kpi"><div class="kpi-l">Tháng đạt cao nhất</div><div class="kpi-v">${best[0] ? fM(best[0].m) : '—'}</div><div class="kpi-f">${best[0] ? 'Sale In ' + pct(best[0].si / best[0].t) : ''}</div></div>
       <div class="card c12"><div class="card-h"><div><h2>Target, Sale In, Sale Out theo tháng</h2><p class="sub">Đơn vị ${U()}</p></div>${legend([['Target', cT, 'sq'], ['Sale In', cSi], ['Sale Out', cSo]])}</div>
         ${chart({ labels: data.map(d => fM(d.m).replace(/\/\d{4}$/, '')), bars: [{ name: 'Target', color: cT, values: data.map(d => d.t) }], lines: [{ name: 'Sale In', color: cSi, values: data.map(d => d.si) }, { name: 'Sale Out', color: cSo, values: data.map(d => d.so) }], height: 230, tipTitle: i => fM(data[i].m), aria: 'Target, Sale In và Sale Out theo tháng' })}</div>
-      <div class="card c7"><h2>Chi tiết theo tháng</h2><p class="sub">Đơn vị ${U()}</p><div class="tw"><table><thead><tr><th>Tháng</th><th>Target</th><th>Sale In</th><th>% SI</th><th>Sale Out</th><th>% SO</th><th>SI − SO</th></tr></thead><tbody>
-        ${data.map(d => `<tr><td><b>${fM(d.m)}</b>${d.mtd ? ' <span class="pill info">MTD</span>' : ''}</td><td>${fmt(d.t)}</td><td>${fmt(d.si)}</td><td>${pct(d.si / d.t)}</td><td>${fmt(d.so)}</td><td>${pct(d.so / d.t)}</td><td>${fmt(d.si - d.so)}</td></tr>`).join('')}
+      <div class="card c12"><h2>Chi tiết theo tháng</h2><p class="sub">Đơn vị ${U()}</p><div class="tw"><table><thead><tr><th>Tháng</th><th>Target</th><th>Sale In</th><th>% SI</th><th>Sale Out</th><th>% SO</th><th>SI − SO</th></tr></thead><tbody>
+        ${data.map(d => `<tr><td><b>${fM(d.m)}</b></td><td>${fmt(d.t)}</td><td>${fmt(d.si)}</td><td>${pct(d.si / d.t)}</td><td>${fmt(d.so)}</td><td>${pct(d.so / d.t)}</td><td>${fmt(d.si - d.so)}</td></tr>`).join('')}
+        ${full.length ? `<tr class="tot"><td>Tổng YTD</td><td>${fmt(tT)}</td><td>${fmt(tSi)}</td><td>${pct(tSi / tT)}</td><td>${fmt(tSo)}</td><td>${pct(tSo / tT)}</td><td>${fmt(tSi - tSo)}</td></tr>` : ''}
       </tbody></table></div></div>
-      <div class="card c5"><h2>Theo BrandGroup · YTD</h2><p class="sub">Tỷ lệ đạt lũy kế</p><div class="tw"><table><thead><tr><th>BrandGroup</th><th>Target</th><th>% SI</th><th>% SO</th></tr></thead><tbody>
-        ${GROUPS.filter(g => gm[g] && gm[g].t).map(g => `<tr><td>${esc(g)}</td><td>${fmt(gm[g].t)}</td><td>${pct(gm[g].si / gm[g].t)}</td><td>${pct(gm[g].so / gm[g].t)}</td></tr>`).join('')}
-      </tbody></table></div></div>
+      ${(() => { const gs = GROUPS.filter(g => gm[g] && gm[g].t);
+        const v = (rows, g) => { const o = { t: 0, si: 0, so: 0 }; rows.forEach(r => { if (grp(r[1]) !== g) return; const hl = ui.unit === 'hl'; o.t += hl ? r[3] : r[2]; o.si += hl ? r[5] : r[4]; o.so += hl ? r[7] : r[6]; }); return o; };
+        const cells = o => `<td>${fmt(o.t)}</td><td>${o.t ? pct(o.si / o.t) : '—'}</td><td class="gsep">${o.t ? pct(o.so / o.t) : '—'}</td>`;
+        return `<div class="card c12"><h2>Theo BrandGroup · từng tháng</h2><p class="sub">Target và tỷ lệ đạt Sale In / Sale Out · đơn vị ${U()}</p><div class="tw"><table class="bgm"><thead>
+          <tr><th rowspan="2">Tháng</th>${gs.map(g => `<th colspan="3" class="gh">${esc(g)}</th>`).join('')}</tr>
+          <tr>${gs.map(() => '<th>Target</th><th>% SI</th><th class="gsep">% SO</th>').join('')}</tr></thead><tbody>
+          ${full.map(d => `<tr><td><b>${fM(d.m)}</b></td>${gs.map(g => cells(v(d.rows, g))).join('')}</tr>`).join('')}
+          <tr class="tot"><td>Tổng YTD</td>${gs.map(g => cells(gm[g])).join('')}</tr>
+        </tbody></table></div></div>`; })()}
       ${brandCard}
     </div>
     ${conclusion([

@@ -261,3 +261,7 @@ select:disabled{opacity:1;color:var(--ink);background:var(--brand-soft);border-c
 .batch .bd{display:block;font-size:12px;color:var(--ink);text-transform:none;letter-spacing:0;font-weight:700;margin-top:2px}
 .batch th .pill{margin-top:3px;font-size:10px;text-transform:none;letter-spacing:0}
 .wk-total .note{margin-left:2px}
+.bgm th.gh{text-align:center;color:var(--ink);border-bottom:1px solid var(--line)}
+.bgm th.gh+th.gh,.bgm .gsep{border-right:1px solid var(--line)}
+.bgm th.gh{border-left:1px solid var(--line)}
+.bgm tr>td:nth-child(2),.bgm tr:nth-child(2)>th:nth-child(1){border-left:1px solid var(--line)}
