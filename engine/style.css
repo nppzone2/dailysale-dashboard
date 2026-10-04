@@ -324,3 +324,6 @@ select:disabled{opacity:1;color:var(--ink);background:var(--brand-soft);border-c
 .wb-mk{top:-4px;bottom:-4px}.wb-mk em{display:none}
 .wkbar-d span{flex-direction:row;justify-content:center;gap:4px;font-size:11px;padding-top:2px;border-top-width:2px}
 .wkbar-d small{font-size:10.5px}
+.trk tr.sku.first td{border-top:2px solid var(--ink-2)}
+.trk tr.area + tr.sku.first td{border-top:0}
+.trk tr.sku:not(.first) td{border-top:0}

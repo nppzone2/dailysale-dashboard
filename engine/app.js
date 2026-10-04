@@ -68,6 +68,7 @@
   const fmt = v => ui.unit === 'hl' ? nf1.format(v || 0) : nf0.format(Math.round(v || 0));
   const fmtC = v => nf0.format(Math.round(v || 0));
   const pct = v => isFinite(v) ? nf1.format(v * 100) + '%' : '—';
+  const pctT = (v, tg) => !isFinite(v) ? pct(v) : `<span class="${v >= tg ? 'hi' : 'lo'}">${pct(v)}</span>`;
   const pctA = v => !isFinite(v) ? pct(v) : `<span class="${v < 1 ? 'lo' : 'hi'}">${pct(v)}</span>`;
   /* Biểu đồ tiến độ theo BrandFamily: mỗi brand 2 thanh (Sale In, Sale Out) so với mốc (time gone hoặc 100%) */
   function brandProgress(list, mark, markLabel) {
@@ -119,9 +120,12 @@
     (cur.target || []).forEach(([c, sc, v]) => { if (inScope(c) && inBrand(sc)) R(c, sc).t += v; });
     siDays.forEach(d => cur.si[d].forEach(([c, sc, v]) => { if (inScope(c) && inBrand(sc)) R(c, sc).si += v; }));
     if (lastSo) cur.so[lastSo].rows.forEach(([c, sc, v]) => { if (inScope(c) && inBrand(sc)) R(c, sc).so += v; });
+    // Thực đạt Sale In = SO Invoice + đơn Delivery (Online Order) chưa có trong SO Invoice (InvoiceNumber = Order Number)
+    const invNo = new Set((cur.lines || []).map(l => String(l[2]))); let delivQ = 0; const delivNo = new Set();
+    (cur.orders || []).forEach(o => { if (/deliver/i.test(o[2]) && !invNo.has(String(o[1])) && inScope(o[0]) && inBrand(o[3])) { R(o[0], o[3]).si += o[4]; delivQ += conv(o[4], o[3]); delivNo.add(o[1]); } });
     const list = Object.values(rows);
     list.forEach(r => { if ((r.t || r.si || r.so) && item(r.sc).hl == null) missingHl.add(r.sc); });
-    return { m, D, siDays, soDays, lastSi, lastSo, dSi, dSo, tgSi: dSi / D, tgSo: dSo / D, list };
+    return { m, D, siDays, soDays, lastSi, lastSo, dSi, dSo, tgSi: dSi / D, tgSo: dSo / D, list, delivQ, delivN: delivNo.size };
   }
   const sumBy = (list, f) => list.reduce((s, r) => s + f(r), 0);
   function aggregate(list, keyF) {
@@ -310,7 +314,7 @@
       const a1 = o.t ? o.si / o.t : NaN, a2 = o.t ? o.so / o.t : NaN; const r1 = o.t - o.si, r2 = o.t - o.so;
       const bar = (a, c) => `<span class="mini"><i style="width:${Math.min(100, (a || 0) * 100)}%;background:${c}"></i></span>`;
       const remCell = r => r > 0 ? `<span class="rem">${fmt(r)}</span>` : `<span class="neg">Vượt ${fmt(-r)}</span>`;
-      return `<tr class="${cls}" ${attr}>${cls === 'sku' ? `<td>${esc(item(label).b || '—')}</td><td class="skuc">${esc(label)}</td>` : `<td colspan="2">${label}</td>`}<td>${fmt(o.t)}</td><td>${fmt(o.si)}</td><td>${pct(a1)}${bar(a1, cSi)}</td><td>${remCell(r1)}</td><td>${fmt(o.so)}</td><td>${pct(a2)}${bar(a2, cSo)}</td><td>${remCell(r2)}</td></tr>`;
+      return `<tr class="${cls}" ${attr}>${cls === 'sku' ? `<td>${esc(item(label).b || '—')}</td><td class="skuc">${esc(label)}</td>` : `<td colspan="2">${label}</td>`}<td>${fmt(o.t)}</td><td>${fmt(o.si)}</td><td>${pctT(a1, M.tgSi)}${bar(a1, cSi)}</td><td>${remCell(r1)}</td><td>${fmt(o.so)}</td><td>${pctT(a2, M.tgSo)}${bar(a2, cSo)}</td><td>${remCell(r2)}</td></tr>`;
     }
     const labels = Array.from({ length: M.D }, (_, i) => String(i + 1));
     const daily = Array(M.D).fill(null); M.siDays.forEach(d => { daily[+d.slice(6) - 1] = sumBy(STATE.cur.si[d].filter(r => inScope(r[0]) && inBrand(r[1])), r => conv(r[2], r[1])); });
@@ -325,7 +329,7 @@
       const rowsN = Object.values(byN).filter(o => o.t).sort((a, b) => (b.si / b.t) - (a.si / a.t));
       board = `<div class="card c12"><div class="card-h"><div><h2>Xếp hạng NPP theo % đạt Sale In</h2><p class="sub">Bấm vào NPP để xem chi tiết · time gone ${pct(M.tgSi)} · đơn vị ${U()}</p></div></div>
       <div class="tw"><table><thead><tr><th>NPP</th><th>Khu vực</th><th>Target</th><th>Sale In</th><th>% đạt SI</th><th>Còn lại SI</th><th>Sale Out</th><th>% đạt SO</th><th>Còn lại SO</th><th>Trạng thái SI</th></tr></thead><tbody>
-      ${rowsN.map(o => `<tr class="click" data-npp="${esc(o.k)}"><td><b>${esc(o.k)}</b></td><td>${esc((STATE.npps[o.k] || {}).area || '')}</td><td>${fmt(o.t)}</td><td>${fmt(o.si)}</td><td>${pct(o.si / o.t)}</td><td class="rem">${fmt(Math.max(0, o.t - o.si))}</td><td>${fmt(o.so)}</td><td>${pct(o.so / o.t)}</td><td class="rem">${fmt(Math.max(0, o.t - o.so))}</td><td>${status(o.si / o.t, M.tgSi)}</td></tr>`).join('')}
+      ${rowsN.map(o => `<tr class="click" data-npp="${esc(o.k)}"><td><b>${esc(o.k)}</b></td><td>${esc((STATE.npps[o.k] || {}).area || '')}</td><td>${fmt(o.t)}</td><td>${fmt(o.si)}</td><td>${pctT(o.si / o.t, M.tgSi)}</td><td class="rem">${fmt(Math.max(0, o.t - o.si))}</td><td>${fmt(o.so)}</td><td>${pctT(o.so / o.t, M.tgSo)}</td><td class="rem">${fmt(Math.max(0, o.t - o.so))}</td><td>${status(o.si / o.t, M.tgSi)}</td></tr>`).join('')}
       </tbody></table></div></div>`;
     }
     let cover = '';
@@ -349,7 +353,7 @@
       <div class="btns"><button class="btn" id="xl-invoice">Tải SO Invoice</button><button class="btn" id="xl-progress">Tải Excel tiến độ</button></div></section>
     <div class="grid">
       <div class="card c3 kpi"><div class="kpi-l">Target tháng</div><div class="kpi-v">${fmt(T)}<small>${U()}</small></div><div class="kpi-f">Time gone <b>${pct(M.tgSi)}</b></div><div class="bar"><i style="width:${M.tgSi * 100}%;background:var(--target)"></i></div></div>
-      <div class="card c3 kpi"><div class="kpi-l">Sale In MTD</div><div class="srcnote">${M.siDays.length ? 'Số liệu ' + fD(M.siDays[0]) + ' → ' + fD(M.lastSi) : 'Chưa có số liệu'}</div><div class="kpi-v">${fmt(SI)}<small>${U()}</small></div><div class="kpi-f"><b>${pct(aSi)}</b> target ${status(aSi, M.tgSi)}</div><div class="bar"><i style="width:${Math.min(100, aSi * 100)}%;background:var(--si)"></i><span class="tg" style="left:${M.tgSi * 100}%" title="Time gone"></span></div></div>
+      <div class="card c3 kpi"><div class="kpi-l">Sale In MTD</div><div class="srcnote">${M.siDays.length ? 'SO Invoice ' + fD(M.siDays[0]) + ' → ' + fD(M.lastSi) : 'Chưa có số liệu'}${M.delivN ? ` + ${M.delivN} đơn Delivery (${fmt(M.delivQ)})` : ''}</div><div class="kpi-v">${fmt(SI)}<small>${U()}</small></div><div class="kpi-f"><b>${pct(aSi)}</b> target ${status(aSi, M.tgSi)}</div><div class="bar"><i style="width:${Math.min(100, aSi * 100)}%;background:var(--si)"></i><span class="tg" style="left:${M.tgSi * 100}%" title="Time gone"></span></div></div>
       <div class="card c3 kpi"><div class="kpi-l">Sale Out MTD</div><div class="srcnote">${M.lastSo ? 'Số liệu 01/' + M.m.slice(4, 6) + ' → ' + fD(M.lastSo) : 'Chưa có số liệu'}</div><div class="kpi-v">${fmt(SO)}<small>${U()}</small></div><div class="kpi-f"><b>${pct(aSo)}</b> target ${status(aSo, M.tgSo)}</div><div class="bar"><i style="width:${Math.min(100, aSo * 100)}%;background:var(--so)"></i><span class="tg" style="left:${M.tgSo * 100}%" title="Time gone"></span></div></div>
       <div class="card c3 kpi"><div class="kpi-l">Còn lại đến cuối tháng</div>
         <div class="remrow"><span class="dot" style="background:var(--si)"></span><span>Sale In</span><b class="num">${fmt(remSi)}</b><small>${U()}</small></div>
@@ -570,12 +574,12 @@
     ui.trOpen = ui.trOpen || new Set(areas);
     let body = ''; const flat = [];
     areas.forEach(a => { const cs = npps.filter(c => ((STATE.npps[c] || {}).area || '—') === a); const open = ui.trOpen.has(a) || areas.length === 1;
-      const ax = calc(cs, shown); body += `<tr class="grp area click${open ? ' open' : ''}" data-area="${esc(a)}"><td><span class="caret">▸</span> ${esc(a)}</td><td>${shown.length > 1 ? 'Tất cả' : esc(shown[0])}</td>${tdv(ax)}</tr>`;
+      const ax = calc(cs, shown); body += `<tr class="grp area click${open ? ' open' : ''}" data-area="${esc(a)}"><td><span class="caret">▸</span> ${esc(a)}</td><td>${shown.length > 1 ? '' : esc(shown[0])}</td>${tdv(ax)}</tr>`;
       cs.forEach(c => { const y = calc([c], shown); flat.push([c, y]); if (!open) return;
         const ss = shown.filter(sc => A.some(r => r[1] === c && r[2] === sc && r[0] === wk));
         ss.forEach((sc, i) => { const z = calc([c], [sc]); body += `<tr class="sku${i === 0 ? ' first' : ''}${isFinite(z.ps) && z.ps < gone ? ' slow' : ''}"><td>${i === 0 ? `<span class="click-npp" data-npp="${esc(c)}">${esc(c)}</span>` : ''}</td><td class="skuc">${esc(sc)}</td>${tdv(z)}</tr>`; });
         }); });
-    const T = calc(npps, shown); body += `<tr class="tot"><td>Tổng</td><td>${shown.length > 1 ? 'Tất cả' : esc(shown[0])}</td>${tdv(T)}</tr>`;
+    const T = calc(npps, shown); body += `<tr class="tot"><td>Tổng</td><td>${shown.length > 1 ? '' : esc(shown[0])}</td>${tdv(T)}</tr>`;
     const slow = flat.filter(([, y]) => isFinite(y.ps) && y.ps < gone).sort((a, b) => a[1].ps - b[1].ps);
     const over = flat.filter(([, y]) => y.rem < 0);
     const chips = `<div class="chips" role="group" aria-label="Chọn SKU">${['all', ...skus].map(k => `<button data-tsku="${esc(k)}" aria-pressed="${ui.trSku === k}">${k === 'all' ? 'Tất cả SKU' : esc(k)}</button>`).join('')}</div>`;
@@ -596,7 +600,7 @@
       <div class="card c3 kpi"><div class="kpi-l">Sale In ${esc(wk)}</div><div class="kpi-v">${fmt(T.si)}<small>${U()}</small></div><div class="kpi-f"><span class="${T.ps < gone ? 'lo' : 'hi'}">${pct(T.ps)}</span> allocation · tiến độ ${pct(gone)}</div></div>
       <div class="card c3 kpi" role="button" tabindex="0" data-go="pending" style="cursor:pointer"><div class="kpi-l">SO Pending ${esc(wk)}</div><div class="kpi-v">${fmt(T.pd)}<small>${U()}</small></div><div class="kpi-f">Xem theo SKU →</div></div>
       <div class="card c3 kpi"><div class="kpi-l">Còn lại ${esc(wk)}</div><div class="kpi-v" style="color:${T.rem < 0 ? 'var(--good)' : 'inherit'}">${fmt(T.rem)}<small>${U()}</small></div><div class="kpi-f">Đã dùng <b>${pct(T.use)}</b> (Sale In + Pending)</div><div class="bar"><i style="width:${Math.min(100, (T.use || 0) * 100)}%;background:${T.use > 1 ? 'var(--good)' : 'var(--si)'}"></i></div></div>
-      <div class="card c12"><h2>Theo khu vực / NPP / SKU · ${esc(wk)}</h2><p class="sub">Bấm khu vực để mở/đóng · bấm mã NPP để xem riêng · đơn vị ${U()}</p><div class="tw"><table class="sticky1 trk"><thead><tr><th>Khu vực / NPP</th><th>SKU</th><th>Allocation ${esc(wk)}</th><th>Sale In ${esc(wk)}</th><th>% Sale In</th><th>SO Pending</th><th>% đã dùng</th><th>Còn lại</th></tr></thead><tbody>${body}</tbody></table></div>
+      <div class="card c12"><h2>Theo khu vực / NPP / SKU · ${esc(wk)}</h2><p class="sub">Đơn vị ${U()}</p><div class="tw"><table class="sticky1 trk"><thead><tr><th>Khu vực / NPP</th><th>SKU</th><th>Allocation ${esc(wk)}</th><th>Sale In ${esc(wk)}</th><th>% Sale In</th><th>SO Pending</th><th>% đã dùng</th><th>Còn lại</th></tr></thead><tbody>${body}</tbody></table></div>
         <p class="note" style="margin:8px 0 0">${hasSbd ? `Dis Sale by Date tính đến ${fd(addDay(D, -1))} (D-1).` : `Chưa có file Dis Sale by Date: ${byOrd}/${allWk} dòng hoá đơn lấy được ngày order từ Online Order, số còn lại tính theo ngày hoá đơn.`}${deliv.length ? ` Cộng ${fmt(sumBy(deliv.filter(o => inWk(orderDateKey(o[5])) && shown.includes(o[3])), o => conv(o[4], o[3])))} ${U()} từ ${new Set(deliv.map(o => o[1])).size} đơn Delivery (Online Order).` : ''}</p></div>
     </div>
     ${conclusion([
