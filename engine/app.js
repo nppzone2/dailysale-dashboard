@@ -328,8 +328,8 @@
       const byN = aggregate(L, r => r.c);
       const rowsN = Object.values(byN).filter(o => o.t).sort((a, b) => (b.si / b.t) - (a.si / a.t));
       board = `<div class="card c12"><div class="card-h"><div><h2>Xếp hạng NPP theo % đạt Sale In</h2><p class="sub">Bấm vào NPP để xem chi tiết · time gone ${pct(M.tgSi)} · đơn vị ${U()}</p></div></div>
-      <div class="tw"><table><thead><tr><th>NPP</th><th>Khu vực</th><th>Target</th><th>Sale In</th><th>% đạt SI</th><th>Còn lại SI</th><th>Sale Out</th><th>% đạt SO</th><th>Còn lại SO</th><th>Trạng thái SI</th></tr></thead><tbody>
-      ${rowsN.map(o => `<tr class="click" data-npp="${esc(o.k)}"><td><b>${esc(o.k)}</b></td><td>${esc((STATE.npps[o.k] || {}).area || '')}</td><td>${fmt(o.t)}</td><td>${fmt(o.si)}</td><td>${pctT(o.si / o.t, M.tgSi)}</td><td class="rem">${fmt(Math.max(0, o.t - o.si))}</td><td>${fmt(o.so)}</td><td>${pctT(o.so / o.t, M.tgSo)}</td><td class="rem">${fmt(Math.max(0, o.t - o.so))}</td><td>${status(o.si / o.t, M.tgSi)}</td></tr>`).join('')}
+      <div class="tw"><table class="rank"><thead><tr><th>Khu vực</th><th>NPP</th><th class="gs">Target</th><th class="gs">Sale In</th><th>% đạt SI</th><th>Còn lại SI</th><th class="gs">Sale Out</th><th>% đạt SO</th><th>Còn lại SO</th><th class="gs">Trạng thái SI</th></tr></thead><tbody>
+      ${rowsN.map(o => `<tr class="click" data-npp="${esc(o.k)}"><td>${esc((STATE.npps[o.k] || {}).area || '')}</td><td><b>${esc(o.k)}</b></td><td class="gs">${fmt(o.t)}</td><td class="gs">${fmt(o.si)}</td><td>${pctT(o.si / o.t, M.tgSi)}</td><td class="rem">${fmt(Math.max(0, o.t - o.si))}</td><td class="gs">${fmt(o.so)}</td><td>${pctT(o.so / o.t, M.tgSo)}</td><td class="rem">${fmt(Math.max(0, o.t - o.so))}</td><td class="gs">${status(o.si / o.t, M.tgSi)}</td></tr>`).join('')}
       </tbody></table></div></div>`;
     }
     let cover = '';
@@ -401,7 +401,7 @@
     const bySku = skus.map(sc => { const w = {}; weeks.forEach(k => w[k] = aSum(r => r[2] === sc && r[0] === k));
       const al = sumBy(Object.values(w), x => x); const si = sumBy([...new Set(A.filter(r => r[2] === sc).map(r => r[1]))], c => siOf(c, sc));
       return { sc, w, al, si }; });
-    const usedBar = (si, al) => { const p = al ? si / al : 0; const c = p > 1 ? 'var(--bad)' : 'var(--si)'; return `${al ? pct(p) : '—'}<span class="mini"><i style="width:${Math.min(100, p * 100)}%;background:${c}"></i></span>`; };
+    const usedBar = (si, al) => { const p = al ? si / al : 0; const c = 'var(--si)'; return `${al ? pct(p) : '—'}<span class="mini"><i style="width:${Math.min(100, p * 100)}%;background:${c}"></i></span>`; };
     const remTd = (al, si) => { const r = al - si; return `<td class="rem">${r >= 0 ? fmt(r) : '<span style="color:var(--bad)">Vượt ' + fmt(-r) + '</span>'}</td>`; };
     const delta = (a, b) => { if (b == null) return '<span class="note">–</span>'; const d = a - b; const p = b ? d / b : NaN; const cls = d > 0 ? 'up' : d < 0 ? 'down' : '';
       return `<span class="dl ${cls}">${d > 0 ? '▲' : d < 0 ? '▼' : '■'} ${fmt(Math.abs(d))}${isFinite(p) ? ' · ' + pct(Math.abs(p)) : ''}</span>`; };
@@ -424,7 +424,7 @@
     const wDays = wStart ? Object.keys(cur.si || {}).filter(d => d >= wStart && d <= wEnd).sort() : [];
     const siWk = sc => sumBy(wDays, d => sumBy(cur.si[d].filter(r => r[1] === sc && inScope(r[0]) && inBrand(r[1])), r => conv(r[2], r[1])));
     const siWkTot = sumBy(bySku, x => siWk(x.sc));
-    const prog = (si, al) => { const p = al ? si / al : 0; return `<td><b>${fmt(si)}</b></td><td>${al ? pct(p) : '—'}<span class="mini"><i style="width:${Math.min(100, p * 100)}%;background:${p > 1 ? 'var(--bad)' : 'var(--si)'}"></i></span></td>`; };
+    const prog = (si, al) => { const p = al ? si / al : 0; return `<td><b>${fmt(si)}</b></td><td>${al ? pct(p) : '—'}<span class="mini"><i style="width:${Math.min(100, p * 100)}%;background:var(--si)"></i></span></td>`; };
     const siNote = wStart && wDays.length ? `Sale In tuần ${esc(wk)}: ${fd(wDays[0])} → ${fd(wDays[wDays.length - 1])}${wDays[0] > wStart ? ` (dữ liệu Sale In từ ${fd(wDays[0])}, ngày trước đó thuộc tháng trước)` : ''}` : '';
     const latest = `<div class="card c12 wk-card"><div class="card-h"><div><div class="eyebrow">Current Week</div><h2 style="font-size:18px">${esc(wk)}<span class="note" style="font-weight:500;margin-left:8px">${esc(rangeTxt)}</span></h2></div>
         <div class="wk-total"><span class="kpi-l">Tổng allocation ${esc(wk)}</span><b>${fmt(wkTot)}</b><small>${U()}</small> ${pw ? delta(wkTot, pwTot) + `<span class="note">so với ${esc(pw)}</span>` : ''}</div></div>
@@ -635,7 +635,7 @@
     // group mix for completed months
     const bm = {}; full.forEach(d => d.rows.forEach(r => { const b = brandOf(r[1]); const o = bm[b] || (bm[b] = { t: 0, si: 0, so: 0, mo: {} }); const hl = ui.unit === 'hl';
       o.t += hl ? r[3] : r[2]; o.si += hl ? r[5] : r[4]; o.so += hl ? r[7] : r[6]; const mm = o.mo[d.m] || (o.mo[d.m] = { t: 0, si: 0 }); mm.t += hl ? r[3] : r[2]; mm.si += hl ? r[5] : r[4]; }));
-    const brs = Object.entries(bm).filter(([, o]) => o.t || o.si).sort((a, b) => b[1].si - a[1].si);
+    const brs = Object.entries(bm).filter(([, o]) => o.t || o.si).sort((a, b) => (a[0] === 'Khác') - (b[0] === 'Khác') || b[1].si - a[1].si);
     const siAll = sumBy(brs, ([, o]) => o.si);
     const lastM = full.length ? full[full.length - 1].m : '';
     const brandChart = brs.length ? `<div class="card c12"><div class="card-h"><div><h2>Tiến độ BrandFamily · YTD</h2><p class="sub">% đạt target lũy kế T1–${fM(lastM)} · vạch đứng là mốc 100%</p></div>${legend([['Sale In', css('--si')], ['Sale Out', css('--so')]])}</div>${brandProgress(brs.filter(([b]) => b !== 'Khác').map(([k, o]) => ({ k, t: o.t, si: o.si, so: o.so })), 1, '100%')}</div>` : '';

@@ -344,3 +344,10 @@ select:disabled{opacity:1;color:var(--ink);background:var(--brand-soft);border-c
 .grid>.kpi.c3{min-height:150px}
 .grid>.kpi.c3 .bar{margin-top:auto}
 .grid>.kpi.c3 .kpi-f{min-height:24px}
+.rank .gs{border-left:2px solid var(--line)}
+.rank th:first-child,.rank td:first-child{text-align:left;color:var(--ink-2)}
+.rank th:nth-child(2),.rank td:nth-child(2){text-align:left}
+.batch{table-layout:fixed}
+.batch th,.batch td{vertical-align:middle}
+.batch th:nth-child(1){width:13%}.batch th:nth-child(2){width:8%}
+.batch thead th{height:64px}
