@@ -426,6 +426,16 @@
     const tT = sumBy(full, d => d.t), tSi = sumBy(full, d => d.si), tSo = sumBy(full, d => d.so);
     const best = [...full].sort((a, b) => b.si / b.t - a.si / a.t);
     // group mix for completed months
+    const bm = {}; full.forEach(d => d.rows.forEach(r => { const b = brandOf(r[1]); const o = bm[b] || (bm[b] = { t: 0, si: 0, so: 0, mo: {} }); const hl = ui.unit === 'hl';
+      o.t += hl ? r[3] : r[2]; o.si += hl ? r[5] : r[4]; o.so += hl ? r[7] : r[6]; const mm = o.mo[d.m] || (o.mo[d.m] = { t: 0, si: 0 }); mm.t += hl ? r[3] : r[2]; mm.si += hl ? r[5] : r[4]; }));
+    const brs = Object.entries(bm).filter(([, o]) => o.t || o.si).sort((a, b) => b[1].si - a[1].si);
+    const siAll = sumBy(brs, ([, o]) => o.si);
+    const lastM = full.length ? full[full.length - 1].m : '';
+    const brandCard = brs.length ? `<div class="card c12"><h2>Theo BrandName · YTD</h2><p class="sub">Đơn vị ${U()} · xếp theo Sale In · cột cuối là % đạt Sale In tháng gần nhất (${fM(lastM)})</p><div class="tw"><table><thead><tr><th>BrandName</th><th>Target</th><th>Sale In</th><th>% SI</th><th>Sale Out</th><th>% SO</th><th>Tỷ trọng SI</th><th>% SI ${fM(lastM).replace(/\/\d{4}$/, '')}</th></tr></thead><tbody>
+      ${brs.map(([b, o]) => { const lm = o.mo[lastM]; return `<tr><td><b>${esc(b)}</b></td><td>${fmt(o.t)}</td><td>${fmt(o.si)}</td><td>${o.t ? pct(o.si / o.t) : '—'}${o.t ? `<span class="mini"><i style="width:${Math.min(100, o.si / o.t * 100)}%;background:${o.si >= o.t ? 'var(--si)' : 'var(--warn)'}"></i></span>` : ''}</td><td>${fmt(o.so)}</td><td>${o.t ? pct(o.so / o.t) : '—'}</td><td>${pct(siAll ? o.si / siAll : 0)}</td><td>${lm && lm.t ? pct(lm.si / lm.t) : '—'}</td></tr>`; }).join('')}
+    </tbody></table></div></div>` : '';
+    const tAll = sumBy(brs, ([, o]) => o.t); const brT = brs.filter(([b, o]) => b !== 'Khác' && o.t > 0 && o.t >= tAll * 0.01).map(([b, o]) => [b, o.si / o.t, o]);
+    const brBest = [...brT].sort((a, b) => b[1] - a[1])[0], brWorst = [...brT].sort((a, b) => a[1] - b[1])[0];
     const gm = {}; full.forEach(d => d.rows.forEach(r => { const g = grp(r[1]); gm[g] = gm[g] || { t: 0, si: 0, so: 0 }; gm[g].t += ui.unit === 'hl' ? r[3] : r[2]; gm[g].si += ui.unit === 'hl' ? r[5] : r[4]; gm[g].so += ui.unit === 'hl' ? r[7] : r[6]; }));
     return `
     <section class="lead"><div><div class="eyebrow">YTD as of ${fM(asOf)}</div><h1>${esc(scopeLabel())}</h1>
@@ -443,10 +453,13 @@
       <div class="card c5"><h2>Theo BrandGroup · YTD</h2><p class="sub">Tỷ lệ đạt lũy kế</p><div class="tw"><table><thead><tr><th>BrandGroup</th><th>Target</th><th>% SI</th><th>% SO</th></tr></thead><tbody>
         ${GROUPS.filter(g => gm[g] && gm[g].t).map(g => `<tr><td>${esc(g)}</td><td>${fmt(gm[g].t)}</td><td>${pct(gm[g].si / gm[g].t)}</td><td>${pct(gm[g].so / gm[g].t)}</td></tr>`).join('')}
       </tbody></table></div></div>
+      ${brandCard}
     </div>
     ${conclusion([
       `YTD as of ${fM(asOf)}: Sale In đạt <b>${pct(tSi / tT)}</b>, Sale Out đạt <b>${pct(tSo / tT)}</b> tổng target.`,
       best.length > 1 ? `Cao nhất <b>${fM(best[0].m)}</b> (${pct(best[0].si / best[0].t)}), thấp nhất <b>${fM(best[best.length - 1].m)}</b> (${pct(best[best.length - 1].si / best[best.length - 1].t)}).` : '',
+      brs.length ? `Brand đóng góp lớn nhất: <b>${esc(brs[0][0])}</b> (${pct(siAll ? brs[0][1].si / siAll : 0)} Sale In YTD, đạt ${brs[0][1].t ? pct(brs[0][1].si / brs[0][1].t) : '—'} target).` : '',
+      brBest && brWorst && brBest[0] !== brWorst[0] ? `Brand đạt cao nhất: <b>${esc(brBest[0])}</b> (${pct(brBest[1])}); thấp nhất: <b>${esc(brWorst[0])}</b> (${pct(brWorst[1])}, thiếu ${fmt(Math.max(0, brWorst[2].t - brWorst[2].si))} ${U()}).` : '',
       (() => { const w = GROUPS.filter(g => g !== 'Khác' && gm[g] && gm[g].t > 0).map(g => [g, gm[g].si / gm[g].t]).sort((a, b) => a[1] - b[1])[0]; return w ? `BrandGroup đạt thấp nhất: <b>${esc(w[0])}</b> (${pct(w[1])}), cần ưu tiên cải thiện.` : ''; })()
     ])}`;
   }
