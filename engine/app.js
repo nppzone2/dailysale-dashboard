@@ -582,7 +582,16 @@
     const byOrd = lines.filter(l => inWk(l.d) && l.byOrder).length, allWk = lines.filter(l => inWk(l.d)).length;
     return `
     <section class="lead"><div><div class="eyebrow">Tracking Allocation · Current Week ${esc(wk)}</div><h1>${esc(scopeLabel())}</h1>
-      <p>${wStart ? `Tuần ${fd(wStart)} → ${fd(wEnd)} · đã qua ${goneDays}/${span} ngày làm việc T2–T7 đến D-1 (tiến độ tuần ${pct(gone)}). ` : ''}Sale In thực tế = Dis Sale by Date đến D-1 (theo ngày order) + đơn Delivery; dòng tô đỏ là chậm hơn tiến độ tuần, ô vàng là vượt allocation.</p></div>${chips}</section>
+      <p>${wStart ? `Tuần ${fd(wStart)} → ${fd(wEnd)} · đã qua ${goneDays}/${span} ngày làm việc T2–T7 đến D-1 (tiến độ tuần ${pct(gone)}). ` : ''}</p></div>${chips}</section>
+    <div class="wkbar card">
+      <div class="wkbar-h"><b>Tiến độ ${esc(wk)}</b><span class="note">Allocation ${fmt(T.al)} ${U()} · Sale In ${pct(T.ps)} · Pending ${pct(T.al ? T.pd / T.al : 0)} · tiến độ tuần ${pct(gone)}</span></div>
+      <div class="wkbar-t">
+        <i class="wb-si" style="width:${Math.min(100, (T.ps || 0) * 100)}%"></i><i class="wb-pd" style="width:${Math.max(0, Math.min(100 - Math.min(100, (T.ps || 0) * 100), (T.al ? T.pd / T.al : 0) * 100))}%"></i>
+        <span class="wb-mk${gone > 0.85 ? ' r' : gone < 0.15 ? ' l' : ''}" style="left:${gone * 100}%"><em>Tiến độ ${pct(gone)}</em></span>
+      </div>
+      <div class="wkbar-d">${(() => { const out = []; if (wStart) for (let d = wStart; d <= wEnd; d = addDay(d, 1)) if (isWork(d)) out.push(d); return out.map(d => `<span class="${d <= lastData ? 'on' : ''}">${['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'][new Date(Date.UTC(+d.slice(0, 4), +d.slice(4, 6) - 1, +d.slice(6, 8))).getUTCDay()]}<small>${fd(d)}</small></span>`).join(''); })()}</div>
+      <div class="legend"><span><i class="sq" style="background:var(--si)"></i>Sale In</span><span><i class="sq" style="background:var(--so);opacity:.55"></i>SO Pending</span><span><i style="background:var(--ink)"></i>Tiến độ tuần</span></div>
+    </div>
     <div class="grid">
       <div class="card c3 kpi"><div class="kpi-l">Allocation ${esc(wk)}</div><div class="kpi-v">${fmt(T.al)}<small>${U()}</small></div><div class="kpi-f">${wStart ? 'Upload ' + (AD[wk] || []).filter(Boolean).map(fd).join(' · ') : ''}</div></div>
       <div class="card c3 kpi"><div class="kpi-l">Sale In ${esc(wk)}</div><div class="kpi-v">${fmt(T.si)}<small>${U()}</small></div><div class="kpi-f"><span class="${T.ps < gone ? 'lo' : 'hi'}">${pct(T.ps)}</span> allocation · tiến độ ${pct(gone)}</div></div>
