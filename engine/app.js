@@ -3,11 +3,11 @@
   const $ = (s, el = document) => el.querySelector(s);
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const GROUPS = ['Group AA', 'Group BB', 'Khác'];
-    const TABS = [['target', 'Target tháng'], ['progress', 'MTD Sale In - Out'], ['alloc', 'Allocation'], ['history', 'YTD as of M-1']];
+    const TABS = [['target', 'Target tháng'], ['progress', 'MTD Sale In - Out'], ['alloc', 'Allocation'], ['tracking', 'Tracking Allocation'], ['history', 'YTD as of M-1']];
 
   let STATE = null; const ENC = window.ENC || { blobs: {} };
   let PUBLISHED = STATE; let previewing = false;
-  const ui = { tab: 'progress', scope: 'all', area: 'all', npp: 'all', brand: 'all', bgf: 'all', unit: 'case', tMonth: '', open: new Set(), allocSku: 'all' };
+  const ui = { trSku: 'all', tab: 'progress', scope: 'all', area: 'all', npp: 'all', brand: 'all', bgf: 'all', unit: 'case', tMonth: '', open: new Set(), allocSku: 'all' };
   try { const s = JSON.parse(localStorage.getItem('npp-ui') || '{}'); if (s.tab) ui.tab = s.tab; if (s.unit) ui.unit = s.unit; if (s.brand) ui.brand = s.brand; } catch (e) {}
   const saveUi = () => { try { localStorage.setItem('npp-ui', JSON.stringify({ tab: ui.tab, unit: ui.unit, scope: ui.scope, brand: ui.brand })); } catch (e) {} };
 
@@ -193,7 +193,7 @@
           <div><div class="brand-t">Daily Sale by Distributor</div><div class="brand-s"><b>RTC - Future Fit</b> · HCM Zone 2 · ${esc(fM(cur.month))}</div></div></div>
         <div class="fresh"><span>Sale In <b>${fD(siD)}</b></span><span>Sale Out <b>${fD(soD)}</b></span><span>Allocation <b>${esc(wk || '—')}</b></span><span class="who">${esc(ROLE.type === 'npp' ? ROLE.id : ROLE.label)}<button id="logout" class="linkbtn">Đăng xuất</button></span></div>
       </div>
-      <nav class="tabs" role="tablist">${TABS.map(([k, l]) => `<button class="tab" role="tab" data-tab="${k}" aria-selected="${ui.tab === k}">${l}</button>`).join('')}</nav>
+      <nav class="tabs" role="tablist">${TABS.map(([k, l]) => `<button class="tab" role="tab" data-tab="${k}" aria-selected="${ui.tab === k || (ui.tab === 'pending' && k === 'progress')}">${l}</button>`).join('')}</nav>
     </div></header>
     <div class="filters"><div class="filters-in">
       <div class="fld"><label for="area">Khu vực</label><select id="area" ${ROLE.type !== 'admin' ? 'disabled' : ''}>
@@ -223,7 +223,7 @@
   }
 
   function render() { missingHl.clear(); const v = $('#view'); chartId = 0; CHARTS = [];
-    v.innerHTML = ({ target: viewTarget, progress: viewProgress, alloc: viewAlloc, history: viewHistory })[ui.tab]();
+    v.innerHTML = ({ target: viewTarget, progress: viewProgress, alloc: viewAlloc, tracking: viewTracking, pending: viewPending, history: viewHistory }[ui.tab] || viewProgress)();
     bindView(); drawCharts(); }
 
   const conclusion = pts => `<section class="concl"><svg class="star" width="18" height="18" viewBox="0 0 30 30" aria-hidden="true"><path d="M15 2l3.9 8.4 9.1 1-6.8 6.2 1.9 9-8.1-4.6-8.1 4.6 1.9-9L2 11.4l9.1-1z" fill="currentColor"/></svg><div><div class="eyebrow">Kết luận nhanh</div><ul>${pts.filter(Boolean).map(p => `<li>${p}</li>`).join('')}</ul></div></section>`;
@@ -355,6 +355,7 @@
         <div class="remrow"><span class="dot" style="background:var(--si)"></span><span>Sale In</span><b class="num">${fmt(remSi)}</b><small>${U()}</small></div>
         <div class="remrow"><span class="dot" style="background:var(--so)"></span><span>Sale Out</span><b class="num">${fmt(remSo)}</b><small>${U()}</small></div></div>
 
+      ${pendingCard()}
       <div class="card c12"><div class="card-h"><div><h2>Còn lại theo BrandGroup</h2><p class="sub">Target − thực đạt lũy kế · bấm vào BrandGroup để xem từng SKU · đơn vị ${U()}</p></div></div>
         ${hlNote()}<div class="tw"><table class="sticky1 tgt"><thead><tr><th>BrandFamily</th><th>SKU</th><th>Target</th><th>Sale In</th><th>% SI</th><th>Còn lại SI</th><th>Sale Out</th><th>% SO</th><th>Còn lại SO</th></tr></thead><tbody>${body}</tbody></table></div></div>
 
@@ -462,6 +463,108 @@
     ])}`;
   }
 
+  /* ---------- SO Pending: Online Order trừ Backorder và đơn đã có hoá đơn ---------- */
+  function pendingOrders() {
+    const cur = STATE.cur || {}; const inv = new Set((cur.lines || []).map(l => String(l[2])));
+    return (cur.orders || []).filter(o => !/back\s*-?\s*order/i.test(o[2]) && !inv.has(String(o[1])) && inScope(o[0]) && inBrand(o[3]));
+  }
+  function pendingCard() {
+    const P = pendingOrders(); const n = new Set(P.map(o => o[1])).size; if (!(STATE.cur.orders || []).length) return '';
+    const cs = sumBy(P, o => o[4]), hl = sumBy(P, o => o[4] * (item(o[3]).hl || 0));
+    return `<div class="card c12 pend" role="button" tabindex="0" data-go="pending"><div><div class="kpi-l">SO Pending · chờ giao hàng</div>
+      <div class="pend-v"><b>${fmtC(cs)}</b><small>Case</small><b>${nf1.format(hl)}</b><small>HL</small><span class="note">${n} đơn · ${new Set(P.map(o => o[3])).size} SKU · cập nhật ${fTs((STATE.updatedAt || {}).orders)}</span></div></div>
+      <span class="pend-go">Xem theo SKU →</span></div>`;
+  }
+  function viewPending() {
+    const P = pendingOrders(); const all = (STATE.cur.orders || []).filter(o => inScope(o[0]) && inBrand(o[3]));
+    const inv = new Set((STATE.cur.lines || []).map(l => String(l[2])));
+    const nBo = new Set(all.filter(o => /back\s*-?\s*order/i.test(o[2])).map(o => o[1])).size, nInv = new Set(all.filter(o => inv.has(String(o[1]))).map(o => o[1])).size;
+    const hlOf = o => o[4] * (item(o[3]).hl || 0);
+    const bySku = {}; P.forEach(o => { const x = bySku[o[3]] || (bySku[o[3]] = { sc: o[3], c: 0, h: 0, ord: new Set(), npp: new Set() }); x.c += o[4]; x.h += hlOf(o); x.ord.add(o[1]); x.npp.add(o[0]); });
+    const bo = ['Heineken', 'Tiger', 'Bia Viet', 'Larue', 'Bivina', 'Strongbow', 'Edelweiss']; const bi = sc => (bo.indexOf(brandOf(sc)) + 1) || 99;
+    const rows = Object.values(bySku).sort((a, b) => GROUPS.indexOf(grp(a.sc)) - GROUPS.indexOf(grp(b.sc)) || bi(a.sc) - bi(b.sc) || b.c - a.c);
+    const tc = sumBy(rows, r => r.c), th = sumBy(rows, r => r.h);
+    const byN = {}; P.forEach(o => { const x = byN[o[0]] || (byN[o[0]] = { c: 0, h: 0, ord: new Set() }); x.c += o[4]; x.h += hlOf(o); x.ord.add(o[1]); });
+    let body = ''; GROUPS.forEach(g => { const rr = rows.filter(r => grp(r.sc) === g); if (!rr.length) return;
+      body += `<tr class="grp"><td colspan="2">${esc(g)}</td><td>${fmtC(sumBy(rr, r => r.c))}</td><td>${nf1.format(sumBy(rr, r => r.h))}</td><td></td><td></td></tr>`;
+      rr.forEach(r => { body += `<tr class="sku"><td>${esc(item(r.sc).b || '—')}</td><td class="skuc">${esc(r.sc)}</td><td>${fmtC(r.c)}</td><td>${nf1.format(r.h)}</td><td>${r.ord.size}</td><td>${tc ? pct(r.c / tc) : '—'}</td></tr>`; }); });
+    body += `<tr class="tot"><td colspan="2">Tổng</td><td>${fmtC(tc)}</td><td>${nf1.format(th)}</td><td>${new Set(P.map(o => o[1])).size}</td><td>100%</td></tr>`;
+    const nppRows = Object.entries(byN).sort((a, b) => b[1].c - a[1].c);
+    const list = [...P].sort((a, b) => (a[0] + a[1]).localeCompare(b[0] + b[1]));
+    return `
+    <section class="lead"><div><button class="linkback" data-go="progress">← MTD Sale In - Out</button><div class="eyebrow">SO Pending · chờ giao hàng</div><h1>${esc(scopeLabel())}</h1>
+      <p>Online Order đã loại ${nBo} đơn Backorder và ${nInv} đơn đã có hoá đơn trong SO Invoice. Còn lại là đơn chờ giao.</p></div>
+      <button class="btn" id="xl-pending">Tải Excel Pending</button></section>
+    <div class="grid">
+      <div class="card c3 kpi"><div class="kpi-l">Pending (Case)</div><div class="kpi-v">${fmtC(tc)}<small>Case</small></div></div>
+      <div class="card c3 kpi"><div class="kpi-l">Pending (HL)</div><div class="kpi-v">${nf1.format(th)}<small>HL</small></div></div>
+      <div class="card c3 kpi"><div class="kpi-l">Số đơn</div><div class="kpi-v">${new Set(P.map(o => o[1])).size}</div><div class="kpi-f">${Object.keys(byN).length} NPP</div></div>
+      <div class="card c3 kpi"><div class="kpi-l">Số SKU</div><div class="kpi-v">${rows.length}</div></div>
+      <div class="card c12"><h2>Pending theo SKU</h2><p class="sub">Case và HL chờ giao</p>${P.length ? `<div class="tw"><table class="sticky1 tgt"><thead><tr><th>BrandFamily</th><th>SKU</th><th>Case</th><th>HL</th><th>Số đơn</th><th>Tỷ trọng</th></tr></thead><tbody>${body}</tbody></table></div>` : '<p class="note">Không có đơn Pending trong phạm vi này.</p>'}</div>
+      ${nppRows.length > 1 ? `<div class="card c5"><h2>Theo NPP</h2><p class="sub">Bấm để xem từng NPP</p><div class="tw"><table><thead><tr><th>NPP</th><th>Case</th><th>HL</th><th>Số đơn</th></tr></thead><tbody>
+        ${nppRows.map(([c, x]) => `<tr class="click" data-npp="${esc(c)}"><td><b>${esc(c)}</b></td><td>${fmtC(x.c)}</td><td>${nf1.format(x.h)}</td><td>${x.ord.size}</td></tr>`).join('')}</tbody></table></div></div>` : ''}
+      ${P.length ? `<div class="card ${nppRows.length > 1 ? 'c7' : 'c12'}"><h2>Danh sách đơn</h2><p class="sub">Ngày đặt · ngày hẹn giao · trạng thái</p><div class="tw"><table><thead><tr><th>NPP</th><th>Số đơn</th><th>Trạng thái</th><th>Ngày đặt</th><th>Hẹn giao</th><th>SKU</th><th>Case</th></tr></thead><tbody>
+        ${list.map(o => `<tr><td>${esc(o[0])}</td><td>${esc(o[1])}</td><td>${esc(o[2])}</td><td>${esc(o[5])}</td><td>${esc(o[6])}</td><td><b>${esc(o[3])}</b></td><td>${fmtC(o[4])}</td></tr>`).join('')}</tbody></table></div></div>` : ''}
+    </div>
+    ${conclusion([
+      `Đang chờ giao <b>${fmtC(tc)} case</b> (${nf1.format(th)} HL) từ ${new Set(P.map(o => o[1])).size} đơn.`,
+      rows[0] ? `SKU chờ giao nhiều nhất: <b>${esc(rows[0].sc)}</b> (${fmtC(rows[0].c)} case, ${pct(tc ? rows[0].c / tc : 0)}).` : '',
+      nppRows.length > 1 ? `NPP có nhiều hàng chờ giao nhất: <b>${esc(nppRows[0][0])}</b> (${fmtC(nppRows[0][1].c)} case).` : ''
+    ])}`;
+  }
+  function exportPending(ev) {
+    const P = pendingOrders();
+    const rows = [['Khu vực', 'Mã NPP', 'Số đơn', 'Trạng thái', 'Ngày đặt', 'Hẹn giao', 'BrandFamily', 'BrandGroup', 'ShortCode', 'Case', 'HL']];
+    P.forEach(o => rows.push([(STATE.npps[o[0]] || {}).area || '', o[0], o[1], o[2], o[5], o[6], item(o[3]).b || '', grp(o[3]), o[3], o[4], Math.round(o[4] * (item(o[3]).hl || 0) * 100) / 100]));
+    if (rows.length === 1) { toastBtn(ev.currentTarget, 'Không có đơn Pending'); return; }
+    saveXlsx(`SO_Pending_${todayKey()}_${scopeTag()}.xlsx`, [['SO Pending', rows, [9, 9, 12, 14, 10, 10, 12, 11, 10, 9, 9]]], ev.currentTarget);
+  }
+
+  /* ---------- TAB: Tracking Allocation theo Khu vực / NPP ---------- */
+  function viewTracking() {
+    const M = curModel(); const A = (STATE.cur.alloc || []).filter(r => inScope(r[1]) && inBrand(r[2]));
+    if (!A.length) return '<div class="card empty">Chưa có dữ liệu Allocation cho phạm vi này.</div>';
+    const weeks = [...new Set(A.map(r => r[0]))].sort(wkSort); const wk = currentWeek(weeks); const upTo = weeks.slice(0, weeks.indexOf(wk) + 1);
+    const skus = [...new Set(A.map(r => r[2]))].map(sc => ({ sc, al: sumBy(A.filter(r => r[2] === sc), r => r[3]) })).sort((a, b) => b.al - a.al).map(x => x.sc);
+    if (ui.trSku !== 'all' && !skus.includes(ui.trSku)) ui.trSku = 'all';
+    const okSku = sc => ui.trSku === 'all' ? skus.includes(sc) : sc === ui.trSku;
+    const P = pendingOrders().filter(o => okSku(o[3]));
+    const npps = [...new Set(A.map(r => r[1]))].sort((a, b) => npAll().indexOf(a) - npAll().indexOf(b));
+    const calc = cs => {
+      const al = sumBy(A.filter(r => cs.includes(r[1]) && okSku(r[2]) && upTo.includes(r[0])), r => conv(r[3], r[2]));
+      const aw = sumBy(A.filter(r => cs.includes(r[1]) && okSku(r[2]) && r[0] === wk), r => conv(r[3], r[2]));
+      const si = sumBy(M.list.filter(r => cs.includes(r.c) && okSku(r.sc)), r => conv(r.si, r.sc));
+      const pd = sumBy(P.filter(o => cs.includes(o[0])), o => conv(o[4], o[3]));
+      return { al, aw, si, pd, rem: al - si - pd, use: al ? (si + pd) / al : NaN };
+    };
+    const tdv = x => `<td>${fmt(x.al)}</td><td>${fmt(x.aw)}</td><td>${fmt(x.si)}</td><td>${fmt(x.pd)}</td><td>${isFinite(x.use) ? pct(x.use) : '—'}<span class="mini"><i style="width:${Math.min(100, (x.use || 0) * 100)}%;background:${x.use > 1 ? 'var(--bad)' : 'var(--si)'}"></i></span></td><td class="rem">${x.rem >= 0 ? fmt(x.rem) : `<span style="color:var(--bad)">Vượt ${fmt(-x.rem)}</span>`}</td>`;
+    const areas = [...new Set(npps.map(c => (STATE.npps[c] || {}).area || '—'))];
+    ui.trOpen = ui.trOpen || new Set(areas);
+    let body = ''; const flat = [];
+    areas.forEach(a => { const cs = npps.filter(c => ((STATE.npps[c] || {}).area || '—') === a); const x = calc(cs); const open = ui.trOpen.has(a) || areas.length === 1;
+      body += `<tr class="grp click${open ? ' open' : ''}" data-area="${esc(a)}"><td><span class="caret">▸</span> ${esc(a)}</td>${tdv(x)}</tr>`;
+      cs.forEach(c => { const y = calc([c]); flat.push([c, y]); if (open) body += `<tr class="sku click" data-npp="${esc(c)}"><td>${esc(c)}</td>${tdv(y)}</tr>`; }); });
+    const T = calc(npps); body += `<tr class="tot"><td>Tổng</td>${tdv(T)}</tr>`;
+    const over = flat.filter(([, y]) => y.rem < 0).sort((a, b) => a[1].rem - b[1].rem);
+    const most = [...flat].sort((a, b) => b[1].rem - a[1].rem)[0];
+    const chips = `<div class="chips" role="group" aria-label="Chọn SKU">${['all', ...skus].map(k => `<button data-tsku="${esc(k)}" aria-pressed="${ui.trSku === k}">${k === 'all' ? 'Tất cả SKU' : esc(k)}</button>`).join('')}</div>`;
+    return `
+    <section class="lead"><div><div class="eyebrow">Tracking Allocation · đến ${esc(wk)}</div><h1>${esc(scopeLabel())}</h1>
+      <p>Allocation đã Upload Portal (${esc(upTo.join(', '))}) so với Sale In MTD và SO Pending. Còn lại = Allocation − Sale In − Pending.</p></div>${chips}</section>
+    <div class="grid">
+      <div class="card c3 kpi"><div class="kpi-l">Allocation đến ${esc(wk)}</div><div class="kpi-v">${fmt(T.al)}<small>${U()}</small></div><div class="kpi-f">Current Week ${esc(wk)}: <b>${fmt(T.aw)}</b></div></div>
+      <div class="card c3 kpi"><div class="kpi-l">Sale In MTD</div><div class="kpi-v">${fmt(T.si)}<small>${U()}</small></div><div class="kpi-f">${isFinite(T.al) && T.al ? pct(T.si / T.al) + ' allocation' : ''}</div></div>
+      <div class="card c3 kpi" role="button" tabindex="0" data-go="pending" style="cursor:pointer"><div class="kpi-l">SO Pending</div><div class="kpi-v">${fmt(T.pd)}<small>${U()}</small></div><div class="kpi-f">Xem theo SKU →</div></div>
+      <div class="card c3 kpi"><div class="kpi-l">Còn lại</div><div class="kpi-v" style="color:${T.rem < 0 ? 'var(--bad)' : 'inherit'}">${fmt(T.rem)}<small>${U()}</small></div><div class="kpi-f">Đã dùng <b>${pct(T.use)}</b></div><div class="bar"><i style="width:${Math.min(100, (T.use || 0) * 100)}%;background:${T.use > 1 ? 'var(--bad)' : 'var(--si)'}"></i></div></div>
+      <div class="card c12"><h2>Theo khu vực / NPP</h2><p class="sub">Bấm khu vực để mở/đóng · bấm NPP để xem riêng · đơn vị ${U()}${ui.trSku !== 'all' ? ' · SKU ' + esc(ui.trSku) : ''}</p><div class="tw"><table class="sticky1"><thead><tr><th>Khu vực / NPP</th><th>Allocation đến ${esc(wk)}</th><th>Alloc ${esc(wk)}</th><th>Sale In MTD</th><th>SO Pending</th><th>% đã dùng</th><th>Còn lại</th></tr></thead><tbody>${body}</tbody></table></div></div>
+    </div>
+    ${conclusion([
+      `Đã dùng <b>${pct(T.use)}</b> allocation đến ${esc(wk)} (Sale In ${fmt(T.si)} + Pending ${fmt(T.pd)} ${U()}), còn <b>${fmt(Math.max(0, T.rem))} ${U()}</b>.`,
+      over.length ? `Vượt allocation: ${over.slice(0, 3).map(([c, y]) => `<b>${esc(c)}</b> (${fmt(-y.rem)} ${U()})`).join(', ')}.` : '',
+      most && most[1].rem > 0 ? `Còn nhiều allocation nhất: <b>${esc(most[0])}</b> (${fmt(most[1].rem)} ${U()}).` : ''
+    ])}`;
+  }
+
   /* ---------- TAB 4: History ---------- */
   function viewHistory() {
     const ms = Object.keys(STATE.months || {}).sort().filter(m => m.slice(0, 4) === (STATE.cur.month || m).slice(0, 4) && m < (STATE.cur.month || '999999'));
@@ -525,12 +628,16 @@
   function bindView() {
     const v = $('#view');
     v.querySelectorAll('tr[data-g]').forEach(tr => tr.onclick = () => { const g = tr.dataset.g; ui.open.has(g) ? ui.open.delete(g) : ui.open.add(g); render(); });
-    v.querySelectorAll('tr[data-npp]').forEach(tr => tr.onclick = () => { ui.scope = tr.dataset.npp; $('#scope').value = ui.scope; saveUi(); window.scrollTo({ top: 0, behavior: 'smooth' }); render(); });
+    v.querySelectorAll('tr[data-npp]').forEach(tr => tr.onclick = () => { if (ROLE.type === 'npp') return; const c = tr.dataset.npp; ui.npp = c; ui.area = (STATE.npps[c] || {}).area || ui.area; applyRole(); shell(); window.scrollTo({ top: 0, behavior: 'smooth' }); render(); });
     const tm = $('#tmonth'); if (tm) tm.onchange = () => { ui.tMonth = tm.value; render(); };
     v.querySelectorAll('[data-asku]').forEach(b => b.onclick = () => { ui.allocSku = b.dataset.asku; render(); });
     const xt = $('#xl-target'); if (xt) xt.onclick = exportTarget;
     const xp = $('#xl-progress'); if (xp) xp.onclick = exportProgress;
     const xi = $('#xl-invoice'); if (xi) xi.onclick = exportInvoice;
+    v.querySelectorAll('[data-go]').forEach(b => { const go = () => { ui.tab = b.dataset.go; saveUi(); shell(); window.scrollTo({ top: 0 }); render(); }; b.onclick = go; b.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } }; });
+    v.querySelectorAll('[data-tsku]').forEach(b => b.onclick = () => { ui.trSku = b.dataset.tsku; render(); });
+    v.querySelectorAll('tr[data-area]').forEach(tr => tr.onclick = () => { const a = tr.dataset.area; ui.trOpen = ui.trOpen || new Set(); ui.trOpen.has(a) ? ui.trOpen.delete(a) : ui.trOpen.add(a); render(); });
+    const xpd = $('#xl-pending'); if (xpd) xpd.onclick = exportPending;
   }
 
   /* ---------- Excel export ---------- */

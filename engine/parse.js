@@ -6,9 +6,10 @@ const KINDS = {
   si:      { label: 'SO Invoice (Sale In)',     need: ['InvoiceNumber', 'UOM_Invoice', 'Date_ID'] },
   so:      { label: 'SaleOut by Seller',        need: ['Seller_Name', 'Outlet_ID', 'UOM'] },
   alloc:   { label: 'Allocation Current Month', need: ['WEEK', 'Alpha_Name', 'Allocation'] },
-  allocdates: { label: 'Allocation · Upload Date', need: ['WEEK', 'WEEK No'] }
+  allocdates: { label: 'Allocation · Upload Date', need: ['WEEK', 'WEEK No'] },
+  orders:  { label: 'Online Order (SO chờ giao)', need: ['Order Number', 'Status', 'ShortCode', 'Sum of Case'] }
 };
-const KIND_ORDER = ['items', 'hist', 'si', 'so', 'alloc', 'allocdates', 'target'];
+const KIND_ORDER = ['items', 'hist', 'si', 'so', 'orders', 'alloc', 'allocdates', 'target'];
 
 function cleanStr(v) { return v == null ? '' : String(v).trim(); }
 function num(v) { const n = typeof v === 'number' ? v : parseFloat(String(v ?? '').replace(/,/g, '')); return isFinite(n) ? n : 0; }
@@ -157,6 +158,18 @@ function applyParsed(state, p, opts = {}) {
     state.cur.allocBatches = batchCols;
     const wk = [...new Set(state.cur.alloc.map(x => x[0]))];
     msg.note = 'Tuần ' + wk.join(', ');
+  }
+
+  if (p.kind === 'orders') {
+    state.cur.orders = p.rows.map(r => {
+      const c = cleanStr(has('Distributor') ? g(r, 'Distributor') : '').split('-')[0].trim(); const sc = cleanStr(g(r, 'ShortCode'));
+      if (!c || !sc) return null;
+      if (!state.npps[c]) state.npps[c] = { name: '', area: '' };
+      if (has('Area') && g(r, 'Area') && !state.npps[c].area) state.npps[c].area = cleanStr(g(r, 'Area'));
+      return [c, cleanStr(g(r, 'Order Number')), cleanStr(g(r, 'Status')), sc, num(g(r, 'Sum of Case')),
+        has('Order Date') ? cleanStr(g(r, 'Order Date')) : '', has('Promised Delivery') ? cleanStr(g(r, 'Promised Delivery')) : '', has('Item B.O') ? cleanStr(g(r, 'Item B.O')) : ''];
+    }).filter(Boolean);
+    msg.note = new Set(state.cur.orders.map(o => o[1])).size + ' đơn';
   }
 
   if (p.kind === 'allocdates') {

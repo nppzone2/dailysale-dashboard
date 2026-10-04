@@ -91,6 +91,7 @@ function slice(st, keep) {
   Object.values(c.so || {}).forEach(sn => { ['rows', 'seg', 'out', 'segB', 'outB'].forEach(f => { if (sn[f]) sn[f] = sn[f].filter(k); }); });
   c.alloc = (c.alloc || []).filter(r => keep(r[1]));
   c.lines = (c.lines || []).filter(l => keep(l[1]));
+  c.orders = (c.orders || []).filter(o => keep(o[0]));
   const ships = new Set(c.lines.map(l => l[4])); c.ship = Object.fromEntries(Object.entries(c.ship || {}).filter(([id]) => ships.has(id)));
   return s;
 }

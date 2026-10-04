@@ -10,7 +10,7 @@ Dashboard theo dõi Target, Sale In, Sale Out và Allocation của các NPP vùn
 
 | Khi nào | File cần tải |
 |---|---|
-| Hằng ngày | `SO_Invoice`, `SaleOut_by_Seller` |
+| Hằng ngày | `SO_Invoice`, `SaleOut_by_Seller`, `Online_Order` (SO chờ giao: dashboard tự loại đơn Backorder và đơn đã có trong SO Invoice) |
 | Hằng tuần | `Allocation_Current_Month`: sheet **Allocation** có cột `Batch 1`, `Batch 2`… và sheet **Upload Date** ghi ngày chia từng batch |
 | Đầu tháng | `Target_Current_Month` |
 | Khi đổi mã SKU | `Item_Master` |
