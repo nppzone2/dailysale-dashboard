@@ -3,7 +3,7 @@
   --bg:#F3F6F3; --surface:#FFFFFF; --surface-2:#F7FAF7; --ink:#0F2418; --ink-2:#465A4D; --muted:#7A8B80; --line:#E0E7E1;
   --band:#0A4A2A; --band-ink:#FFFFFF; --band-ink-2:#B9D3C2; --brand:#0B6B39; --brand-soft:#E3F1E8;
   --si:#13804A; --so:#3567B8; --target:#A9B5AD; --star:#D6001C;
-  --good:#1B7A43; --good-bg:#E2F3E8; --warn:#9A6200; --warn-bg:#FCF0D9; --bad:#C0121F; --bad-bg:#FBE4E5;
+  --over:#F2B200; --over-bg:#FFF3C4; --over-ink:#7A5600; --good:#1B7A43; --good-bg:#E2F3E8; --warn:#9A6200; --warn-bg:#FCF0D9; --bad:#C0121F; --bad-bg:#FBE4E5;
   --f-ui:"Be Vietnam Pro", "Segoe UI", system-ui, -apple-system, sans-serif;
   --r:10px; --shadow:0 1px 2px rgba(10,40,24,.06), 0 4px 14px rgba(10,40,24,.05);
 }
@@ -11,13 +11,13 @@
   --bg:#0D1410; --surface:#141D17; --surface-2:#18231C; --ink:#E7EEE9; --ink-2:#AAB8AE; --muted:#7F9085; --line:#25332A;
   --band:#0B2F1C; --band-ink:#F2F7F3; --band-ink-2:#93B49F; --brand:#3FAE6C; --brand-soft:#173323;
   --si:#2E9E5E; --so:#5A88D6; --target:#56655B; --star:#FF4A55;
-  --good:#5CCB8A; --good-bg:#153424; --warn:#E8B04A; --warn-bg:#352812; --bad:#FF6B73; --bad-bg:#3A1619;
+  --over:#F5C02E; --over-bg:#3A2F0E; --over-ink:#FFD66B; --good:#5CCB8A; --good-bg:#153424; --warn:#E8B04A; --warn-bg:#352812; --bad:#FF6B73; --bad-bg:#3A1619;
   --shadow:0 1px 2px rgba(0,0,0,.3); color-scheme:dark } }
 :root[data-theme="dark"]{
   --bg:#0D1410; --surface:#141D17; --surface-2:#18231C; --ink:#E7EEE9; --ink-2:#AAB8AE; --muted:#7F9085; --line:#25332A;
   --band:#0B2F1C; --band-ink:#F2F7F3; --band-ink-2:#93B49F; --brand:#3FAE6C; --brand-soft:#173323;
   --si:#2E9E5E; --so:#5A88D6; --target:#56655B; --star:#FF4A55;
-  --good:#5CCB8A; --good-bg:#153424; --warn:#E8B04A; --warn-bg:#352812; --bad:#FF6B73; --bad-bg:#3A1619;
+  --over:#F5C02E; --over-bg:#3A2F0E; --over-ink:#FFD66B; --good:#5CCB8A; --good-bg:#153424; --warn:#E8B04A; --warn-bg:#352812; --bad:#FF6B73; --bad-bg:#3A1619;
   --shadow:0 1px 2px rgba(0,0,0,.3); color-scheme:dark }
 
 *{box-sizing:border-box}
@@ -301,3 +301,5 @@ select:disabled{opacity:1;color:var(--ink);background:var(--brand-soft);border-c
 .trk tr.area .hi{background:rgba(92,203,138,.2);color:#9FE3BC}.trk tr.area .lo{background:rgba(255,107,115,.22);color:#FFB3B8}
 .trk tr.area .ov{background:rgba(232,176,74,.25);color:#FFD27A}
 .trk tr.area:hover td{filter:brightness(1.1)}
+.ov{background:var(--over-bg);color:var(--over-ink)}
+.trk tr.area .mini i[style*="--over"]{background:var(--over)!important}
