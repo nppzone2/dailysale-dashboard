@@ -556,7 +556,8 @@
     // đơn Delivery: cộng vào Sale In; bỏ đơn đã xuất hoá đơn trước hôm nay (đã nằm trong số D-1)
     // Delivery: Order Number chưa có trong SO Invoice -> cộng Sale In; đã có trong SO Invoice -> đã nằm trong hoá đơn (trừ hoá đơn hôm nay, chưa vào số D-1)
     const invDate = {}; (cur.lines || []).forEach(l => { invDate[String(l[2])] = l[0]; });
-    const deliv = (cur.orders || []).filter(o => /deliver/i.test(o[2]) && inScope(o[0]) && inBrand(o[3]) && (!invSet.has(String(o[1])) || (hasSbd && invDate[String(o[1])] >= D)));
+    // Sale In = Dis Sale by Date đến D-1 + toàn bộ đơn Online Order có Invoice Date = hôm nay (trừ Backorder)
+    const deliv = (cur.orders || []).filter(o => !/back\s*-?\s*order/i.test(o[2]) && orderDateKey(o[8]) === D && inScope(o[0]) && inBrand(o[3]));
     const delivNo = new Set(deliv.map(o => String(o[1])));
     deliv.forEach(o => lines.push({ c: o[0], sc: o[3], q: o[4], d: orderDateKey(o[5]), byOrder: true, deliv: true }));
     const lastData = hasSbd ? addDay(todayKey(), -1) : (Object.keys(cur.si || {}).sort().pop() || todayKey());
@@ -568,7 +569,7 @@
     const skus = [...new Set(A.map(r => r[2]))].map(sc => ({ sc, al: sumBy(A.filter(r => r[2] === sc && r[0] === wk), r => r[3]) })).sort((a, b) => b.al - a.al).map(x => x.sc);
     if (ui.trSku !== 'all' && !skus.includes(ui.trSku)) ui.trSku = 'all';
     const shown = ui.trSku === 'all' ? skus : [ui.trSku];
-    const P = pendingOrders().filter(o => shown.includes(o[3]) && (!orderDateKey(o[5]) || inWk(orderDateKey(o[5]))));
+    const P = (cur.orders || []).filter(o => /approve|schedule/i.test(o[2]) && !/back\s*-?\s*order/i.test(o[2]) && inScope(o[0]) && inBrand(o[3]) && shown.includes(o[3]) && (!orderDateKey(o[5]) || inWk(orderDateKey(o[5]))));
     const npps = [...new Set(A.map(r => r[1]))].sort((a, b) => npAll().indexOf(a) - npAll().indexOf(b));
     const calc = (cs, ss) => {
       const al = sumBy(A.filter(r => cs.includes(r[1]) && ss.includes(r[2]) && r[0] === wk), r => conv(r[3], r[2]));
@@ -610,7 +611,7 @@
       <div class="card c3 kpi" role="button" tabindex="0" data-go="pending" style="cursor:pointer"><div class="kpi-l">SO Pending ${esc(wk)}</div><div class="kpi-v">${fmt(T.pd)}<small>${U()}</small></div><div class="kpi-f">Xem theo SKU →</div></div>
       <div class="card c3 kpi"><div class="kpi-l">Còn lại ${esc(wk)}</div><div class="kpi-v" style="color:${T.rem < 0 ? 'var(--good)' : 'inherit'}">${fmt(T.rem)}<small>${U()}</small></div><div class="kpi-f">Đã dùng <b>${pct(T.use)}</b> (Sale In + Pending)</div><div class="bar"><i style="width:${Math.min(100, (T.use || 0) * 100)}%;background:${T.use > 1 ? 'var(--good)' : 'var(--si)'}"></i></div></div>
       <div class="card c12"><h2>Theo khu vực / NPP / SKU · ${esc(wk)}</h2><p class="sub">Đơn vị ${U()}</p><div class="tw"><table class="sticky1 trk"><thead><tr><th>Khu vực / NPP</th><th>SKU</th><th>Allocation ${esc(wk)}</th><th>Sale In ${esc(wk)}</th><th>% Sale In</th><th>SO Pending</th><th>% đã dùng</th><th>Còn lại</th></tr></thead><tbody>${body}</tbody></table></div>
-        <p class="note" style="margin:8px 0 0">${hasSbd ? `Dis Sale by Date tính đến ${fd(addDay(D, -1))} (D-1).` : `Chưa có file Dis Sale by Date: ${byOrd}/${allWk} dòng hoá đơn lấy được ngày order từ Online Order, số còn lại tính theo ngày hoá đơn.`}${deliv.length ? ` Cộng ${fmt(sumBy(deliv.filter(o => inWk(orderDateKey(o[5])) && shown.includes(o[3])), o => conv(o[4], o[3])))} ${U()} từ ${new Set(deliv.map(o => o[1])).size} đơn Delivery chưa vào số D-1 (kiểm tra Order Number trong SO Invoice).` : ''}</p></div>
+        <p class="note" style="margin:8px 0 0">${hasSbd ? `Dis Sale by Date tính đến ${fd(addDay(D, -1))} (D-1).` : `Chưa có file Dis Sale by Date: ${byOrd}/${allWk} dòng hoá đơn lấy được ngày order từ Online Order, số còn lại tính theo ngày hoá đơn.`}${deliv.length ? ` Cộng ${fmt(sumBy(deliv.filter(o => inWk(orderDateKey(o[5])) && shown.includes(o[3])), o => conv(o[4], o[3])))} ${U()} từ ${new Set(deliv.map(o => o[1])).size} đơn Online Order có Invoice Date hôm nay (${fd(D)}). Pending = Order Approve & Schedule, loại Backorder.` : ' Pending = Order Approve & Schedule, loại Backorder.'}</p></div>
     </div>
     ${conclusion([
       `Current Week <b>${esc(wk)}</b>: Sale In đạt <b>${pct(T.ps)}</b> allocation so với tiến độ tuần ${pct(gone)}; tính cả Pending đã dùng <b>${pct(T.use)}</b>, ${T.rem >= 0 ? `còn <b>${fmt(T.rem)} ${U()}</b>` : `vượt allocation <b>${fmt(-T.rem)} ${U()}</b>`}.`,
