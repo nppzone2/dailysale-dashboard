@@ -290,3 +290,6 @@ select:disabled{opacity:1;color:var(--ink);background:var(--brand-soft);border-c
 .trk tr.sub td{font-weight:600;color:var(--ink-2);background:var(--surface-2)}
 .trk td:nth-child(2),.trk th:nth-child(2){text-align:left}
 .click-npp{font-weight:700;color:var(--brand);cursor:pointer;text-decoration:underline;text-decoration-color:var(--line)}
+.trk tr.slow td{background:var(--bad-bg)}
+.trk tr.slow td:first-child{box-shadow:inset 3px 0 0 var(--bad)}
+.trk tr.grp.slow td{background:color-mix(in srgb,var(--bad-bg) 70%,var(--surface-2))}

@@ -466,7 +466,7 @@
   /* ---------- SO Pending: Online Order trừ Backorder và đơn đã có hoá đơn ---------- */
   function pendingOrders() {
     const cur = STATE.cur || {}; const inv = new Set((cur.lines || []).map(l => String(l[2])));
-    return (cur.orders || []).filter(o => !/back\s*-?\s*order/i.test(o[2]) && !inv.has(String(o[1])) && inScope(o[0]) && inBrand(o[3]));
+    return (cur.orders || []).filter(o => !/back\s*-?\s*order/i.test(o[2]) && !/deliver/i.test(o[2]) && !inv.has(String(o[1])) && inScope(o[0]) && inBrand(o[3]));
   }
   function pendingCard() {
     const P = pendingOrders(); const n = new Set(P.map(o => o[1])).size; if (!(STATE.cur.orders || []).length) return '';
@@ -479,6 +479,7 @@
     const P = pendingOrders(); const all = (STATE.cur.orders || []).filter(o => inScope(o[0]) && inBrand(o[3]));
     const inv = new Set((STATE.cur.lines || []).map(l => String(l[2])));
     const nBo = new Set(all.filter(o => /back\s*-?\s*order/i.test(o[2])).map(o => o[1])).size, nInv = new Set(all.filter(o => inv.has(String(o[1]))).map(o => o[1])).size;
+    const nDel = new Set(all.filter(o => /deliver/i.test(o[2]) && !inv.has(String(o[1]))).map(o => o[1])).size;
     const hlOf = o => o[4] * (item(o[3]).hl || 0);
     const bySku = {}; P.forEach(o => { const x = bySku[o[3]] || (bySku[o[3]] = { sc: o[3], c: 0, h: 0, ord: new Set(), npp: new Set() }); x.c += o[4]; x.h += hlOf(o); x.ord.add(o[1]); x.npp.add(o[0]); });
     const bo = ['Heineken', 'Tiger', 'Bia Viet', 'Larue', 'Bivina', 'Strongbow', 'Edelweiss']; const bi = sc => (bo.indexOf(brandOf(sc)) + 1) || 99;
@@ -493,7 +494,7 @@
     const list = [...P].sort((a, b) => (a[0] + a[1]).localeCompare(b[0] + b[1]));
     return `
     <section class="lead"><div><button class="linkback" data-go="progress">← MTD Sale In - Out</button><div class="eyebrow">SO Pending · chờ giao hàng</div><h1>${esc(scopeLabel())}</h1>
-      <p>Online Order đã loại ${nBo} đơn Backorder và ${nInv} đơn đã có hoá đơn trong SO Invoice. Còn lại là đơn chờ giao.</p></div>
+      <p>Online Order đã loại ${nBo} đơn Backorder, ${nInv} đơn đã có hoá đơn trong SO Invoice và ${nDel} đơn trạng thái Delivery (đã giao, tính vào Sale In thực tế). Còn lại là đơn chờ giao.</p></div>
       <button class="btn" id="xl-pending">Tải Excel Pending</button></section>
     <div class="grid">
       <div class="card c3 kpi"><div class="kpi-l">Pending (Case)</div><div class="kpi-v">${fmtC(tc)}<small>Case</small></div></div>
@@ -536,9 +537,15 @@
     const wStart = (AD[wk] || []).find(Boolean) || null; const nStart = nw ? ((AD[nw] || []).find(Boolean) || null) : null;
     const wEnd = wStart ? (nStart ? addDay(nStart, -1) : addDay(wStart, 6)) : null; const inWk = d => d && wStart && d >= wStart && d <= wEnd;
     // ngày order của từng hoá đơn (ghép InvoiceNumber = Order Number trong Online Order); không ghép được thì dùng ngày hoá đơn
+    // Sale In thực tế theo ngày order = Dis Sale by Date (hoá đơn theo ngày order) + đơn Delivery chưa có hoá đơn trong SO Invoice
+    const invSet = new Set((cur.lines || []).map(l => String(l[2])));
     const oDate = {}; (cur.orders || []).forEach(o => { const k = orderDateKey(o[5]); if (k) oDate[String(o[1])] = k; });
-    const lines = (cur.lines || []).filter(l => inScope(l[1]) && inBrand(l[5])).map(l => ({ c: l[1], sc: l[5], q: l[6], d: oDate[String(l[2])] || l[0], byOrder: !!oDate[String(l[2])] }));
-    const lastData = Object.keys(cur.si || {}).sort().pop() || todayKey();
+    const hasSbd = (cur.sbd || []).length > 0;
+    const lines = hasSbd ? cur.sbd.filter(r => inScope(r[0]) && inBrand(r[3])).map(r => ({ c: r[0], sc: r[3], q: r[4], d: r[2], byOrder: true }))
+      : (cur.lines || []).filter(l => inScope(l[1]) && inBrand(l[5])).map(l => ({ c: l[1], sc: l[5], q: l[6], d: oDate[String(l[2])] || l[0], byOrder: !!oDate[String(l[2])] }));
+    const deliv = (cur.orders || []).filter(o => /deliver/i.test(o[2]) && !invSet.has(String(o[1])) && inScope(o[0]) && inBrand(o[3]));
+    deliv.forEach(o => lines.push({ c: o[0], sc: o[3], q: o[4], d: orderDateKey(o[5]), byOrder: true, deliv: true }));
+    const lastData = [...Object.keys(cur.si || {}), ...(cur.sbd || []).map(r => r[1])].sort().pop() || todayKey();
     const span = wStart ? dayDiff(wStart, wEnd) + 1 : 7; const gone = wStart ? Math.max(0, Math.min(span, dayDiff(wStart, lastData) + 1)) / span : 1;
     const skus = [...new Set(A.map(r => r[2]))].map(sc => ({ sc, al: sumBy(A.filter(r => r[2] === sc && r[0] === wk), r => r[3]) })).sort((a, b) => b.al - a.al).map(x => x.sc);
     if (ui.trSku !== 'all' && !skus.includes(ui.trSku)) ui.trSku = 'all';
@@ -557,11 +564,11 @@
     ui.trOpen = ui.trOpen || new Set(areas);
     let body = ''; const flat = [];
     areas.forEach(a => { const cs = npps.filter(c => ((STATE.npps[c] || {}).area || '—') === a); const open = ui.trOpen.has(a) || areas.length === 1;
-      body += `<tr class="grp click${open ? ' open' : ''}" data-area="${esc(a)}"><td><span class="caret">▸</span> ${esc(a)}</td><td>${shown.length > 1 ? 'Tất cả' : esc(shown[0])}</td>${tdv(calc(cs, shown))}</tr>`;
+      const ax = calc(cs, shown); body += `<tr class="grp click${open ? ' open' : ''}${isFinite(ax.ps) && ax.ps < gone ? ' slow' : ''}" data-area="${esc(a)}"><td><span class="caret">▸</span> ${esc(a)}</td><td>${shown.length > 1 ? 'Tất cả' : esc(shown[0])}</td>${tdv(ax)}</tr>`;
       cs.forEach(c => { const y = calc([c], shown); flat.push([c, y]); if (!open) return;
         const ss = shown.filter(sc => A.some(r => r[1] === c && r[2] === sc && r[0] === wk));
-        ss.forEach((sc, i) => { body += `<tr class="sku${i === 0 ? ' first' : ''}"><td>${i === 0 ? `<span class="click-npp" data-npp="${esc(c)}">${esc(c)}</span>` : ''}</td><td class="skuc">${esc(sc)}</td>${tdv(calc([c], [sc]))}</tr>`; });
-        if (ss.length > 1) body += `<tr class="sku sub"><td></td><td class="skuc">Cộng ${esc(c)}</td>${tdv(y)}</tr>`; }); });
+        ss.forEach((sc, i) => { const z = calc([c], [sc]); body += `<tr class="sku${i === 0 ? ' first' : ''}${isFinite(z.ps) && z.ps < gone ? ' slow' : ''}"><td>${i === 0 ? `<span class="click-npp" data-npp="${esc(c)}">${esc(c)}</span>` : ''}</td><td class="skuc">${esc(sc)}</td>${tdv(z)}</tr>`; });
+        if (ss.length > 1) body += `<tr class="sku sub${isFinite(y.ps) && y.ps < gone ? ' slow' : ''}"><td></td><td class="skuc">Cộng ${esc(c)}</td>${tdv(y)}</tr>`; }); });
     const T = calc(npps, shown); body += `<tr class="tot"><td>Tổng</td><td>${shown.length > 1 ? 'Tất cả' : esc(shown[0])}</td>${tdv(T)}</tr>`;
     const slow = flat.filter(([, y]) => isFinite(y.ps) && y.ps < gone).sort((a, b) => a[1].ps - b[1].ps);
     const over = flat.filter(([, y]) => y.rem < 0);
@@ -569,14 +576,14 @@
     const byOrd = lines.filter(l => inWk(l.d) && l.byOrder).length, allWk = lines.filter(l => inWk(l.d)).length;
     return `
     <section class="lead"><div><div class="eyebrow">Tracking Allocation · Current Week ${esc(wk)}</div><h1>${esc(scopeLabel())}</h1>
-      <p>${wStart ? `Tuần ${fd(wStart)} → ${fd(wEnd)} · đã qua ${Math.round(gone * span)}/${span} ngày (tiến độ tuần ${pct(gone)}). ` : ''}Sale In tính theo ngày order trong tuần; ô % Sale In tô đỏ khi chậm hơn tiến độ tuần.</p></div>${chips}</section>
+      <p>${wStart ? `Tuần ${fd(wStart)} → ${fd(wEnd)} · đã qua ${Math.round(gone * span)}/${span} ngày (tiến độ tuần ${pct(gone)}). ` : ''}Sale In thực tế = hoá đơn theo ngày order + đơn Delivery chưa xuất hoá đơn; dòng tô đỏ là chậm hơn tiến độ tuần.</p></div>${chips}</section>
     <div class="grid">
       <div class="card c3 kpi"><div class="kpi-l">Allocation ${esc(wk)}</div><div class="kpi-v">${fmt(T.al)}<small>${U()}</small></div><div class="kpi-f">${wStart ? 'Upload ' + (AD[wk] || []).filter(Boolean).map(fd).join(' · ') : ''}</div></div>
       <div class="card c3 kpi"><div class="kpi-l">Sale In tuần</div><div class="kpi-v">${fmt(T.si)}<small>${U()}</small></div><div class="kpi-f"><span class="${T.ps < gone ? 'lo' : 'hi'}">${pct(T.ps)}</span> allocation · tiến độ ${pct(gone)}</div></div>
       <div class="card c3 kpi" role="button" tabindex="0" data-go="pending" style="cursor:pointer"><div class="kpi-l">SO Pending tuần</div><div class="kpi-v">${fmt(T.pd)}<small>${U()}</small></div><div class="kpi-f">Xem theo SKU →</div></div>
       <div class="card c3 kpi"><div class="kpi-l">Còn lại ${esc(wk)}</div><div class="kpi-v" style="color:${T.rem < 0 ? 'var(--bad)' : 'inherit'}">${fmt(T.rem)}<small>${U()}</small></div><div class="kpi-f">Đã dùng <b>${pct(T.use)}</b> (Sale In + Pending)</div><div class="bar"><i style="width:${Math.min(100, (T.use || 0) * 100)}%;background:${T.use > 1 ? 'var(--bad)' : 'var(--si)'}"></i></div></div>
       <div class="card c12"><h2>Theo khu vực / NPP / SKU · ${esc(wk)}</h2><p class="sub">Bấm khu vực để mở/đóng · bấm mã NPP để xem riêng · đơn vị ${U()}</p><div class="tw"><table class="sticky1 trk"><thead><tr><th>Khu vực / NPP</th><th>SKU</th><th>Allocation ${esc(wk)}</th><th>Sale In tuần</th><th>% Sale In</th><th>SO Pending</th><th>% đã dùng</th><th>Còn lại</th></tr></thead><tbody>${body}</tbody></table></div>
-        <p class="note" style="margin:8px 0 0">${allWk ? `${byOrd}/${allWk} dòng hoá đơn trong tuần lấy được ngày order từ Online Order, số còn lại tính theo ngày hoá đơn.` : 'Chưa có Sale In trong tuần.'}${wStart && Object.keys(cur.si || {}).sort()[0] > wStart ? ` Sale In có dữ liệu từ ${fd(Object.keys(cur.si).sort()[0])}.` : ''}</p></div>
+        <p class="note" style="margin:8px 0 0">${hasSbd ? 'Ngày order lấy từ file Dis Sale by Date.' : `Chưa có file Dis Sale by Date: ${byOrd}/${allWk} dòng hoá đơn lấy được ngày order từ Online Order, số còn lại tính theo ngày hoá đơn.`}${deliv.length ? ` Gồm ${fmt(sumBy(deliv.filter(o => inWk(orderDateKey(o[5])) && shown.includes(o[3])), o => conv(o[4], o[3])))} ${U()} từ ${new Set(deliv.map(o => o[1])).size} đơn Delivery chưa có hoá đơn.` : ''}</p></div>
     </div>
     ${conclusion([
       `Current Week <b>${esc(wk)}</b>: Sale In đạt <b>${pct(T.ps)}</b> allocation so với tiến độ tuần ${pct(gone)}; tính cả Pending đã dùng <b>${pct(T.use)}</b>, ${T.rem >= 0 ? `còn <b>${fmt(T.rem)} ${U()}</b>` : `vượt allocation <b>${fmt(-T.rem)} ${U()}</b>`}.`,

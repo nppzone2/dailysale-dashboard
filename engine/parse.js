@@ -7,9 +7,10 @@ const KINDS = {
   so:      { label: 'SaleOut by Seller',        need: ['Seller_Name', 'Outlet_ID', 'UOM'] },
   alloc:   { label: 'Allocation Current Month', need: ['WEEK', 'Alpha_Name', 'Allocation'] },
   allocdates: { label: 'Allocation · Upload Date', need: ['WEEK', 'WEEK No'] },
-  orders:  { label: 'Online Order (SO chờ giao)', need: ['Order Number', 'Status', 'ShortCode', 'Sum of Case'] }
+  orders:  { label: 'Online Order (SO chờ giao)', need: ['Order Number', 'Status', 'ShortCode', 'Sum of Case'] },
+  sbd:     { label: 'Dis Sale by Date (Sale In theo ngày order)', need: ['Invoice Date', 'Order Date', 'ShortCode', 'Unit'] }
 };
-const KIND_ORDER = ['items', 'hist', 'si', 'so', 'orders', 'alloc', 'allocdates', 'target'];
+const KIND_ORDER = ['items', 'hist', 'si', 'sbd', 'so', 'orders', 'alloc', 'allocdates', 'target'];
 
 function cleanStr(v) { return v == null ? '' : String(v).trim(); }
 function num(v) { const n = typeof v === 'number' ? v : parseFloat(String(v ?? '').replace(/,/g, '')); return isFinite(n) ? n : 0; }
@@ -158,6 +159,19 @@ function applyParsed(state, p, opts = {}) {
     state.cur.allocBatches = batchCols;
     const wk = [...new Set(state.cur.alloc.map(x => x[0]))];
     msg.note = 'Tuần ' + wk.join(', ');
+  }
+
+  if (p.kind === 'sbd') {
+    const agg = {};
+    p.rows.forEach(r => {
+      const c = touchNpp(state, g(r, 'Distributor_Name'), has('Zone_Name') ? g(r, 'Zone_Name') : ''); const sc = cleanStr(g(r, 'ShortCode'));
+      const iv = dateKey(g(r, 'Invoice Date')), od = dateKey(g(r, 'Order Date'));
+      if (!c || !sc || !iv) return;
+      const k = [c, iv, od || iv, sc].join('|'); agg[k] = (agg[k] || 0) + num(g(r, 'Unit'));
+    });
+    state.cur.sbd = Object.entries(agg).map(([k, v]) => { const [c, iv, od, sc] = k.split('|'); return [c, iv, od, sc, v]; });
+    const ods = state.cur.sbd.map(x => x[2]).sort();
+    msg.note = ods.length ? 'Ngày order ' + fmtDate(ods[0]) + ' → ' + fmtDate(ods[ods.length - 1]) : 'Không có dòng';
   }
 
   if (p.kind === 'orders') {
