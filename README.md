@@ -11,7 +11,7 @@ Dashboard theo dõi Target, Sale In, Sale Out và Allocation của các NPP vùn
 | Khi nào | File cần tải |
 |---|---|
 | Hằng ngày | `SO_Invoice`, `SaleOut_by_Seller` |
-| Hằng tuần | `Allocation_Current_Month` |
+| Hằng tuần | `Allocation_Current_Month`: sheet **Allocation** có cột `Batch 1`, `Batch 2`… và sheet **Upload Date** ghi ngày chia từng batch |
 | Đầu tháng | `Target_Current_Month` |
 | Khi đổi mã SKU | `Item_Master` |
 | Chốt tháng | `Target_Total_YYYYMM` của tháng vừa kết thúc **cùng lúc với** `Target_Current_Month` của tháng mới |

@@ -55,10 +55,10 @@ const now = new Date().toISOString();
 const files = fs.existsSync(AOA) ? fs.readdirSync(AOA).filter(f => f.endsWith('.json')) : [];
 const parsed = [];
 for (const f of files) {
-  const { name, aoa } = JSON.parse(fs.readFileSync(path.join(AOA, f), 'utf8'));
-  const p = P.detect(aoa);
-  if (!p) die(`không nhận diện được file "${name}" (thiếu cột tiêu đề chuẩn).`);
-  parsed.push({ name, p });
+  const { name, sheets, aoa } = JSON.parse(fs.readFileSync(path.join(AOA, f), 'utf8'));
+  const found = (sheets || [{ sheet: '', aoa }]).map(s => ({ name: name + (sheets && sheets.length > 1 ? ' › ' + s.sheet : ''), p: P.detect(s.aoa) })).filter(x => x.p);
+  if (!found.length) die(`không nhận diện được file "${name}" (thiếu cột tiêu đề chuẩn).`);
+  parsed.push(...found);
 }
 parsed.sort((a, b) => P.KIND_ORDER.indexOf(a.p.kind) - P.KIND_ORDER.indexOf(b.p.kind));
 const nextMonth = m => { const y = +m.slice(0, 4), mo = +m.slice(4, 6); return mo === 12 ? (y + 1) + '01' : y + String(mo + 1).padStart(2, '0'); };

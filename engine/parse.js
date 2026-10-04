@@ -5,9 +5,10 @@ const KINDS = {
   target:  { label: 'Target Current Month',     need: ['Ref', 'Alpha_Name', 'Unit'] },
   si:      { label: 'SO Invoice (Sale In)',     need: ['InvoiceNumber', 'UOM_Invoice', 'Date_ID'] },
   so:      { label: 'SaleOut by Seller',        need: ['Seller_Name', 'Outlet_ID', 'UOM'] },
-  alloc:   { label: 'Allocation Current Month', need: ['WEEK', 'Alpha_Name', 'Allocation'] }
+  alloc:   { label: 'Allocation Current Month', need: ['WEEK', 'Alpha_Name', 'Allocation'] },
+  allocdates: { label: 'Allocation · Upload Date', need: ['WEEK', 'WEEK No'] }
 };
-const KIND_ORDER = ['items', 'hist', 'si', 'so', 'alloc', 'target'];
+const KIND_ORDER = ['items', 'hist', 'si', 'so', 'alloc', 'allocdates', 'target'];
 
 function cleanStr(v) { return v == null ? '' : String(v).trim(); }
 function num(v) { const n = typeof v === 'number' ? v : parseFloat(String(v ?? '').replace(/,/g, '')); return isFinite(n) ? n : 0; }
@@ -145,15 +146,25 @@ function applyParsed(state, p, opts = {}) {
   if (p.kind === 'alloc') {
     const m = opts.month || state.cur.month;
     if (m && m !== state.cur.month) resetCur(state, m);
+    const batchCols = Object.keys(p.idx).filter(h => /^batch\s*\d+$/i.test(h)).sort((a, b) => parseInt(a.replace(/\D/g, '')) - parseInt(b.replace(/\D/g, '')));
     state.cur.alloc = p.rows.map(r => {
       const c = cleanStr(g(r, 'Alpha_Name')); const sc = cleanStr(g(r, 'ShortCode'));
       if (!c || !sc) return null;
       const n = state.npps[c] || (state.npps[c] = { name: '', area: '' });
       if (has('AREA') && g(r, 'AREA')) n.area = cleanStr(g(r, 'AREA'));
-      return [cleanStr(g(r, 'WEEK')), c, sc, num(g(r, 'Allocation'))];
+      return [cleanStr(g(r, 'WEEK')), c, sc, num(g(r, 'Allocation')), batchCols.map(b => { const v = r[p.idx[b]]; return v == null || v === '' ? null : num(v); })];
     }).filter(Boolean);
+    state.cur.allocBatches = batchCols;
     const wk = [...new Set(state.cur.alloc.map(x => x[0]))];
     msg.note = 'Tuần ' + wk.join(', ');
+  }
+
+  if (p.kind === 'allocdates') {
+    const cols = Object.keys(p.idx).filter(h => /^batch\s*\d+$/i.test(h)).sort((a, b) => parseInt(a.replace(/\D/g, '')) - parseInt(b.replace(/\D/g, '')));
+    const dates = {};
+    p.rows.forEach(r => { const w = cleanStr(g(r, 'WEEK')); if (w) dates[w] = cols.map(c => dateKey(r[p.idx[c]])); });
+    state.cur.allocDates = dates; state.cur.allocDateCols = cols;
+    msg.note = Object.keys(dates).length + ' tuần có lịch chia';
   }
 
   if (p.kind === 'target') {
@@ -172,6 +183,14 @@ function applyParsed(state, p, opts = {}) {
   return msg;
 }
 
+/* Ngày dạng 'YYYY-MM-DD…', 'DD/MM/YYYY', số serial Excel hoặc YYYYMMDD -> 'YYYYMMDD' */
+function dateKey(v) {
+  if (v == null || v === '') return null;
+  if (typeof v === 'number') { if (v > 19000000) return String(Math.round(v)); const d = new Date(Date.UTC(1899, 11, 30) + Math.round(v) * 864e5); return d.toISOString().slice(0, 10).replace(/-/g, ''); }
+  const s = String(v).trim(); let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/); if (m) return m[1] + m[2] + m[3];
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/); if (m) return m[3] + m[2].padStart(2, '0') + m[1].padStart(2, '0');
+  return /^\d{8}$/.test(s) ? s : null;
+}
 function fmtMonth(m) { return m ? m.slice(4, 6) + '/' + m.slice(0, 4) : '—'; }
 function fmtDate(d) { return d ? d.slice(6, 8) + '/' + d.slice(4, 6) : '—'; }
 function todayKey() {

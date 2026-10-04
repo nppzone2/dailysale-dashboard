@@ -53,6 +53,15 @@
       const res = await tryLogin($('#lg-u').value, $('#lg-p').value); if (res !== true) { btn.disabled = false; btn.textContent = 'Đăng nhập'; $('#lg-err').textContent = res; } });
   }
 
+  /* ---------- allocation: tuần hiện tại theo lịch chia (sheet Upload Date) ---------- */
+  const todayKey = () => new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10).replace(/-/g, '');
+  const wkSort = (a, b) => a.localeCompare(b, 'en', { numeric: true });
+  function currentWeek(weeks) {
+    const D = (STATE.cur || {}).allocDates || {}; const t = todayKey();
+    const started = weeks.filter(w => (D[w] || []).some(d => d && d <= t));
+    return started.length ? started[started.length - 1] : weeks[weeks.length - 1];
+  }
+
   /* ---------- helpers ---------- */
   const nf0 = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 });
   const nf1 = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 1, minimumFractionDigits: 1 });
@@ -158,7 +167,7 @@
   function shell() {
     const npps = npAll(); const areas = [...new Set(npps.map(c => STATE.npps[c].area).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'vi', { numeric: true }));
     const cur = STATE.cur || {}; const siD = Object.keys(cur.si || {}).sort().pop(); const soD = Object.keys(cur.so || {}).sort().pop();
-    const wk = [...new Set((cur.alloc || []).map(r => r[0]))].sort().pop();
+    const wk = currentWeek([...new Set((cur.alloc || []).map(r => r[0]))].sort(wkSort));
     const used = new Set([...(cur.target || []).map(r => r[1]), ...Object.values(cur.si || {}).flat().map(r => r[1]), ...Object.values(STATE.months || {}).flatMap(x => x.rows.map(r => r[1]))]);
     const bOrder = ['Heineken', 'Tiger', 'Bia Viet', 'Larue', 'Bivina', 'Strongbow', 'Edelweiss'];
     const brands = [...new Set([...used].map(brandOf))].filter(b => b !== 'Khác').sort((a, b) => ((bOrder.indexOf(a) + 1) || 99) - ((bOrder.indexOf(b) + 1) || 99) || a.localeCompare(b));
@@ -357,7 +366,7 @@
     const M = curModel(); const A = (STATE.cur.alloc || []).filter(r => inScope(r[1]) && inBrand(r[2]));
     if (!A.length) return '<div class="card empty">Chưa có dữ liệu Allocation cho phạm vi này.</div>';
     const weeks = [...new Set(A.map(r => r[0]))].sort((a, b) => a.localeCompare(b, 'en', { numeric: true }));
-    const wk = weeks[weeks.length - 1], pw = weeks[weeks.length - 2];
+    const wk = currentWeek(weeks), pw = weeks[weeks.indexOf(wk) - 1]; const nw = weeks[weeks.indexOf(wk) + 1];
     const siMap = {}; M.list.forEach(r => { siMap[r.c + '|' + r.sc] = (siMap[r.c + '|' + r.sc] || 0) + r.si; });
     const aSum = f => sumBy(A.filter(f), r => conv(r[3], r[2]));
     const skus = [...new Set(A.map(r => r[2]))].map(sc => ({ sc, al: aSum(r => r[2] === sc) })).sort((a, b) => b.al - a.al).map(x => x.sc);
@@ -370,11 +379,25 @@
     const remTd = (al, si) => { const r = al - si; return `<td class="rem">${r >= 0 ? fmt(r) : '<span style="color:var(--bad)">Vượt ' + fmt(-r) + '</span>'}</td>`; };
     const delta = (a, b) => { if (b == null) return '<span class="note">–</span>'; const d = a - b; const p = b ? d / b : NaN; const cls = d > 0 ? 'up' : d < 0 ? 'down' : '';
       return `<span class="dl ${cls}">${d > 0 ? '▲' : d < 0 ? '▼' : '■'} ${fmt(Math.abs(d))}${isFinite(p) ? ' · ' + pct(Math.abs(p)) : ''}</span>`; };
-    // 1) latest week
+    // 1) Current Week theo batch
+    const cur = STATE.cur || {}; const BC = cur.allocBatches || []; const AD = cur.allocDates || {}; const today = todayKey();
+    const fd = d => d ? d.slice(6, 8) + '/' + d.slice(4, 6) : '';
+    const bval = (sc, w, i) => sumBy(A.filter(r => r[2] === sc && r[0] === w), r => conv(Array.isArray(r[4]) ? (r[4][i] || 0) : 0, r[2]));
+    const bHas = i => (AD[wk] || [])[i] || A.some(r => r[0] === wk && Array.isArray(r[4]) && r[4][i] != null && r[4][i] !== 0);
+    const bIdx = BC.map((_, i) => i).filter(bHas);
     const wkTot = sumBy(bySku, s => s.w[wk]); const pwTot = pw ? sumBy(bySku, s => s.w[pw]) : null;
-    const latest = `<div class="card c12 wk-card"><div class="card-h"><div><div class="eyebrow">Current Week</div><h2 style="font-size:18px">${esc(wk)}<span class="note" style="font-weight:500;margin-left:8px">${pw ? 'so với ' + esc(pw) : ''}</span></h2></div>
-        <div class="wk-total"><span class="kpi-l">Tổng allocation ${esc(wk)}</span><b>${fmt(wkTot)}</b><small>${U()}</small> ${delta(wkTot, pwTot)}</div></div>
-      <div class="wk-grid">${bySku.map(s => `<div class="wk-item"><div class="wk-sku">${esc(s.sc)}<span class="wk-b">${esc(item(s.sc).b || '')}</span></div><div class="wk-v num">${fmt(s.w[wk])}</div><div>${delta(s.w[wk], pw ? s.w[pw] : null)}</div><div class="wk-share"><i style="width:${wkTot ? s.w[wk] / wkTot * 100 : 0}%"></i></div></div>`).join('')}</div></div>`;
+    const bTot = i => sumBy(bySku, s => bval(s.sc, wk, i));
+    const bHead = i => { const d = (AD[wk] || [])[i]; const done = d && d <= today;
+      return `<th class="bh">${esc(BC[i])}<span class="bd">${d ? fd(d) : 'Chưa có ngày'}</span><span class="pill ${done ? 'good' : 'info'}">${done ? 'Đã chia' : 'Dự kiến'}</span></th>`; };
+    const wkRange = (AD[wk] || []).filter(Boolean); const rangeTxt = wkRange.length ? `Lịch chia ${wkRange.map(fd).join(' · ')}` : '';
+    const nextTxt = nw && (AD[nw] || []).some(Boolean) ? `Tuần tới <b>${esc(nw)}</b>: ${BC.map((b, i) => (AD[nw] || [])[i] ? `${esc(b)} ngày ${fd(AD[nw][i])}` : '').filter(Boolean).join(' · ')}` : '';
+    const latest = `<div class="card c12 wk-card"><div class="card-h"><div><div class="eyebrow">Current Week</div><h2 style="font-size:18px">${esc(wk)}<span class="note" style="font-weight:500;margin-left:8px">${esc(rangeTxt)}</span></h2></div>
+        <div class="wk-total"><span class="kpi-l">Tổng allocation ${esc(wk)}</span><b>${fmt(wkTot)}</b><small>${U()}</small> ${pw ? delta(wkTot, pwTot) + `<span class="note">so với ${esc(pw)}</span>` : ''}</div></div>
+      ${bIdx.length ? `<div class="tw" style="margin-top:10px"><table class="sticky1 tgt batch"><thead><tr><th>BrandFamily</th><th>SKU</th>${bIdx.map(bHead).join('')}<th>Tổng ${esc(wk)}</th><th>So với ${esc(pw || '—')}</th></tr></thead><tbody>
+        ${bySku.map(s => `<tr class="sku"><td>${esc(item(s.sc).b || '—')}</td><td class="skuc">${esc(s.sc)}</td>${bIdx.map(i => `<td>${fmt(bval(s.sc, wk, i))}</td>`).join('')}<td><b>${fmt(s.w[wk])}</b></td><td>${delta(s.w[wk], pw ? s.w[pw] : null)}</td></tr>`).join('')}
+        ${bySku.length > 1 ? `<tr class="tot"><td colspan="2">Tổng</td>${bIdx.map(i => `<td>${fmt(bTot(i))}</td>`).join('')}<td>${fmt(wkTot)}</td><td>${delta(wkTot, pwTot)}</td></tr>` : ''}
+      </tbody></table></div>` : `<div class="wk-grid">${bySku.map(s => `<div class="wk-item"><div class="wk-sku">${esc(s.sc)}<span class="wk-b">${esc(item(s.sc).b || '')}</span></div><div class="wk-v num">${fmt(s.w[wk])}</div><div>${delta(s.w[wk], pw ? s.w[pw] : null)}</div></div>`).join('')}</div>`}
+      ${nextTxt ? `<p class="note" style="margin:10px 0 0">${nextTxt}</p>` : ''}</div>`;
     // 2) cumulative by SKU
     const totAl = sumBy(bySku, s => s.al), totSi = sumBy(bySku, s => s.si);
     const cum = `<div class="card c12"><h2>Lũy kế tháng theo SKU</h2><p class="sub">Allocation các tuần đã chốt vs. Sale In MTD · đơn vị ${U()}</p><div class="tw"><table class="sticky1 tgt"><thead><tr><th>BrandFamily</th><th>SKU</th>${weeks.map(w => `<th>${esc(w)}</th>`).join('')}<th>Tổng allocation</th><th>Sale In MTD</th><th>% sử dụng</th><th>Còn lại</th></tr></thead><tbody>
@@ -408,7 +431,7 @@
       <p>Allocation Current Week và lũy kế các tuần đã chốt (${weeks.join(', ')}), so với Sale In MTD của cùng SKU.</p></div></section>
     <div class="grid">${latest}${cum}${byNpp}</div>
     ${conclusion([
-      `Tuần <b>${esc(wk)}</b>: tổng allocation <b>${fmt(wkTot)} ${U()}</b>${pwTot != null ? `, ${wkTot >= pwTot ? 'tăng' : 'giảm'} ${pct(Math.abs(pwTot ? wkTot / pwTot - 1 : 0))} so với ${esc(pw)}` : ''}.`,
+      `Current Week <b>${esc(wk)}</b>: tổng allocation <b>${fmt(wkTot)} ${U()}</b>${bIdx.length ? ' (' + bIdx.map(i => `${esc(BC[i])} ${fmt(bTot(i))}`).join(', ') + ')' : ''}${pwTot != null ? `, ${wkTot >= pwTot ? 'tăng' : 'giảm'} ${pct(Math.abs(pwTot ? wkTot / pwTot - 1 : 0))} so với ${esc(pw)}` : ''}.`,
       main ? `<b>${esc(main.sc)}</b> đã sử dụng ${pct(main.al ? main.si / main.al : 0)} allocation lũy kế, còn <b>${fmt(Math.max(0, main.al - main.si))} ${U()}</b>.` : '',
       over.length ? `Đã vượt allocation: <b>${over.map(s => s.sc).join(', ')}</b>.` : ''
     ])}`;
