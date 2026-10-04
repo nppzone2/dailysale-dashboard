@@ -180,7 +180,7 @@
         ${ROLE.type !== 'npp' ? '<option value="all">Tất cả NPP</option>' : ''}${npps.filter(c => (ui.area === 'all' || STATE.npps[c].area === ui.area) && (ROLE.type !== 'npp' || c === ROLE.id)).map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('')}
       </select></div>
       <div class="fld"><label for="bgf">BrandGroup</label><select id="bgf"><option value="all">Tất cả</option>${GROUPS.filter(g => g !== 'Khác').map(g => `<option value="${g}">${g}</option>`).join('')}</select></div>
-      <div class="fld"><label for="brand">Brand</label><select id="brand"><option value="all">Tất cả brand</option>${brands.map(b => `<option value="${esc(b)}">${esc(b)}</option>`).join('')}</select></div>
+      <div class="fld"><label for="brand">BrandFamily</label><select id="brand"><option value="all">Tất cả</option>${brands.map(b => `<option value="${esc(b)}">${esc(b)}</option>`).join('')}</select></div>
       <div class="fld"><label>Đơn vị</label><div class="seg"><button data-unit="case" aria-pressed="${ui.unit === 'case'}">Case</button><button data-unit="hl" aria-pressed="${ui.unit === 'hl'}">HL</button></div></div>
       <div class="spacer"></div>
       <button class="btn" id="admin-btn" hidden>Cập nhật dữ liệu</button>
@@ -221,7 +221,7 @@
     const multi = npps.length > 1;
     const byG = {}; rows.forEach(r => { const g = grp(r.sc); (byG[g] = byG[g] || {})[r.sc] = (byG[g][r.sc] || {}); byG[g][r.sc][r.c] = (byG[g][r.sc][r.c] || 0) + tv(r); });
     const total = sumBy(rows, tv); const gTot = g => sumBy(rows.filter(r => grp(r.sc) === g), tv);
-    const head = multi ? `<tr><th>BrandGroup / BrandName</th><th>SKU</th>${npps.map(c => `<th>${esc(c)}</th>`).join('')}<th>Tổng</th><th>Tỷ trọng</th></tr>` : `<tr><th>BrandGroup / BrandName</th><th>SKU</th><th>Target (Case)</th><th>Target (HL)</th><th>Tỷ trọng</th></tr>`;
+    const head = multi ? `<tr><th>BrandFamily</th><th>SKU</th>${npps.map(c => `<th>${esc(c)}</th>`).join('')}<th>Tổng</th><th>Tỷ trọng</th></tr>` : `<tr><th>BrandFamily</th><th>SKU</th><th>Target (Case)</th><th>Target (HL)</th><th>Tỷ trọng</th></tr>`;
     let body = '';
     GROUPS.filter(g => byG[g]).forEach(g => {
       const bo = ['Heineken', 'Tiger', 'Bia Viet', 'Larue', 'Bivina', 'Strongbow', 'Edelweiss']; const bi = sc => (bo.indexOf(brandOf(sc)) + 1) || 99;
@@ -247,7 +247,7 @@
       bgNote = ch.map(x => `<b>${esc(x.g)}</b>: ${fmt(x.a)} ${U()}, ${x.d >= 0 ? 'tăng' : 'giảm'} <b>${isFinite(x.p) ? pct(Math.abs(x.p)) : '—'}</b> so với ${fM(prev)} (${x.d >= 0 ? '+' : '−'}${fmt(Math.abs(x.d))} ${U()}), tỷ trọng ${pct(x.a / total)}.`);
       const bm = {}; rows.forEach(r => { const k = brandOf(r.sc); bm[k] = bm[k] || { a: 0, b: 0 }; bm[k].a += tv(r); }); pr.forEach(r => { const k = brandOf(r.sc); bm[k] = bm[k] || { a: 0, b: 0 }; bm[k].b += tv(r); });
       const bl = Object.entries(bm).filter(([k, v]) => k !== 'Khác' && v.b > 0).map(([k, v]) => ({ k, d: v.a - v.b, p: v.a / v.b - 1 })).sort((x, y) => y.d - x.d);
-      if (bl.length > 1) { const up = bl[0], dn = bl[bl.length - 1]; brNote = `Brand tăng mạnh nhất: <b>${esc(up.k)}</b> (${up.d >= 0 ? '+' : '−'}${fmt(Math.abs(up.d))} ${U()}, ${pct(up.p)})` + (dn.d < 0 ? `; giảm nhiều nhất: <b>${esc(dn.k)}</b> (−${fmt(-dn.d)} ${U()}, ${pct(dn.p)}).` : '.'); } }
+      if (bl.length > 1) { const up = bl[0], dn = bl[bl.length - 1]; brNote = `BrandFamily tăng mạnh nhất: <b>${esc(up.k)}</b> (${up.d >= 0 ? '+' : '−'}${fmt(Math.abs(up.d))} ${U()}, ${pct(up.p)})` + (dn.d < 0 ? `; giảm nhiều nhất: <b>${esc(dn.k)}</b> (−${fmt(-dn.d)} ${U()}, ${pct(dn.p)}).` : '.'); } }
     const topN = multi ? npps.map(c => [c, sumBy(rows.filter(r => r.c === c), tv)]).sort((a, b) => b[1] - a[1])[0] : null;
     return `
     <section class="lead"><div><div class="eyebrow">Target tháng</div><h1>Target ${fM(m)} · ${esc(scopeLabel())}</h1>
@@ -280,14 +280,14 @@
     GROUPS.filter(g => groups[g] && (groups[g].t || groups[g].si || groups[g].so)).forEach(g => {
       const o = groups[g]; const isOpen = ui.open.has(g);
       body += rowHtml(`<span class="caret">▸</span> ${esc(g)}`, o, 'grp click' + (isOpen ? ' open' : ''), `data-g="${esc(g)}"`);
-      if (isOpen) { const sk = aggregate(o.rows, r => r.sc); Object.values(sk).sort((a, b) => b.t - a.t).forEach(s => { body += rowHtml(esc(s.k) + bchip(s.k), s, 'sku'); }); }
+      if (isOpen) { const sk = aggregate(o.rows, r => r.sc); const bo = ['Heineken', 'Tiger', 'Bia Viet', 'Larue', 'Bivina', 'Strongbow', 'Edelweiss']; const bi = sc => (bo.indexOf(brandOf(sc)) + 1) || 99; Object.values(sk).sort((a, b) => bi(a.k) - bi(b.k) || b.t - a.t).forEach(s => { body += rowHtml(s.k, s, 'sku'); }); }
     });
     body += rowHtml('Tổng', { t: T, si: SI, so: SO }, 'tot');
     function rowHtml(label, o, cls, attr = '') {
       const a1 = o.t ? o.si / o.t : NaN, a2 = o.t ? o.so / o.t : NaN; const r1 = o.t - o.si, r2 = o.t - o.so;
       const bar = (a, c) => `<span class="mini"><i style="width:${Math.min(100, (a || 0) * 100)}%;background:${c}"></i></span>`;
       const remCell = r => r > 0 ? `<span class="rem">${fmt(r)}</span>` : `<span class="neg">Vượt ${fmt(-r)}</span>`;
-      return `<tr class="${cls}" ${attr}><td>${label}</td><td>${fmt(o.t)}</td><td>${fmt(o.si)}</td><td>${pct(a1)}${bar(a1, cSi)}</td><td>${remCell(r1)}</td><td>${fmt(o.so)}</td><td>${pct(a2)}${bar(a2, cSo)}</td><td>${remCell(r2)}</td></tr>`;
+      return `<tr class="${cls}" ${attr}>${cls === 'sku' ? `<td>${esc(item(label).b || '—')}</td><td class="skuc">${esc(label)}</td>` : `<td colspan="2">${label}</td>`}<td>${fmt(o.t)}</td><td>${fmt(o.si)}</td><td>${pct(a1)}${bar(a1, cSi)}</td><td>${remCell(r1)}</td><td>${fmt(o.so)}</td><td>${pct(a2)}${bar(a2, cSo)}</td><td>${remCell(r2)}</td></tr>`;
     }
     const labels = Array.from({ length: M.D }, (_, i) => String(i + 1));
     const daily = Array(M.D).fill(null); M.siDays.forEach(d => { daily[+d.slice(6) - 1] = sumBy(STATE.cur.si[d].filter(r => inScope(r[0]) && inBrand(r[1])), r => conv(r[2], r[1])); });
@@ -333,7 +333,7 @@
         <div class="remrow"><span class="dot" style="background:var(--so)"></span><span>Sale Out</span><b class="num">${fmt(remSo)}</b><small>${U()}</small></div></div>
 
       <div class="card c12"><div class="card-h"><div><h2>Còn lại theo BrandGroup</h2><p class="sub">Target − thực đạt lũy kế · bấm vào BrandGroup để xem từng SKU · đơn vị ${U()}</p></div></div>
-        ${hlNote()}<div class="tw"><table class="sticky1"><thead><tr><th>BrandGroup</th><th>Target</th><th>Sale In</th><th>% SI</th><th>Còn lại SI</th><th>Sale Out</th><th>% SO</th><th>Còn lại SO</th></tr></thead><tbody>${body}</tbody></table></div></div>
+        ${hlNote()}<div class="tw"><table class="sticky1 tgt"><thead><tr><th>BrandFamily</th><th>SKU</th><th>Target</th><th>Sale In</th><th>% SI</th><th>Còn lại SI</th><th>Sale Out</th><th>% SO</th><th>Còn lại SO</th></tr></thead><tbody>${body}</tbody></table></div></div>
 
       <div class="card ${cover ? 'c7' : 'c12'}"><div class="card-h"><div><h2>Lũy kế MTD vs. tiến độ</h2><p class="sub">${U()} · tiến độ = target tháng chia đều theo ngày</p></div>
         ${legend([['Sale In', cSi], ...(soLine ? [['Sale Out', cSo]] : []), ['Tiến độ', cT, 'dash']])}</div>
@@ -374,12 +374,12 @@
     const wkTot = sumBy(bySku, s => s.w[wk]); const pwTot = pw ? sumBy(bySku, s => s.w[pw]) : null;
     const latest = `<div class="card c12 wk-card"><div class="card-h"><div><div class="eyebrow">Current Week</div><h2 style="font-size:18px">${esc(wk)}<span class="note" style="font-weight:500;margin-left:8px">${pw ? 'so với ' + esc(pw) : ''}</span></h2></div>
         <div class="wk-total"><span class="kpi-l">Tổng allocation ${esc(wk)}</span><b>${fmt(wkTot)}</b><small>${U()}</small> ${delta(wkTot, pwTot)}</div></div>
-      <div class="wk-grid">${bySku.map(s => `<div class="wk-item"><div class="wk-sku">${esc(s.sc)}</div><div class="wk-v num">${fmt(s.w[wk])}</div><div>${delta(s.w[wk], pw ? s.w[pw] : null)}</div><div class="wk-share"><i style="width:${wkTot ? s.w[wk] / wkTot * 100 : 0}%"></i></div></div>`).join('')}</div></div>`;
+      <div class="wk-grid">${bySku.map(s => `<div class="wk-item"><div class="wk-sku">${esc(s.sc)}<span class="wk-b">${esc(item(s.sc).b || '')}</span></div><div class="wk-v num">${fmt(s.w[wk])}</div><div>${delta(s.w[wk], pw ? s.w[pw] : null)}</div><div class="wk-share"><i style="width:${wkTot ? s.w[wk] / wkTot * 100 : 0}%"></i></div></div>`).join('')}</div></div>`;
     // 2) cumulative by SKU
     const totAl = sumBy(bySku, s => s.al), totSi = sumBy(bySku, s => s.si);
-    const cum = `<div class="card c12"><h2>Lũy kế tháng theo SKU</h2><p class="sub">Allocation các tuần đã chốt vs. Sale In MTD · đơn vị ${U()}</p><div class="tw"><table class="sticky1"><thead><tr><th>SKU</th>${weeks.map(w => `<th>${esc(w)}</th>`).join('')}<th>Tổng allocation</th><th>Sale In MTD</th><th>% sử dụng</th><th>Còn lại</th></tr></thead><tbody>
-      ${bySku.map(s => `<tr><td><b>${esc(s.sc)}</b></td>${weeks.map(w => `<td>${fmt(s.w[w])}</td>`).join('')}<td>${fmt(s.al)}</td><td>${fmt(s.si)}</td><td>${usedBar(s.si, s.al)}</td>${remTd(s.al, s.si)}</tr>`).join('')}
-      ${bySku.length > 1 ? `<tr class="tot"><td>Tổng</td>${weeks.map(w => `<td>${fmt(sumBy(bySku, s => s.w[w]))}</td>`).join('')}<td>${fmt(totAl)}</td><td>${fmt(totSi)}</td><td>${usedBar(totSi, totAl)}</td>${remTd(totAl, totSi)}</tr>` : ''}
+    const cum = `<div class="card c12"><h2>Lũy kế tháng theo SKU</h2><p class="sub">Allocation các tuần đã chốt vs. Sale In MTD · đơn vị ${U()}</p><div class="tw"><table class="sticky1 tgt"><thead><tr><th>BrandFamily</th><th>SKU</th>${weeks.map(w => `<th>${esc(w)}</th>`).join('')}<th>Tổng allocation</th><th>Sale In MTD</th><th>% sử dụng</th><th>Còn lại</th></tr></thead><tbody>
+      ${bySku.map(s => `<tr class="sku"><td>${esc(item(s.sc).b || '—')}</td><td class="skuc">${esc(s.sc)}</td>${weeks.map(w => `<td>${fmt(s.w[w])}</td>`).join('')}<td>${fmt(s.al)}</td><td>${fmt(s.si)}</td><td>${usedBar(s.si, s.al)}</td>${remTd(s.al, s.si)}</tr>`).join('')}
+      ${bySku.length > 1 ? `<tr class="tot"><td colspan="2">Tổng</td>${weeks.map(w => `<td>${fmt(sumBy(bySku, s => s.w[w]))}</td>`).join('')}<td>${fmt(totAl)}</td><td>${fmt(totSi)}</td><td>${usedBar(totSi, totAl)}</td>${remTd(totAl, totSi)}</tr>` : ''}
     </tbody></table></div></div>`;
     // 3) by NPP: SKU switch keeps the table narrow however many SKUs exist
     let byNpp = '';
@@ -431,7 +431,7 @@
     const brs = Object.entries(bm).filter(([, o]) => o.t || o.si).sort((a, b) => b[1].si - a[1].si);
     const siAll = sumBy(brs, ([, o]) => o.si);
     const lastM = full.length ? full[full.length - 1].m : '';
-    const brandCard = brs.length ? `<div class="card c12"><h2>Theo BrandName · YTD</h2><p class="sub">Đơn vị ${U()} · xếp theo Sale In · cột cuối là % đạt Sale In tháng gần nhất (${fM(lastM)})</p><div class="tw"><table><thead><tr><th>BrandName</th><th>Target</th><th>Sale In</th><th>% SI</th><th>Sale Out</th><th>% SO</th><th>Tỷ trọng SI</th><th>% SI ${fM(lastM).replace(/\/\d{4}$/, '')}</th></tr></thead><tbody>
+    const brandCard = brs.length ? `<div class="card c12"><h2>Theo BrandFamily · YTD</h2><p class="sub">Đơn vị ${U()} · xếp theo Sale In · cột cuối là % đạt Sale In tháng gần nhất (${fM(lastM)})</p><div class="tw"><table><thead><tr><th>BrandFamily</th><th>Target</th><th>Sale In</th><th>% SI</th><th>Sale Out</th><th>% SO</th><th>Tỷ trọng SI</th><th>% SI ${fM(lastM).replace(/\/\d{4}$/, '')}</th></tr></thead><tbody>
       ${brs.map(([b, o]) => { const lm = o.mo[lastM]; return `<tr><td><b>${esc(b)}</b></td><td>${fmt(o.t)}</td><td>${fmt(o.si)}</td><td>${o.t ? pct(o.si / o.t) : '—'}${o.t ? `<span class="mini"><i style="width:${Math.min(100, o.si / o.t * 100)}%;background:${o.si >= o.t ? 'var(--si)' : 'var(--warn)'}"></i></span>` : ''}</td><td>${fmt(o.so)}</td><td>${o.t ? pct(o.so / o.t) : '—'}</td><td>${pct(siAll ? o.si / siAll : 0)}</td><td>${lm && lm.t ? pct(lm.si / lm.t) : '—'}</td></tr>`; }).join('')}
     </tbody></table></div></div>` : '';
     const tAll = sumBy(brs, ([, o]) => o.t); const brT = brs.filter(([b, o]) => b !== 'Khác' && o.t > 0 && o.t >= tAll * 0.01).map(([b, o]) => [b, o.si / o.t, o]);
@@ -458,8 +458,8 @@
     ${conclusion([
       `YTD as of ${fM(asOf)}: Sale In đạt <b>${pct(tSi / tT)}</b>, Sale Out đạt <b>${pct(tSo / tT)}</b> tổng target.`,
       best.length > 1 ? `Cao nhất <b>${fM(best[0].m)}</b> (${pct(best[0].si / best[0].t)}), thấp nhất <b>${fM(best[best.length - 1].m)}</b> (${pct(best[best.length - 1].si / best[best.length - 1].t)}).` : '',
-      brs.length ? `Brand đóng góp lớn nhất: <b>${esc(brs[0][0])}</b> (${pct(siAll ? brs[0][1].si / siAll : 0)} Sale In YTD, đạt ${brs[0][1].t ? pct(brs[0][1].si / brs[0][1].t) : '—'} target).` : '',
-      brBest && brWorst && brBest[0] !== brWorst[0] ? `Brand đạt cao nhất: <b>${esc(brBest[0])}</b> (${pct(brBest[1])}); thấp nhất: <b>${esc(brWorst[0])}</b> (${pct(brWorst[1])}, thiếu ${fmt(Math.max(0, brWorst[2].t - brWorst[2].si))} ${U()}).` : '',
+      brs.length ? `BrandFamily đóng góp lớn nhất: <b>${esc(brs[0][0])}</b> (${pct(siAll ? brs[0][1].si / siAll : 0)} Sale In YTD, đạt ${brs[0][1].t ? pct(brs[0][1].si / brs[0][1].t) : '—'} target).` : '',
+      brBest && brWorst && brBest[0] !== brWorst[0] ? `BrandFamily đạt cao nhất: <b>${esc(brBest[0])}</b> (${pct(brBest[1])}); thấp nhất: <b>${esc(brWorst[0])}</b> (${pct(brWorst[1])}, thiếu ${fmt(Math.max(0, brWorst[2].t - brWorst[2].si))} ${U()}).` : '',
       (() => { const w = GROUPS.filter(g => g !== 'Khác' && gm[g] && gm[g].t > 0).map(g => [g, gm[g].si / gm[g].t]).sort((a, b) => a[1] - b[1])[0]; return w ? `BrandGroup đạt thấp nhất: <b>${esc(w[0])}</b> (${pct(w[1])}), cần ưu tiên cải thiện.` : ''; })()
     ])}`;
   }
@@ -509,7 +509,7 @@
   const scopeTag = () => ui.scope === 'all' ? 'HCMZ2' : ui.scope.replace('A:', '').replace(/\s+/g, '');
   function exportTarget(ev) {
     const m = ui.tMonth; const rows = targetRows(m).filter(r => r.tc);
-    const long = [['Tháng', 'Khu vực', 'Mã NPP', 'ShortCode', 'BrandName', 'BrandGroup', 'Target (Case)', 'Target (HL)']];
+    const long = [['Tháng', 'Khu vực', 'Mã NPP', 'ShortCode', 'BrandFamily', 'BrandGroup', 'Target (Case)', 'Target (HL)']];
     rows.sort((a, b) => (a.c + GROUPS.indexOf(grp(a.sc)) + a.sc).localeCompare(b.c + GROUPS.indexOf(grp(b.sc)) + b.sc)).forEach(r => long.push([fM(m), (STATE.npps[r.c] || {}).area || '', r.c, r.sc, item(r.sc).b || '', grp(r.sc), Math.round(r.tc), Math.round(r.th * 100) / 100]));
     const npps = [...new Set(rows.map(r => r.c))];
     const piv = [['BrandGroup', ...npps.flatMap(c => [c + ' (Case)', c + ' (HL)']), 'Tổng (Case)', 'Tổng (HL)']];
@@ -519,7 +519,7 @@
   }
   function exportInvoice(ev) {
     const cur = STATE.cur || {}; const ship = cur.ship || {};
-    const rows = [['Ngày', 'Khu vực', 'Mã NPP', 'Số hoá đơn', 'Loại chứng từ', 'Mã ShipTo', 'Tên ShipTo', 'BrandName', 'BrandGroup', 'ShortCode', 'Số lượng (Case)', 'Sản lượng (HL)']];
+    const rows = [['Ngày', 'Khu vực', 'Mã NPP', 'Số hoá đơn', 'Loại chứng từ', 'Mã ShipTo', 'Tên ShipTo', 'BrandFamily', 'BrandGroup', 'ShortCode', 'Số lượng (Case)', 'Sản lượng (HL)']];
     (cur.lines || []).filter(l => inScope(l[1]) && inBrand(l[5])).forEach(([d, c, inv, dt, st, sc, q]) => rows.push([d.slice(6, 8) + '/' + d.slice(4, 6) + '/' + d.slice(0, 4), (STATE.npps[c] || {}).area || '', c, inv, dt, st, ship[st] || '', item(sc).b || '', grp(sc), sc, q, Math.round(q * (item(sc).hl || 0) * 100) / 100]));
     if (rows.length === 1) { toastBtn(ev.currentTarget, 'Không có hoá đơn trong phạm vi này'); return; }
     const days = Object.keys(cur.si || {}).sort();
@@ -527,7 +527,7 @@
   }
   function exportProgress(ev) {
     const M = curModel(); const left = M.D - M.dSi;
-    const rows = [['Tháng', 'Đến ngày', 'Mã NPP', 'ShortCode', 'BrandName', 'BrandGroup', 'Target (Case)', 'Sale In (Case)', '% SI', 'Còn lại SI (Case)', 'Sale Out (Case)', '% SO', 'Còn lại SO (Case)', 'hl/case', 'Target (HL)', 'Sale In (HL)', 'Sale Out (HL)']];
+    const rows = [['Tháng', 'Đến ngày', 'Mã NPP', 'ShortCode', 'BrandFamily', 'BrandGroup', 'Target (Case)', 'Sale In (Case)', '% SI', 'Còn lại SI (Case)', 'Sale Out (Case)', '% SO', 'Còn lại SO (Case)', 'hl/case', 'Target (HL)', 'Sale In (HL)', 'Sale Out (HL)']];
     M.list.filter(r => r.t || r.si || r.so).sort((a, b) => (a.c + GROUPS.indexOf(grp(a.sc)) + a.sc).localeCompare(b.c + GROUPS.indexOf(grp(b.sc)) + b.sc)).forEach(r => { const hl = item(r.sc).hl || 0; const rem = Math.max(0, r.t - r.si);
       rows.push([fM(M.m), fD(M.lastSi), r.c, r.sc, item(r.sc).b || '', grp(r.sc), r.t, r.si, r.t ? Math.round(r.si / r.t * 1000) / 10 : null, rem, r.so, r.t ? Math.round(r.so / r.t * 1000) / 10 : null, Math.max(0, r.t - r.so), hl, Math.round(r.t * hl * 100) / 100, Math.round(r.si * hl * 100) / 100, Math.round(r.so * hl * 100) / 100]); });
     const g = aggregate(M.list, r => grp(r.sc)); const sum = [['BrandGroup', 'Target', 'Sale In', '% SI', 'Còn lại SI', 'Sale Out', '% SO', 'Còn lại SO', 'Đơn vị']];

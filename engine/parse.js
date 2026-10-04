@@ -58,7 +58,7 @@ function applyParsed(state, p, opts = {}) {
     p.rows.forEach(r => {
       const sc = cleanStr(g(r, 'ShortCode')); if (!sc) return;
       const hl = g(r, 'hl');
-      items[sc] = { b: has('BrandName') ? cleanStr(g(r, 'BrandName')) : '', bg: cleanStr(g(r, 'BrandGroup')), g: has('Group') ? cleanStr(g(r, 'Group')) : '', hl: hl == null || hl === '' ? null : num(hl) };
+      items[sc] = { b: has('BrandFamily') ? cleanStr(g(r, 'BrandFamily')) : has('BrandName') ? cleanStr(g(r, 'BrandName')) : '', bg: cleanStr(g(r, 'BrandGroup')), g: has('Group') ? cleanStr(g(r, 'Group')) : '', hl: hl == null || hl === '' ? null : num(hl) };
     });
     state.items = items; msg.note = Object.keys(items).length + ' mã SKU';
   }
