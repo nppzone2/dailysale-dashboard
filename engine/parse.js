@@ -181,7 +181,7 @@ function applyParsed(state, p, opts = {}) {
       if (!state.npps[c]) state.npps[c] = { name: '', area: '' };
       if (has('Area') && g(r, 'Area') && !state.npps[c].area) state.npps[c].area = cleanStr(g(r, 'Area'));
       return [c, cleanStr(g(r, 'Order Number')), cleanStr(g(r, 'Status')), sc, num(g(r, 'Sum of Case')),
-        has('Order Date') ? cleanStr(g(r, 'Order Date')) : '', has('Promised Delivery') ? cleanStr(g(r, 'Promised Delivery')) : '', has('Item B.O') ? cleanStr(g(r, 'Item B.O')) : ''];
+        has('Order Date') ? cleanStr(g(r, 'Order Date')) : '', has('Promised Delivery') ? cleanStr(g(r, 'Promised Delivery')) : '', has('Item B.O') ? cleanStr(g(r, 'Item B.O')) : '', has('Invoice Date') ? cleanStr(g(r, 'Invoice Date')) : ''];
     }).filter(Boolean);
     msg.note = new Set(state.cur.orders.map(o => o[1])).size + ' đơn';
   }

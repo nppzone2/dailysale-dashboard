@@ -10,7 +10,7 @@ Dashboard theo dõi Target, Sale In, Sale Out và Allocation của các NPP vùn
 
 | Khi nào | File cần tải |
 |---|---|
-| Hằng ngày | `SO_Invoice`, `SaleOut_by_Seller`, `Dis_Sale_by_Date` (Sale In theo ngày order), `Online_Order` (Delivery chưa có hoá đơn tính vào Sale In thực tế; Pending = trạng thái khác Backorder và Delivery) |
+| Hằng ngày | `SO_Invoice`, `SaleOut_by_Seller`, `Dis_Sale_by_Date`, `Online_Order`. Tracking Allocation: Sale In thực tế = Dis Sale by Date đến D-1 (theo ngày order) + đơn Delivery; Pending = đơn khác Backorder và Delivery |
 | Hằng tuần | `Allocation_Current_Month`: sheet **Allocation** có cột `Batch 1`, `Batch 2`… và sheet **Upload Date** ghi ngày chia từng batch |
 | Đầu tháng | `Target_Current_Month` |
 | Khi đổi mã SKU | `Item_Master` |
