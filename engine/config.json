@@ -1,0 +1,5 @@
+{
+  "_ghi_chu": "Thường để trống. month: ép tháng hiện hành cho Target/Allocation (dạng 202611). so_date: ép ngày chốt Sale Out (dạng 20261104). Sửa xong commit, rồi xoá lại về rỗng sau khi chạy.",
+  "month": "",
+  "so_date": ""
+}

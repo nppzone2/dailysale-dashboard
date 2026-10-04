@@ -1,0 +1,78 @@
+name: Cập nhật dashboard
+
+# Chạy khi có file Excel mới trong input/, khi sửa engine/, hoặc bấm "Run workflow" trong tab Actions.
+on:
+  push:
+    branches: [main]
+    paths: ['input/**.xlsx', 'input/**.xls', 'engine/**', '.github/workflows/**']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: refresh-dashboard
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Lấy bản mới nhất (kho dữ liệu có thể vừa được lần chạy trước cập nhật)
+      - name: Đồng bộ bản mới nhất
+        run: git pull --ff-only origin main || true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Cài thư viện đọc Excel
+        run: pip install pandas openpyxl
+
+      - name: Đọc file Excel mới
+        run: python engine/read_xlsx.py
+
+      - name: Gộp dữ liệu và dựng trang đã mã hoá
+        env:
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          ASM_PASSWORD: ${{ secrets.ASM_PASSWORD }}
+          NPP_PASSWORD: ${{ secrets.NPP_PASSWORD }}
+          NPP_PASSWORDS: ${{ secrets.NPP_PASSWORDS }}
+          ASM_PASSWORDS: ${{ secrets.ASM_PASSWORDS }}
+        run: node engine/build.js
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+      # Dữ liệu đã nằm trong kho mã hoá input/vault/state.enc -> xoá file Excel gốc khỏi input/
+      - name: Lưu kho mã hoá, xoá file Excel gốc
+        run: |
+          git config user.name "DailySale Dashboard Bot"
+          git config user.email "actions@github.com"
+          git add -A input/vault
+          git rm -q --cached --ignore-unmatch -- 'input/*.xlsx' 'input/*.xls' || true
+          if ! git diff --cached --quiet; then
+            git commit -m "Cập nhật kho dữ liệu mã hoá [skip ci]"
+            git pull --rebase -q origin main
+            git push
+          fi
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
