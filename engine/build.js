@@ -54,25 +54,64 @@ if (fs.existsSync(VAULT)) {
 const now = new Date().toISOString();
 const files = fs.existsSync(AOA) ? fs.readdirSync(AOA).filter(f => f.endsWith('.json')) : [];
 const parsed = [];
+// Báo cáo kiểm tra file nguồn: rejects = file bị loại (sai nguồn), warns = điểm bất thường cần xem lại
+const REPORT = { at: now, files: [], rejects: [], warns: [] };
+const warn2 = (level, msg) => { REPORT.warns.push({ level, msg }); console.log((level === 'error' ? 'CẢNH BÁO' : 'Lưu ý') + ': ' + msg); };
+const headerHint = aoa => { for (const row of (aoa || []).slice(0, 15)) { const h = (row || []).filter(v => typeof v === 'string' && v.trim()); if (h.length >= 4) return h.slice(0, 6).join(', '); } return ''; };
 for (const f of files) {
-  const { name, sheets, aoa } = JSON.parse(fs.readFileSync(path.join(AOA, f), 'utf8'));
+  const { name, sheets, aoa, error } = JSON.parse(fs.readFileSync(path.join(AOA, f), 'utf8'));
+  if (error) { REPORT.rejects.push({ file: name, reason: 'Không mở được file Excel (file hỏng hoặc sai định dạng).' }); continue; }
   const found = (sheets || [{ sheet: '', aoa }]).map(s => ({ name: name + (sheets && sheets.length > 1 ? ' › ' + s.sheet : ''), p: P.detect(s.aoa) })).filter(x => x.p);
-  if (!found.length) die(`không nhận diện được file "${name}" (thiếu cột tiêu đề chuẩn).`);
+  if (!found.length) {
+    const hint = headerHint((sheets && sheets[0] && sheets[0].aoa) || aoa);
+    REPORT.rejects.push({ file: name, reason: 'Không phải file nguồn của dashboard này' + (hint ? ` (cột: ${hint}…)` : '') + '. File đã bị bỏ qua và xoá khỏi input/.' });
+    console.log(`CẢNH BÁO: bỏ qua "${name}": không nhận diện được loại file.`);
+    continue;
+  }
   parsed.push(...found);
 }
 parsed.sort((a, b) => P.KIND_ORDER.indexOf(a.p.kind) - P.KIND_ORDER.indexOf(b.p.kind));
 const nextMonth = m => { const y = +m.slice(0, 4), mo = +m.slice(4, 6); return mo === 12 ? (y + 1) + '01' : y + String(mo + 1).padStart(2, '0'); };
 const opts = { month: String(CFG.month || '').replace(/\D/g, ''), soDate: String(CFG.so_date || '').replace(/\D/g, ''), now };
 const curM = state.cur.month;
+const sum = a => a.reduce((x, y) => x + y, 0);
+const siLast = () => Object.keys(state.cur.si || {}).sort().pop() || '';
+const before = { siLast: siLast(), npps: new Set(Object.keys(state.npps)) };
 for (const { name, p } of parsed) {
+  // Chặn file SO Invoice cũ hơn dữ liệu đang có (cùng tháng) để không ghi đè số mới
+  if (p.kind === 'si' && before.siLast) {
+    const di = p.idx['Date_ID']; const mx = p.rows.map(r => String(r[di] ?? '').replace(/\D/g, '').slice(0, 8)).filter(d => d.length === 8).sort().pop() || '';
+    if (mx && mx.slice(0, 6) === before.siLast.slice(0, 6) && mx < before.siLast) {
+      const f2 = d => d.slice(6, 8) + '/' + d.slice(4, 6);
+      REPORT.rejects.push({ file: name, reason: `File SO Invoice chỉ có dữ liệu đến ${f2(mx)}, cũ hơn dữ liệu đang có (đến ${f2(before.siLast)}). Đã bỏ qua để giữ số mới nhất; có thể bạn đã tải nhầm file cũ.` });
+      console.log(`CẢNH BÁO: bỏ qua "${name}": SO Invoice cũ hơn dữ liệu hiện có.`); continue;
+    }
+  }
   // Chốt tháng: tháng đang chạy đã có Target Total -> Target/Allocation mới thuộc tháng kế tiếp
   if ((p.kind === 'target' || p.kind === 'alloc') && curM && (!opts.month || opts.month === curM) && state.months[curM]) opts.month = nextMonth(curM);
   const r = P.applyParsed(state, p, opts);
   console.log(`Nạp ${name}: ${r.label} · ${r.rows} dòng · ${r.note}`);
+  REPORT.files.push({ file: name, kind: p.kind, label: r.label, rows: r.rows, note: r.note });
+  if (/thiếu hệ số HL: (.+)$/.test(r.note)) warn2('info', `${name}: SKU chưa có hệ số HL trong Item Master (${r.note.match(/thiếu hệ số HL: (.+)$/)[1]}), Sale In của các SKU này đang tính 0.`);
 }
+/* ---------- kiểm tra chéo dữ liệu nguồn ---------- */
+const kinds = new Set(REPORT.files.map(x => x.kind));
+const fd = d => d ? d.slice(6, 8) + '/' + d.slice(4, 6) : '—';
+if ((kinds.has('si') || kinds.has('sbd')) && Object.keys(state.cur.si || {}).length && (state.cur.sbd || []).length) {
+  const a = {}, b = {};
+  Object.entries(state.cur.si).forEach(([d, rows]) => { a[d] = sum(rows.map(r => r[2])); });
+  state.cur.sbd.forEach(r => { b[r[1]] = (b[r[1]] || 0) + r[4]; });
+  const days = Object.keys(a).filter(d => d in b);
+  const A = sum(days.map(d => a[d])), B = sum(days.map(d => b[d]));
+  if (B > 0 && Math.abs(A - B) / B > 0.03) warn2('error', `Sale In theo SO Invoice (${Math.round(A).toLocaleString('vi-VN')} case) lệch ${Math.round(Math.abs(A - B) / B * 100)}% so với Dis Sale by Date (${Math.round(B).toLocaleString('vi-VN')} case) cùng ngày hoá đơn ${fd(days.sort()[0])}–${fd(days[days.length - 1])}. Kiểm tra lại đơn vị (Case/HL) hoặc file nguồn.`);
+}
+const newNpp = Object.keys(state.npps).filter(c => !before.npps.has(c));
+if (before.npps.size && newNpp.length) warn2('info', `Phát hiện mã NPP mới: ${newNpp.join(', ')}. Kiểm tra lại nếu không phải NPP thuộc HCM Zone 2.`);
+const ALERT = REPORT.rejects.length > 0 || REPORT.warns.some(w => w.level === 'error');
+if (files.length) state.lastReport = REPORT;
 if (state.cur.month !== curM) console.log(`Tháng hiện hành: ${curM || '—'} → ${state.cur.month}`);
 delete state.auth;
-if (parsed.length) {
+if (files.length) {
   fs.mkdirSync(path.dirname(VAULT), { recursive: true });
   fs.writeFileSync(VAULT, JSON.stringify(seal(state, ADMIN)));
   console.log('Đã lưu kho dữ liệu mã hoá.');
@@ -81,7 +120,7 @@ if (parsed.length) {
 /* ---------- cắt dữ liệu theo tài khoản ---------- */
 const areaCode = a => String(a || '').replace(/\s+/g, '').toUpperCase();
 function slice(st, keep) {
-  const s = JSON.parse(JSON.stringify(st)); const k = r => keep(r[0]);
+  const s = JSON.parse(JSON.stringify(st)); const k = r => keep(r[0]); delete s.lastReport;
   s.npps = Object.fromEntries(Object.entries(s.npps).filter(([c]) => keep(c)));
   Object.values(s.months).forEach(m => { m.rows = m.rows.filter(k); });
   const c = s.cur;
@@ -98,16 +137,20 @@ function slice(st, keep) {
 }
 const blobs = {};
 const hasData = Object.keys(state.npps).length > 0;
+// Chế độ bảo trì (engine/maintenance.json): chỉ tạo gói Admin, NPP/ASM thấy trang thông báo bảo trì
+let MAINT = null;
+try { const m = JSON.parse(fs.readFileSync(path.join(__dirname, 'maintenance.json'), 'utf8')); if (m && m.on) MAINT = { msg: String(m.message || '').slice(0, 300), since: m.since || '' }; } catch (e) {}
+if (MAINT) console.log('Chế độ bảo trì: BẬT (chỉ Admin đăng nhập được).');
 if (!hasData) console.log('Chưa có dữ liệu: trang sẽ báo "Dashboard chưa có dữ liệu" khi đăng nhập.');
 if (hasData) blobs.admin = seal({ role: { type: 'admin', id: 'ADMIN', label: 'Admin · toàn vùng' }, state }, ADMIN);
 const areas = !hasData ? [] : [...new Set(Object.values(state.npps).map(n => n.area).filter(Boolean))];
 const warn = [];
-for (const a of areas) {
+for (const a of (MAINT ? [] : areas)) {
   const code = areaCode(a); const pw = String(ASMS_PW[code] || ASM).trim();
   if (!pw) { warn.push('ASM ' + code); continue; }
   blobs[code.toLowerCase()] = seal({ role: { type: 'asm', id: code, area: a, label: 'ASM · ' + a }, state: slice(state, c => (state.npps[c] || {}).area === a) }, pw);
 }
-for (const [c, n] of Object.entries(state.npps)) {
+for (const [c, n] of (MAINT ? [] : Object.entries(state.npps))) {
   if (!n.dis) { warn.push(`NPP ${c} (chưa có DisCode)`); continue; }
   const pw = String(NPPS_PW[c] || NPPS_PW[n.dis] || NPP).trim();
   if (!pw) { warn.push('NPP ' + c); continue; }
@@ -118,7 +161,7 @@ if (warn.length) console.log('Cảnh báo: chưa tạo tài khoản cho ' + warn
 /* ---------- ghi trang ---------- */
 const vn = new Date(Date.now() + 7 * 3600e3), p2 = n => String(n).padStart(2, '0');
 const built = `${p2(vn.getUTCHours())}:${p2(vn.getUTCMinutes())} ${p2(vn.getUTCDate())}/${p2(vn.getUTCMonth() + 1)}/${vn.getUTCFullYear()}`;
-const ENC = { iter: ITER, built, blobs };
+const ENC = { iter: ITER, built, blobs, maint: MAINT };
 const rd = f => fs.readFileSync(path.join(__dirname, f), 'utf8');
 const safe = s => s.replace(/<\/(script)/gi, '<\\/$1');
 const page = `<!doctype html><html lang="vi"><head><meta charset="utf-8">
@@ -136,3 +179,17 @@ fs.mkdirSync(path.join(ROOT, 'docs'), { recursive: true });
 fs.writeFileSync(path.join(ROOT, 'docs', 'index.html'), page);
 fs.writeFileSync(path.join(ROOT, 'docs', '.nojekyll'), '');
 console.log(`Đã dựng docs/index.html (${Math.round(page.length / 1024)} KB) · ${Object.keys(blobs).length} tài khoản · tháng hiện hành ${state.cur.month || '—'}.`);
+
+/* ---------- báo cáo cho GitHub Actions ---------- */
+const lines = ['## Kết quả cập nhật dữ liệu', ''];
+if (MAINT) lines.push('> 🔧 **Đang bật chế độ bảo trì**: NPP và ASM chưa xem được dashboard.', '');
+if (REPORT.files.length) { lines.push('| File | Loại | Dòng | Ghi chú |', '|---|---|---|---|'); REPORT.files.forEach(f => lines.push(`| ${f.file} | ${f.label} | ${f.rows} | ${f.note} |`)); lines.push(''); }
+if (REPORT.rejects.length) { lines.push('### ❌ File bị loại'); REPORT.rejects.forEach(r => lines.push(`- **${r.file}**: ${r.reason}`)); lines.push(''); }
+if (REPORT.warns.length) { lines.push('### ⚠️ Cần kiểm tra'); REPORT.warns.forEach(w => lines.push(`- ${w.level === 'error' ? '**[Quan trọng]** ' : ''}${w.msg}`)); lines.push(''); }
+if (!files.length) lines.push('Không có file Excel mới, chỉ dựng lại trang.');
+else if (!ALERT) lines.push('✅ Dữ liệu hợp lệ.');
+if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join('\n') + '\n');
+if (process.env.GITHUB_OUTPUT) {
+  const msg = [...REPORT.rejects.map(r => `${r.file}: ${r.reason}`), ...REPORT.warns.filter(w => w.level === 'error').map(w => w.msg)].join(' | ').replace(/[\r\n]+/g, ' ');
+  fs.appendFileSync(process.env.GITHUB_OUTPUT, `alert=${ALERT ? 1 : 0}\nalert_msg=${msg}\n`);
+}

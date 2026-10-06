@@ -25,6 +25,30 @@ Dashboard nhận loại file theo **tiêu đề cột**, không theo tên file. 
 
 Sau khi xử lý, workflow **xoá file Excel gốc** khỏi `input/`. Toàn bộ dữ liệu được giữ trong kho mã hoá `input/vault/state.enc`, khoá dẫn xuất từ `ADMIN_PASSWORD`.
 
+## Cảnh báo khi tải sai dữ liệu nguồn
+
+Mỗi lần cập nhật, dashboard tự kiểm tra file tải lên:
+
+| Tình huống | Xử lý |
+|---|---|
+| File không phải nguồn của dashboard (ví dụ file TMS, Fill Rate), file hỏng | Bỏ qua và xoá file đó, các file đúng vẫn được cập nhật |
+| SO Invoice cũ hơn dữ liệu đang có trong cùng tháng | Bỏ qua để giữ số mới nhất |
+| Sale In theo SO Invoice lệch quá 3% so với Dis Sale by Date | Vẫn cập nhật, báo để kiểm tra đơn vị Case/HL |
+| SO Invoice xuất theo HL | Tự quy đổi sang Case |
+| Xuất hiện mã NPP mới, SKU thiếu hệ số HL | Ghi chú để kiểm tra |
+
+Khi có lỗi quan trọng, lượt chạy trong tab **Actions** hiện **dấu ✗ đỏ** và GitHub gửi email cho người upload. Chi tiết nằm ở mục **Summary** của lượt chạy. Admin cũng thấy khung cảnh báo ở đầu dashboard, bấm **Đã xem** để ẩn.
+
+## Tạm khoá trang để bảo trì
+
+1. Vào tab **Actions** → **Cập nhật dashboard** → **Run workflow**.
+2. Ở ô **Chọn thao tác**, chọn **Bật bảo trì**. Có thể nhập thông báo, ví dụ "Đang cập nhật số liệu, dự kiến mở lại lúc 14:00".
+3. Bấm **Run workflow** và đợi khoảng 1–2 phút.
+
+Trong lúc bảo trì, NPP và ASM chỉ thấy trang thông báo, không mở được số liệu. Admin vẫn đăng nhập được qua liên kết **Đăng nhập quản trị** để kiểm tra. Các lần upload dữ liệu trong lúc bảo trì vẫn được xử lý bình thường nhưng chưa phát hành cho NPP và ASM.
+
+Mở lại: làm tương tự và chọn **Tắt bảo trì**.
+
 ## Cài đặt lần đầu (làm một lần)
 
 1. **Đặt mật khẩu** ở Settings → Secrets and variables → Actions → New repository secret:

@@ -33,19 +33,32 @@
     ui.scope = ui.npp !== 'all' ? ui.npp : ui.area !== 'all' ? 'A:' + ui.area : 'all';
   }
   function enter(role) { ROLE = role; const h = (location.hash || '').slice(1); if (h && STATE.npps[h] && role.type !== 'npp') { ui.npp = h; ui.area = STATE.npps[h].area; } applyRole(); shell(); render(); }
-  function logout() { ROLE = null; STATE = null; loginView(); }
+  function logout() { ROLE = null; STATE = null; loginView.admin = false; loginView(); }
   async function tryLogin(u, pw) {
     if (!Object.keys(ENC.blobs).length) return 'Dashboard chưa có dữ liệu.';
-    const D = await unlock(u, pw); if (!D) return 'Sai tên đăng nhập hoặc mật khẩu.';
+    const D = await unlock(u, pw); if (!D) return ENC.maint && String(u || '').trim().toLowerCase() !== 'admin' ? 'Hệ thống đang bảo trì, hiện chỉ tài khoản Admin đăng nhập được.' : 'Sai tên đăng nhập hoặc mật khẩu.';
     STATE = D.state; PUBLISHED = STATE; ui.area = 'all'; ui.npp = 'all'; ui.tMonth = ''; ui.open.clear(); enter(D.role); return true;
   }
   function loginView(msg) {
+    const M = ENC.maint;
+    if (M && !loginView.admin) {
+      app.innerHTML = `<div class="login"><div class="login-card maint">
+        <img class="logo lg" src="${LOGO}" alt="EverGreen" width="84" height="84">
+        <div><div class="brand-t">Distributor Sales Performance</div><div class="brand-s"><b>RTC - Future Fit</b> · HCM Zone 2</div></div>
+        <div class="mt-ic" aria-hidden="true"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.8-3.8a6 6 0 0 1-7.9 7.9l-6.9 6.9a2.1 2.1 0 0 1-3-3l6.9-6.9a6 6 0 0 1 7.9-7.9l-3.8 3.8z"/></svg></div>
+        <h1 class="mt-t">Dashboard đang bảo trì</h1>
+        <p class="mt-m">${esc(M.msg || 'Hệ thống đang được cập nhật số liệu. Vui lòng quay lại sau ít phút.')}</p>
+        ${M.since ? `<p class="note" style="margin:0;text-align:center">Bắt đầu bảo trì ${esc(M.since)}</p>` : ''}
+        <button class="linkbtn mt-adm" id="mt-adm">Đăng nhập quản trị</button></div></div>`;
+      $('#mt-adm').onclick = () => { loginView.admin = true; loginView(); };
+      return;
+    }
     app.innerHTML = `<div class="login"><form class="login-card" id="login-form" autocomplete="on">
       <img class="logo lg" src="${LOGO}" alt="EverGreen" width="84" height="84">
       <div><div class="brand-t">Distributor Sales Performance</div><div class="brand-s"><b>RTC - Future Fit</b> · HCM Zone 2</div></div>
       <label for="lg-u">Tên đăng nhập</label><input id="lg-u" autocomplete="username" placeholder="UserName" required>
       <label for="lg-p">Mật khẩu</label><div class="pwbox"><input id="lg-p" type="password" autocomplete="current-password" required><button type="button" id="lg-eye" class="eye" aria-label="Hiện mật khẩu" aria-pressed="false"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path class="slash" d="M3 3l18 18"/></svg></button></div>
-      <div class="lg-err" id="lg-err">${esc(msg || '')}</div>
+      ${M ? '<div class="mt-note">Đang bảo trì: chỉ tài khoản Admin đăng nhập được.</div>' : ''}<div class="lg-err" id="lg-err">${esc(msg || '')}</div>
       <button class="btn primary" type="submit">Đăng nhập</button>
       <p class="note" style="margin:0;text-align:center">Cập nhật ${esc(ENC.built || '—')}</p></form></div>`;
     $('#lg-eye').onclick = () => { const i = $('#lg-p'), b = $('#lg-eye'); const show = i.type === 'password'; i.type = show ? 'text' : 'password'; b.setAttribute('aria-pressed', show); b.setAttribute('aria-label', show ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'); i.focus(); };
@@ -201,6 +214,8 @@
     const brands = [...new Set([...used].map(brandOf))].filter(b => b !== 'Khác').sort((a, b) => ((bOrder.indexOf(a) + 1) || 99) - ((bOrder.indexOf(b) + 1) || 99) || a.localeCompare(b));
     app.innerHTML = `
     ${previewing ? '<div class="preview-bar">Đang xem trước dữ liệu mới, chưa phát hành cho NPP</div>' : ''}
+    ${ENC.maint && ROLE.type === 'admin' ? '<div class="preview-bar maint-bar">Đang bật chế độ bảo trì · NPP và ASM chưa xem được dashboard</div>' : ''}
+    ${reportBox()}
     <header class="band"><div class="band-in">
       <div class="brandrow">
         <div class="brand"><img class="logo" src="${LOGO}" alt="EverGreen" width="52" height="52">
@@ -231,11 +246,20 @@
     ar.onchange = () => { ui.area = ar.value; ui.npp = 'all'; applyRole(); ui.open.clear(); shell(); render(); };
     np.onchange = () => { ui.npp = np.value; applyRole(); ui.open.clear(); render(); };
     $('#logout').onclick = logout;
+    const rx = $('#rep-x'); if (rx) rx.onclick = () => { ui.repHide = STATE.lastReport.at; shell(); render(); };
     app.querySelectorAll('[data-unit]').forEach(b => b.onclick = () => { ui.unit = b.dataset.unit; saveUi(); app.querySelectorAll('[data-unit]').forEach(x => x.setAttribute('aria-pressed', x.dataset.unit === ui.unit)); render(); });
     app.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { ui.tab = b.dataset.tab; saveUi(); app.querySelectorAll('[data-tab]').forEach(x => x.setAttribute('aria-selected', x.dataset.tab === ui.tab)); render(); });
     if (ADMIN.ok && ROLE && ROLE.type === 'admin') { const b = $('#admin-btn'); b.hidden = false; b.onclick = openDrawer; }
   }
 
+  /* Cảnh báo dữ liệu nguồn của lần tải gần nhất (chỉ Admin thấy) */
+  function reportBox() {
+    const R = STATE && STATE.lastReport; if (!R || ROLE.type !== 'admin' || ui.repHide === R.at) return '';
+    const items = [...(R.rejects || []).map(r => ({ lv: 'error', t: `<b>${esc(r.file)}</b>: ${esc(r.reason)}` })), ...(R.warns || []).map(w => ({ lv: w.level, t: esc(w.msg) }))];
+    if (!items.length) return '';
+    const bad = items.some(x => x.lv === 'error');
+    return `<div class="repbox ${bad ? 'bad' : ''}"><div class="repbox-in"><div><b>${bad ? 'Cảnh báo dữ liệu nguồn' : 'Lưu ý dữ liệu'}</b> · lần tải ${esc(fTs(R.at))}<ul>${items.map(x => `<li class="${x.lv}">${x.t}</li>`).join('')}</ul></div><button class="linkbtn" id="rep-x">Đã xem</button></div></div>`;
+  }
   function render() { missingHl.clear(); const v = $('#view'); chartId = 0; CHARTS = [];
     v.innerHTML = ({ target: viewTarget, progress: viewProgress, alloc: viewAlloc, tracking: viewTracking, pending: viewPending, history: viewHistory }[ui.tab] || viewProgress)();
     bindView(); drawCharts(); }

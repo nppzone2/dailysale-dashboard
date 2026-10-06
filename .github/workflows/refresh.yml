@@ -6,6 +6,16 @@ on:
     branches: [main]
     paths: ['input/**.xlsx', 'input/**.xls', 'engine/**', '.github/workflows/**']
   workflow_dispatch:
+    inputs:
+      che_do:
+        description: 'Chọn thao tác'
+        type: choice
+        options: ['Cập nhật dashboard', 'Bật bảo trì', 'Tắt bảo trì']
+        default: 'Cập nhật dashboard'
+      thong_bao:
+        description: 'Thông báo hiển thị khi bảo trì (không bắt buộc)'
+        type: string
+        required: false
 
 permissions:
   contents: write
@@ -19,6 +29,9 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      alert: ${{ steps.dung.outputs.alert }}
+      alert_msg: ${{ steps.dung.outputs.alert_msg }}
     steps:
       - uses: actions/checkout@v4
 
@@ -34,6 +47,20 @@ jobs:
         with:
           node-version: '22'
 
+      # Bật / tắt chế độ bảo trì (Actions → Cập nhật dashboard → Run workflow)
+      - name: Chế độ bảo trì
+        if: github.event_name == 'workflow_dispatch' && inputs.che_do != 'Cập nhật dashboard'
+        env:
+          CHE_DO: ${{ inputs.che_do }}
+          THONG_BAO: ${{ inputs.thong_bao }}
+        run: |
+          node -e '
+            const on = process.env.CHE_DO === "Bật bảo trì";
+            const t = new Date(Date.now() + 7 * 3600e3), p = n => String(n).padStart(2, "0");
+            const since = `${p(t.getUTCHours())}:${p(t.getUTCMinutes())} ${p(t.getUTCDate())}/${p(t.getUTCMonth() + 1)}/${t.getUTCFullYear()}`;
+            require("fs").writeFileSync("engine/maintenance.json", JSON.stringify(on ? { on: true, message: process.env.THONG_BAO || "", since } : { on: false }, null, 2) + "\n");
+            console.log(on ? "Bật bảo trì" : "Tắt bảo trì");'
+
       - name: Cài thư viện đọc Excel
         run: pip install pandas openpyxl
 
@@ -41,6 +68,7 @@ jobs:
         run: python engine/read_xlsx.py
 
       - name: Gộp dữ liệu và dựng trang đã mã hoá
+        id: dung
         env:
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
           ASM_PASSWORD: ${{ secrets.ASM_PASSWORD }}
@@ -59,7 +87,7 @@ jobs:
         run: |
           git config user.name "DailySale Dashboard Bot"
           git config user.email "actions@github.com"
-          git add -A input/vault
+          git add -A input/vault engine/maintenance.json
           git rm -q --cached --ignore-unmatch -- 'input/*.xlsx' 'input/*.xls' || true
           if ! git diff --cached --quiet; then
             git commit -m "Cập nhật kho dữ liệu mã hoá [skip ci]"
@@ -76,3 +104,17 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+
+  # Upload sai file nguồn hoặc số liệu bất thường -> lượt chạy báo đỏ, GitHub gửi email cho người upload
+  canh-bao:
+    needs: [build, deploy]
+    if: needs.build.outputs.alert == '1'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cảnh báo dữ liệu nguồn
+        env:
+          MSG: ${{ needs.build.outputs.alert_msg }}
+        run: |
+          echo "::error title=Dữ liệu nguồn cần kiểm tra::$MSG"
+          echo "Xem chi tiết ở mục Summary của lượt chạy này. Dữ liệu hợp lệ khác vẫn đã được cập nhật."
+          exit 1

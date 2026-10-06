@@ -20,7 +20,10 @@ for p in files:
     try:
         sheets = pd.read_excel(p, header=None, sheet_name=None)
     except Exception as e:
-        sys.exit(f'LỖI: không đọc được {p.name}: {e}')
+        # Không dừng cả lượt cập nhật: ghi lại lỗi để build.js báo cảnh báo và bỏ qua file này
+        (OUT / (p.stem + '.json')).write_text(json.dumps({'name': p.name, 'error': str(e)[:300]}, ensure_ascii=False))
+        print(f'CẢNH BÁO: không đọc được {p.name}: {e}')
+        continue
     out = [{'sheet': n, 'aoa': [[cell(v) for v in row] for row in df.itertuples(index=False, name=None)]} for n, df in sheets.items()]
     (OUT / (p.stem + '.json')).write_text(json.dumps({'name': p.name, 'sheets': out}, ensure_ascii=False))
     print(f'Đọc {p.name}: ' + ', '.join(f"{s['sheet']} ({len(s['aoa'])} dòng)" for s in out))

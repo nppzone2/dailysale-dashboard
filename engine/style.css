@@ -377,3 +377,16 @@ select:disabled{opacity:1;color:var(--ink);background:var(--brand-soft);border-c
 .yd tr.lv1.click:hover td{filter:brightness(.97)}
 .yd tr.lv0.click:hover td{background:var(--surface-2)}
 .batch .bn{display:block;margin-bottom:3px}
+/* bảo trì & cảnh báo dữ liệu nguồn */
+.login-card.maint{align-items:center;text-align:center;gap:12px}
+.mt-ic{width:64px;height:64px;border-radius:50%;display:grid;place-items:center;background:var(--brand-soft);color:var(--brand);margin-top:6px}
+.mt-t{font-size:20px;margin:0;color:var(--ink)}
+.mt-m{margin:0;color:var(--ink-2);font-size:14px;line-height:1.5}
+.mt-adm{margin-top:6px;font-size:13px;color:var(--muted)}
+.mt-note{font-size:12.5px;color:var(--warn);background:var(--warn-bg);border-radius:8px;padding:7px 10px}
+.maint-bar{background:var(--warn)!important;color:#fff!important}
+.repbox{background:var(--warn-bg);border-bottom:1px solid var(--line)}
+.repbox.bad{background:var(--bad-bg);border-bottom-color:color-mix(in srgb,var(--bad) 40%,var(--line))}
+.repbox-in{max-width:1240px;margin:0 auto;padding:10px 20px;display:flex;gap:16px;align-items:flex-start;justify-content:space-between;font-size:13px;color:var(--ink)}
+.repbox ul{margin:4px 0 0;padding-left:18px}.repbox li{margin:2px 0}.repbox li.error{color:var(--bad);font-weight:600}
+.repbox .linkbtn{color:var(--ink-2);white-space:nowrap}
