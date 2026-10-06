@@ -101,7 +101,11 @@
   const brandOf = sc => item(sc).b || 'Khác';
   const inBrand = sc => (ui.brand === 'all' || brandOf(sc) === ui.brand) && (ui.bgf === 'all' || grp(sc) === ui.bgf);
   const bchip = sc => item(sc).b ? `<span class="chip">${esc(item(sc).b)}</span>` : '';
-  const grp = sc => item(sc).bg || 'Khác';
+  // Phân nhóm: Larue, Bivina luôn thuộc nhóm Khác; Strongbow luôn thuộc Group BB; còn lại theo BrandGroup trong Item Master
+  const grp = sc => { const b = String(item(sc).b || '').trim().toLowerCase();
+    if (b === 'larue' || b === 'bivina') return 'Khác';
+    if (b === 'strongbow') return 'Group BB';
+    return item(sc).bg || 'Khác'; };
   const conv = (c, sc) => ui.unit === 'hl' ? c * (item(sc).hl || 0) : c;
   const inScope = c => ui.scope === 'all' ? true : ui.scope.startsWith('A:') ? (STATE.npps[c] || {}).area === ui.scope.slice(2) : c === ui.scope;
   const nppLabel = c => c;
@@ -664,7 +668,7 @@
     return `
     <section class="lead"><div><div class="eyebrow">Allocation · cập nhật hàng tuần</div><h1>${esc(scopeLabel())}</h1>
       <p>Allocation Current Week và lũy kế các tuần đã chốt (${weeks.join(', ')}), so với Sale In MTD của cùng SKU.</p></div></section>
-    <div class="grid">${latest}${cum}${byNpp}</div>
+    <div class="grid">${latest}${byNpp}${cum}</div>
     ${conclusion([
       `Current Week <b>${esc(wk)}</b>: tổng allocation <b>${fmt(wkTot)} ${U()}</b>${bIdx.length ? ' (' + bIdx.map(i => `${esc(BC[i])} ${fmt(bTot(i))}`).join(', ') + ')' : ''}${pwTot != null ? `, ${wkTot >= pwTot ? 'tăng' : 'giảm'} ${pct(Math.abs(pwTot ? wkTot / pwTot - 1 : 0))} so với ${esc(pw)}` : ''}.`,
       main ? `<b>${esc(main.sc)}</b> đã sử dụng ${pct(main.al ? main.si / main.al : 0)} allocation lũy kế, còn <b>${fmt(Math.max(0, main.al - main.si))} ${U()}</b>.` : '',
