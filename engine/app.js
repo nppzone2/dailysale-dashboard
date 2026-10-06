@@ -659,19 +659,21 @@
       let tb = '';
       AG.forEach(([a, cs]) => { const k = 'al:' + a, op = isOpen(k, true);
         const skusOf = list => skus.filter(sc => A.some(r => r[0] === wk && list.includes(r[1]) && r[2] === sc));
-        tb += `<tr class="grp area click${op ? ' open' : ''}" data-fold="${esc(k)}"><td><span class="caret">▸</span> ${esc(a)}</td><td>${cs.length} NPP · ${skusOf(cs).length} SKU</td>${cells(cs, null)}</tr>`;
-        const GA = byGrp(skusOf(cs)); if (GA.length > 1) GA.forEach(([g, l]) => { tb += `<tr class="gsub garea"><td></td><td>${esc(g)}</td>${cells(cs, l)}</tr>`; });
+        const GA = byGrp(skusOf(cs));
+        tb += `<tr class="grp area click${op ? ' open' : ''}" data-fold="${esc(k)}"><td><span class="caret">▸</span> ${esc(a)}</td><td>${cs.length} NPP${GA.length === 1 ? ' · ' + esc(GA[0][0]) : ''}</td>${cells(cs, null)}</tr>`;
+        if (GA.length > 1) GA.forEach(([g, l]) => { tb += `<tr class="gsub garea"><td></td><td>${esc(g)} <span class="note">· ${l.length} SKU</span></td>${cells(cs, l)}</tr>`; });
         if (!op) return;
         cs.forEach(c => { const ss = skusOf([c]); if (!ss.length) return;
           const nk = 'al:n:' + c, nOp = isOpen(nk, true) || ss.length < 2;
           const nm = `${ss.length > 1 ? `<span class="caret fold${nOp ? ' on' : ''}" data-fold="${esc(nk)}" role="button" aria-label="Mở/thu gọn ${esc(c)}">▸</span> ` : ''}<span class="click-npp" data-npp="${esc(c)}">${esc(c)}</span>`;
-          if (ss.length > 1) tb += `<tr class="sub first"><td>${nm}</td><td class="note">${ss.length} SKU</td>${cells([c], null)}</tr>`;
-          if (!nOp) return; const G = byGrp(ss);
-          G.forEach(([g, l]) => { if (G.length > 1) tb += `<tr class="gsub"><td></td><td>${esc(g)}</td>${cells([c], l)}</tr>`;
+          const G = byGrp(ss);
+          if (ss.length > 1) tb += `<tr class="sub first"><td>${nm}</td><td class="note">${G.length === 1 ? esc(G[0][0]) + ' · ' : ''}${ss.length} SKU</td>${cells([c], null)}</tr>`;
+          if (!nOp) return;
+          G.forEach(([g, l]) => { if (G.length > 1) tb += `<tr class="gsub"><td></td><td>${esc(g)} <span class="note">· ${l.length} SKU</span></td>${cells([c], l)}</tr>`;
             l.forEach((sc, i) => { tb += `<tr class="sku${ss.length < 2 && i === 0 ? ' first' : ''}"><td>${ss.length < 2 ? nm : ''}</td><td class="skuc">${esc(sc)}</td>${cells([c], sc)}</tr>`; }); }); }); });
       const GT = byGrp(skus.filter(sc => A.some(r => r[0] === wk && r[2] === sc)));
-      tb += `<tr class="tot"><td colspan="2">Tổng</td>${cells(npps, null)}</tr>`;
-      if (GT.length > 1) GT.forEach(([g, l]) => { tb += `<tr class="gsub gtot"><td colspan="2">${esc(g)} <span class="note">· ${l.length} SKU</span></td>${cells(npps, l)}</tr>`; });
+      tb += `<tr class="tot"><td>Tổng</td><td></td>${cells(npps, null)}</tr>`;
+      GT.forEach(([g, l]) => { tb += `<tr class="gsub gtot"><td></td><td>${esc(g)} <span class="note">· ${l.length} SKU</span></td>${cells(npps, l)}</tr>`; });
       const table = `<table class="sticky1 trk batch"><thead><tr><th>Khu vực / NPP</th><th>SKU</th>${bIdx.map(bHead).join('')}<th>Tổng ${esc(wk)}</th></tr></thead><tbody>${tb}</tbody></table>`;
       byNpp = `<div class="card c12"><div class="card-h"><div><h2>Theo Khu vực / NPP · ${esc(wk)}</h2><p class="sub">Đơn vị ${U()} · số chia Current Week theo từng batch · bấm mũi tên để mở khu vực, NPP · số còn lại xem ở tab <button class="linkback" data-go="tracking" style="display:inline;margin:0">Tracking Allocation</button></p></div></div><div class="tw">${table}</div></div>`;
     }
