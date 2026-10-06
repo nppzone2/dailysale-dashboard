@@ -639,6 +639,9 @@
       ${bIdx.length ? `<div class="tw" style="margin-top:10px"><table class="sticky1 tgt batch"><thead><tr><th>BrandFamily</th><th>SKU</th>${bIdx.map(bHead).join('')}<th>Tổng ${esc(wk)}</th><th>Sale In tuần</th><th>Tiến độ SI</th><th>So với ${esc(pw || '—')}</th></tr></thead><tbody>
         ${bySku.map(s => `<tr class="sku"><td>${esc(item(s.sc).b || '—')}</td><td class="skuc">${esc(s.sc)}</td>${bIdx.map(i => `<td>${fmt(bval(s.sc, wk, i))}</td>`).join('')}<td><b>${fmt(s.w[wk])}</b></td>${prog(siWk(s.sc), s.w[wk])}<td>${delta(s.w[wk], pw ? s.w[pw] : null)}</td></tr>`).join('')}
         ${bySku.length > 1 ? `<tr class="tot"><td colspan="2">Tổng</td>${bIdx.map(i => `<td>${fmt(bTot(i))}</td>`).join('')}<td>${fmt(wkTot)}</td>${prog(siWkTot, wkTot)}<td>${delta(wkTot, pwTot)}</td></tr>` : ''}
+        ${bySku.length > 1 ? GROUPS.map(g => { const gs = bySku.filter(x => grp(x.sc) === g); if (!gs.length) return '';
+          const gw = k => sumBy(gs, x => x.w[k] || 0);
+          return `<tr class="grp gsum"><td colspan="2">${esc(g)} <span class="note">· ${gs.length} SKU</span></td>${bIdx.map(i => `<td>${fmt(sumBy(gs, x => bval(x.sc, wk, i)))}</td>`).join('')}<td>${fmt(gw(wk))}</td>${prog(sumBy(gs, x => siWk(x.sc)), gw(wk))}<td>${delta(gw(wk), pw ? gw(pw) : null)}</td></tr>`; }).join('') : ''}
       </tbody></table></div>` : `<div class="wk-grid">${bySku.map(s => `<div class="wk-item"><div class="wk-sku">${esc(s.sc)}<span class="wk-b">${esc(item(s.sc).b || '')}</span></div><div class="wk-v num">${fmt(s.w[wk])}</div><div>${delta(s.w[wk], pw ? s.w[pw] : null)}</div></div>`).join('')}</div>`}
       ${nextTxt || siNote ? `<p class="note" style="margin:10px 0 0">${[siNote, nextTxt].filter(Boolean).join(' · ')}</p>` : ''}</div>`;
     // 2) cumulative by SKU

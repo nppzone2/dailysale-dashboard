@@ -423,3 +423,5 @@ select:disabled{opacity:1;color:var(--ink);background:var(--brand-soft);border-c
 .trk tr.gtot td:nth-child(2){text-transform:none;font-size:13px;letter-spacing:0}
 .trk tr.garea td{background:var(--surface-2);color:var(--ink);border-bottom:1px solid var(--line)}
 .trk tr.garea td:nth-child(2){color:var(--brand)}
+.batch tr.gsum td{background:var(--brand-soft);color:var(--brand);font-weight:700;border-top:0}
+.batch tr.gsum td:first-child{font-size:13px}
