@@ -509,12 +509,12 @@
     const soLine = soCum.some(v => v != null);
     let board = '';
     const npps = [...new Set(L.map(r => r.c))];
-    if (npps.length > 1) {
+    if (npps.length >= 1) {
       const byN = aggregate(L, r => r.c);
       const hasStock = !!M.stockDate && L.some(r => r.st0 || r.dso);
-      const SD = ENC.stockDays || { low: 2, high: 4 };
+      const SD = ENC.stockDays || { low: 3, high: 3.5 };
       const stockCells = o => { const now = o.st0 + o.si - o.so; const d = o.dso ? Math.max(0, now) / o.dso : NaN;
-        const pill = !isFinite(d) ? '<span class="note">—</span>' : d < SD.low ? '<span class="pill bad">Tồn thấp</span>' : d > SD.high ? '<span class="pill warn">Tồn cao</span>' : '<span class="pill good">Phù hợp</span>';
+        const pill = !isFinite(d) ? '<span class="note">—</span>' : d < SD.low ? '<span class="pill orange">Tồn thấp</span>' : d > SD.high ? '<span class="pill bad">Tồn cao</span>' : '<span class="pill good">Phù hợp</span>';
         return `<td class="gs">${fmt(o.st0)}</td><td><b>${fmt(now)}</b></td><td>${isFinite(d) ? nf1.format(d) : '—'}</td><td>${pill}</td>`; };
       const cells = o => `<td class="gs">${fmt(o.t)}</td><td class="gs">${fmt(o.si)}</td><td>${o.t ? pctT(o.si / o.t, M.tgSi) : '—'}</td><td class="rem">${fmt(Math.max(0, o.t - o.si))}</td><td>${status(o.t ? o.si / o.t : NaN, M.tgSi)}</td><td class="gs">${fmt(o.so)}</td><td>${o.t ? pctT(o.so / o.t, M.tgSo) : '—'}</td><td class="rem">${fmt(Math.max(0, o.t - o.so))}</td><td>${status(o.t ? o.so / o.t : NaN, M.tgSo)}</td>${hasStock ? stockCells(o) : ''}`;
       const sumO = os => ({ t: sumBy(os, o => o.t), si: sumBy(os, o => o.si), so: sumBy(os, o => o.so), st0: sumBy(os, o => o.st0), dso: sumBy(os, o => o.dso) });
@@ -524,11 +524,11 @@
         rb += `<tr class="grp area click${aOpen ? ' open' : ''}" data-fold="${esc(ak)}"><td><span class="caret">▸</span> ${esc(a)}</td><td>${cs.length} NPP</td>${cells(sumO(cs.map(c => byN[c])))}</tr>`;
         if (!aOpen) return;
         cs.forEach((c, i) => { const nk = 'rk:n:' + c, nOpen = isOpen(nk, false); const o = byN[c];
-          rb += `<tr class="npp click${nOpen ? ' open' : ''}${i === 0 ? ' first' : ''}" data-fold="${esc(nk)}"><td></td><td><span class="caret">▸</span> <span class="click-npp" data-npp="${esc(c)}" title="Lọc theo ${esc(c)}">${esc(c)}</span></td>${cells(o)}</tr>`;
+          rb += `<tr class="npp click${nOpen ? ' open' : ''}${i === 0 ? ' first' : ''}" data-fold="${esc(nk)}"><td></td><td><span class="caret">▸</span> <span class="click-npp" data-npp="${esc(c)}">${esc(c)}</span></td>${cells(o)}</tr>`;
           if (nOpen) { const g = aggregate(o.rows, r => grp(r.sc)); GROUPS.filter(k => g[k] && (g[k].t || g[k].si || g[k].so)).forEach(k => { rb += `<tr class="sku"><td></td><td class="skuc">${esc(k)}</td>${cells(g[k])}</tr>`; }); }
         }); });
       rb += `<tr class="tot"><td>Tổng</td><td></td>${cells(sumO(Object.values(byN)))}</tr>`;
-      board = `<div class="card c12"><div class="card-h"><div><h2>Tiến độ theo Khu vực / NPP</h2><p class="sub">Bấm mũi tên để xem chi tiết từng khu vực, NPP · bấm mã NPP để lọc · time gone ${pct(M.tgSi)} · đơn vị ${U()}${hasStock ? ` · Tồn hiện tại = Tồn ${fD(M.stockDate)} + Sale In − Sale Out (ước tính); Ngày tồn theo Sale Out bình quân ngày, phù hợp ${nf1.format(SD.low)}–${nf1.format(SD.high)} ngày` : ''}</p></div></div>
+      board = `<div class="card c12"><div class="card-h"><div><h2>Tiến độ theo Khu vực / NPP</h2><p class="sub">Bấm mũi tên hoặc tên NPP để xem chi tiết · time gone ${pct(M.tgSi)} · đơn vị ${U()}${hasStock ? ` · Tồn hiện tại = Tồn ${fD(M.stockDate)} + Sale In − Sale Out (ước tính); Ngày tồn theo Sale Out bình quân ngày, phù hợp ${nf1.format(SD.low)}–${nf1.format(SD.high)} ngày` : ''}</p></div></div>
       <div class="tw"><table class="rank ag"><thead><tr><th>Khu vực</th><th>NPP</th><th class="gs">Target</th><th class="gs">Sale In</th><th>% đạt SI</th><th>Còn lại SI</th><th>Trạng thái SI</th><th class="gs">Sale Out</th><th>% đạt SO</th><th>Còn lại SO</th><th>Trạng thái SO</th>${hasStock ? `<th class="gs" title="Tồn đầu ngày theo file Stock">Tồn ${fD(M.stockDate)}</th><th title="Tồn đầu tháng + Sale In MTD − Sale Out MTD">Tồn hiện tại</th><th title="Tồn hiện tại ÷ Sale Out bình quân ngày (30 ngày trước ${fD(M.stockDate)})">Ngày tồn</th><th>Đánh giá tồn</th>` : ''}</tr></thead><tbody>${rb}</tbody></table></div></div>`;
     }
     let cover = '';
@@ -582,7 +582,7 @@
     ${conclusion([
       `Sale In đạt <b>${pct(aSi)}</b> target so với time gone <b>${pct(M.tgSi)}</b> (${aSi >= M.tgSi ? 'đi trước tiến độ' : 'chậm hơn tiến độ'}); còn <b>${fmt(remSi)} ${U()}</b> để đạt target.`,
       `Sale Out đạt <b>${pct(aSo)}</b>, còn <b>${fmt(remSo)} ${U()}</b>. ${soGap > 0 ? `Sale In cao hơn Sale Out <b>${fmt(soGap)} ${U()}</b>, tồn kho NPP đang tăng.` : `Sale Out cao hơn Sale In <b>${fmt(-soGap)} ${U()}</b>, cần đặt hàng bổ sung.`}`,
-      (() => { if (!M.stockDate) return ''; const SD = ENC.stockDays || { low: 2, high: 4 };
+      (() => { if (!M.stockDate) return ''; const SD = ENC.stockDays || { low: 3, high: 3.5 };
         const ns = Object.values(aggregate(L, r => r.c)).filter(o => o.dso > 0).map(o => ({ c: o.k, d: Math.max(0, o.st0 + o.si - o.so) / o.dso })).sort((a, b) => nppCmp(a.c, b.c));
         if (!ns.length) return ''; const tot = Object.values(aggregate(L, () => 'all'))[0]; const td = tot && tot.dso ? Math.max(0, tot.st0 + tot.si - tot.so) / tot.dso : NaN;
         const lo = ns.filter(x => x.d < SD.low), hi = ns.filter(x => x.d > SD.high);
@@ -650,7 +650,7 @@
       const chips = `<div class="chips" role="group" aria-label="Chọn SKU">${['all', ...skus].map(k => `<button data-asku="${esc(k)}" aria-pressed="${ui.allocSku === k}">${k === 'all' ? 'Tất cả SKU' : esc(k)}</button>`).join('')}</div>`;
       let table; const AG = byArea(npps);
       const aRow = (a, cs, inner) => { const k = 'al:' + a, op = isOpen(k, true); return { op, html: `<tr class="grp area click${op ? ' open' : ''}" data-fold="${esc(k)}"><td><span class="caret">▸</span> ${esc(a)}</td><td>${cs.length} NPP</td>${inner}</tr>` }; };
-      const nRow = (c, i, inner) => `<tr class="npp${i === 0 ? ' first' : ''}"><td></td><td><span class="click-npp" data-npp="${esc(c)}" title="Lọc theo ${esc(c)}">${esc(c)}</span></td>${inner}</tr>`;
+      const nRow = (c, i, inner) => `<tr class="npp${i === 0 ? ' first' : ''}"><td></td><td><b class="nppn">${esc(c)}</b></td>${inner}</tr>`;
       if (ui.allocSku === 'all') {
         const cell = cs => { let tr = 0; const html = skus.map(sc => { const al = aSum(r => cs.includes(r[1]) && r[2] === sc), si = sumBy(cs, c => siOf(c, sc)); tr += al - si; const p = al ? si / al : 0;
           return al || si ? `<td><div class="mx"><b class="${al - si < 0 ? 'over' : ''}">${al - si < 0 ? '−' + fmt(si - al) : fmt(al - si)}</b><span class="mini"><i style="width:${Math.min(100, p * 100)}%;background:${p >= 1 ? 'var(--good)' : 'var(--si)'}"></i></span></div></td>` : '<td><span class="note">–</span></td>'; }).join('');
@@ -865,7 +865,7 @@
       if (!op) return h;
       byArea([...new Set(rows.map(r => r[0]))]).forEach(([a, cs]) => { const ak = key + ':' + a, aop = isOpen(ak, false);
         h += `<tr class="lv1 click${aop ? ' open' : ''}" data-fold="${esc(ak)}"><td><span class="caret">▸</span> ${esc(a)}</td>${cellsF(rows.filter(r => cs.includes(r[0])))}</tr>`;
-        if (aop) cs.forEach(c => { h += `<tr class="lv2"><td><span class="click-npp" data-npp="${esc(c)}">${esc(c)}</span></td>${cellsF(rows.filter(r => r[0] === c))}</tr>`; }); });
+        if (aop) cs.forEach(c => { h += `<tr class="lv2"><td><b class="nppn">${esc(c)}</b></td>${cellsF(rows.filter(r => r[0] === c))}</tr>`; }); });
       return h; };
     return `
     <section class="lead"><div><div class="eyebrow">YTD as of ${fM(asOf)}</div><h1>${esc(scopeLabel())}</h1>
@@ -907,7 +907,10 @@
     const v = $('#view');
     v.querySelectorAll('tr[data-g]').forEach(tr => tr.onclick = () => { const g = tr.dataset.g; ui.open.has(g) ? ui.open.delete(g) : ui.open.add(g); render(); });
     v.querySelectorAll('[data-fold]').forEach(el => el.onclick = e => { e.stopPropagation(); const k = el.dataset.fold; ui.flip.has(k) ? ui.flip.delete(k) : ui.flip.add(k); render(); });
-    v.querySelectorAll('tr[data-npp], .click-npp').forEach(tr => tr.onclick = e => { e.stopPropagation(); if (ROLE.type === 'npp') return; const c = tr.dataset.npp; ui.npp = c; ui.area = (STATE.npps[c] || {}).area || ui.area; applyRole(); shell(); window.scrollTo({ top: 0, behavior: 'smooth' }); render(); });
+    // Bấm tên NPP: mở/thu gọn chi tiết của NPP đó (không lọc, để bảng giữ nguyên)
+    v.querySelectorAll('.click-npp').forEach(el => el.onclick = e => { e.stopPropagation(); const tr = el.closest('tr'); const f = tr && (tr.matches('[data-fold]') ? tr : tr.querySelector('[data-fold]'));
+      if (!f) return; const k = f.dataset.fold; ui.flip.has(k) ? ui.flip.delete(k) : ui.flip.add(k); render(); });
+    v.querySelectorAll('tr[data-npp]').forEach(tr => tr.onclick = e => { e.stopPropagation(); if (ROLE.type === 'npp') return; const c = tr.dataset.npp; ui.npp = c; ui.area = (STATE.npps[c] || {}).area || ui.area; applyRole(); shell(); window.scrollTo({ top: 0, behavior: 'smooth' }); render(); });
     const tm = $('#tmonth'); if (tm) tm.onchange = () => { ui.tMonth = tm.value; render(); };
     v.querySelectorAll('[data-asku]').forEach(b => b.onclick = () => { ui.allocSku = b.dataset.asku; render(); });
     const xt = $('#xl-target'); if (xt) xt.onclick = exportTarget;
