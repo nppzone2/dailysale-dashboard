@@ -174,7 +174,8 @@ const page = `<!doctype html><html lang="vi"><head><meta charset="utf-8">
 ${rd('style.css')}</style></head><body><div id="app"></div>
 <script id="logo-src" type="text/plain">${rd('logo.b64').trim()}</script>
 <script>window.ENC = ${safe(JSON.stringify(ENC))};</script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+<script>if (!window.XLSX) document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"><\\/script>');</script>
 <script>${safe(rd('app.js'))}</script></body></html>`;
 fs.mkdirSync(path.join(ROOT, 'docs'), { recursive: true });
 fs.writeFileSync(path.join(ROOT, 'docs', 'index.html'), page);

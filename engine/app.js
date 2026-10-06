@@ -280,7 +280,7 @@
     const RF = refMap(); const zero = { t: 0, si: 0, pd: 0, th: 0, sih: 0, pdh: 0 };
     const row = (c, g) => { const o = (by[c] || {})[g] || zero; const rc = o.t - o.si - o.pd, rh = o.th - o.sih - o.pdh;
       const rf = RF[c]; const on = !rf ? 0 : g === 'Group AA' ? rf.aa : g === 'Group BB' ? rf.bb : rf.aa + rf.bb;
-      const xe = rf && rf.hx ? (Math.max(0, rh) + on) / rf.hx : null;
+      const xe = rf && rf.hx ? Math.ceil((Math.max(0, rh) + on) / rf.hx - 1e-9) : null; // số xe làm tròn lên số nguyên
       return { ...o, rc, rh, on, xe, hasRef: !!(rf && rf.hx) }; };
     const npps = Object.keys(by).filter(c => by[c]['Tổng'] && (by[c]['Tổng'].t || by[c]['Tổng'].si || by[c]['Tổng'].pd)).sort(nppCmp);
     const add = rows => { const o = { t: 0, si: 0, pd: 0, th: 0, sih: 0, pdh: 0, rc: 0, rh: 0, on: 0, xe: null };
@@ -292,7 +292,7 @@
     if (!M.m) return '<div class="card empty">Chưa có dữ liệu tháng hiện hành.</div>';
     const remC = v => v >= 0 ? fmtC(v) : `<span class="ov">Vượt ${fmtC(-v)}</span>`;
     const remH = v => v >= 0 ? nf2.format(v) : `<span class="ov">Vượt ${nf2.format(-v)}</span>`;
-    const xeF = v => v == null ? '<span class="note">Chưa có</span>' : `<b>${nf2.format(v)}</b>`;
+    const xeF = v => v == null ? '<span class="note">Chưa có</span>' : `<b>${fmtC(v)}</b>`;
     const cells = o => `<td class="gs">${fmtC(o.t)}</td><td>${fmtC(o.si)}</td><td>${fmtC(o.pd)}</td><td>${o.t ? pctT((o.si + o.pd) / o.t, M.tgSi) : '—'}</td><td class="rem">${remC(o.rc)}</td><td class="gs">${remH(o.rh)}</td><td>${o.on ? nf2.format(o.on) : '<span class="note">–</span>'}</td><td class="xe">${xeF(o.xe)}</td>`;
     let body = ''; const totN = [];
     byArea(npps).forEach(([a, cs]) => { const ak = 'ld:a:' + a, op = isOpen(ak, true);
@@ -317,22 +317,68 @@
       <div class="card c3 kpi"><div class="kpi-l">Target tháng</div><div class="kpi-v">${fmtC(T.t)}<small>Case</small></div><div class="kpi-f">${nf2.format(T.th)} HL</div></div>
       <div class="card c3 kpi${T.t && T.si / T.t < M.tgSi ? ' slowcard' : ''}"><div class="kpi-l">Sale In MTD</div><div class="kpi-v">${fmtC(T.si)}<small>Case</small></div><div class="kpi-f"><b>${pctT(T.t ? T.si / T.t : NaN, M.tgSi)}</b> target · time gone ${pct(M.tgSi)}</div></div>
       <div class="card c3 kpi" role="button" tabindex="0" data-go="pending" style="cursor:pointer"><div class="kpi-l">SO Pending</div><div class="kpi-v">${fmtC(T.pd)}<small>Case</small></div><div class="kpi-f">${nf2.format(T.pdh)} HL · xem chi tiết →</div></div>
-      <div class="card c3 kpi hero"><div class="kpi-l">Còn lại cần giao</div><div class="kpi-v">${fmtC(Math.max(0, T.rc))}<small>Case</small></div><div class="kpi-f">${nf2.format(Math.max(0, T.rh))} HL · <b>${T.xe == null ? '—' : nf2.format(T.xe)} xe</b></div></div>
+      <div class="card c3 kpi hero"><div class="kpi-l">Còn lại cần giao</div><div class="kpi-v">${fmtC(Math.max(0, T.rc))}<small>Case</small></div><div class="kpi-f">${nf2.format(Math.max(0, T.rh))} HL · <b>${T.xe == null ? '—' : fmtC(T.xe)} xe</b></div></div>
       <div class="card c12"><div class="card-h"><div><h2>Còn lại theo Khu vực / NPP / Group</h2><p class="sub">Target, Sale In, Pending, Còn lại theo Case · Còn lại, Ontop theo HL · % = (Sale In + Pending) ÷ Target, xanh khi ≥ time gone ${pct(M.tgSi)} · bấm mũi tên để mở hoặc thu gọn</p></div></div>
         <div class="tw"><table class="ag lnd"><thead><tr><th>Khu vực</th><th>NPP</th><th>Group</th><th class="gs">Target</th><th>Sale In</th><th>Pending</th><th title="(Sale In + Pending) ÷ Target, so với time gone">% (SI + Pending)</th><th>Còn lại (Case)</th><th class="gs">Còn lại (HL)</th><th>Ontop HL</th><th>Số xe còn lại</th></tr></thead><tbody>${body}</tbody></table></div>
         ${missing.length ? `<p class="note" style="margin:8px 0 0">Chưa có HL của 1 xe cho: ${missing.map(esc).join(', ')}${ROLE.type === 'admin' ? ' · cập nhật ở tab Tham chiếu xe' : ''}.</p>` : ''}</div>
     </div>
     ${conclusion([
-      `Còn lại <b>${fmtC(Math.max(0, T.rc))} case</b> (${nf2.format(Math.max(0, T.rh))} HL) sau khi trừ Sale In và Pending${T.on ? `, cộng Ontop ${nf2.format(T.on)} HL` : ''}${T.xe != null ? `, tương đương <b>${nf2.format(T.xe)} xe</b>` : ''}.`,
-      `Group AA còn <b>${fmtC(Math.max(0, AA.rc))} case</b>${AA.xe != null ? ` (${nf2.format(AA.xe)} xe)` : ''}; Group BB còn <b>${fmtC(Math.max(0, BB.rc))} case</b>${BB.xe != null ? ` (${nf2.format(BB.xe)} xe)` : ''}.`,
-      topXe && totN.length > 1 ? `NPP cần nhiều xe nhất: <b>${esc(topXe[0])}</b> (${nf2.format(topXe[1].xe)} xe).` : ''
+      `Còn lại <b>${fmtC(Math.max(0, T.rc))} case</b> (${nf2.format(Math.max(0, T.rh))} HL) sau khi trừ Sale In và Pending${T.on ? `, cộng Ontop ${nf2.format(T.on)} HL` : ''}${T.xe != null ? `, tương đương <b>${fmtC(T.xe)} xe</b>` : ''}.`,
+      `Group AA còn <b>${fmtC(Math.max(0, AA.rc))} case</b>${AA.xe != null ? ` (${fmtC(AA.xe)} xe)` : ''}; Group BB còn <b>${fmtC(Math.max(0, BB.rc))} case</b>${BB.xe != null ? ` (${fmtC(BB.xe)} xe)` : ''}.`,
+      topXe && totN.length > 1 ? `NPP cần nhiều xe nhất: <b>${esc(topXe[0])}</b> (${fmtC(topXe[1].xe)} xe).` : ''
     ])}`;
   }
   function exportLanding(ev) {
-    const { npps, row } = landingModel();
-    const out = [['Khu vực', 'Mã NPP', 'Group', 'Target (Case)', 'Sale In (Case)', 'Pending (Case)', 'Còn lại (Case)', 'Còn lại (HL)', 'Ontop HL', 'Số xe còn lại']];
-    npps.forEach(c => LG.forEach(g => { const o = row(c, g); out.push([areaOf(c), c, g, Math.round(o.t), Math.round(o.si), Math.round(o.pd), Math.round(o.rc), Math.round(o.rh * 100) / 100, o.on, o.xe == null ? '' : Math.round(o.xe * 10) / 10]); }));
-    saveXlsx(`Tong_quan_${STATE.cur.month}_${scopeTag()}.xlsx`, [['Tổng quan', out, [9, 9, 10, 13, 13, 13, 13, 12, 10, 12]]], ev.currentTarget);
+    const { M, npps, row, add } = landingModel();
+    const C = { band: '0A4A2A', brand: '0B6B39', soft: 'E3F1E8', sub: 'F3F5F4', line: 'D9DED9', ink: '14201A', muted: '6B7A70', good: '137A3F', goodBg: 'DDF2E5', bad: 'C8102E', badBg: 'FBE3E5', white: 'FFFFFF' };
+    const bd = { top: { style: 'thin', color: { rgb: C.line } }, bottom: { style: 'thin', color: { rgb: C.line } } };
+    const st = (o = {}) => ({ font: { name: 'Arial', sz: 10, color: { rgb: o.color || C.ink }, bold: !!o.bold }, fill: o.fill ? { patternType: 'solid', fgColor: { rgb: o.fill } } : undefined, alignment: { horizontal: o.h || 'right', vertical: 'center', wrapText: !!o.wrap }, border: o.border === false ? undefined : bd, numFmt: o.nf });
+    const H = ['Khu vực', 'NPP', 'Group', 'Target (Case)', 'Sale In (Case)', 'Pending (Case)', '% (SI + Pending)', 'Còn lại (Case)', 'Còn lại (HL)', 'Ontop HL', 'Số xe còn lại'];
+    const N = H.length; const rows = []; const merges = [];
+    const put = (cells, styles, height) => { rows.push({ cells, styles, height }); return rows.length - 1; };
+    const title = `Distributor Sales Performance · Tổng quan ${fM(M.m)}`;
+    put([title], [st({ bold: true, color: C.white, fill: C.band, h: 'left', border: false })], 30); merges.push([0, 0, N - 1]);
+    put([`RTC - Future Fit · HCM Zone 2 · ${scopeLabel()} · cập nhật đến ${fD(M.lastSi)} · time gone ${pct(M.tgSi)}`], [st({ color: 'B9D3C2', fill: C.band, h: 'left', border: false })], 20); merges.push([1, 0, N - 1]);
+    put(['Còn lại = Target − Sale In − Pending · % = (Sale In + Pending) ÷ Target, xanh khi ≥ time gone · Số xe = (Còn lại HL + Ontop HL) ÷ HL của 1 xe, làm tròn lên'], [st({ color: C.muted, h: 'left', border: false })], 18); merges.push([2, 0, N - 1]);
+    put([], [], 8);
+    const hr = put(H, H.map((_, k) => st({ bold: true, color: C.muted, fill: C.soft, h: k < 3 ? 'left' : 'center', wrap: true })), 30);
+    const line = (a, n, g, o, kind) => {
+      const p = o.t ? (o.si + o.pd) / o.t : null; const ok = p != null && p >= M.tgSi;
+      const base = kind === 'area' ? { fill: C.band, color: C.white, bold: true } : kind === 'tot' ? { fill: C.sub, bold: true } : kind === 'grand' ? { fill: C.soft, bold: true } : {};
+      const v = [a, n, g, Math.round(o.t), Math.round(o.si), Math.round(o.pd), p, Math.round(o.rc), Math.round(o.rh * 10) / 10, o.on ? Math.round(o.on * 10) / 10 : null, o.xe == null ? 'Chưa có' : o.xe];
+      const s2 = v.map((_, k) => {
+        if (k < 3) return st({ ...base, h: 'left', color: k === 1 && kind === 'npp' ? C.brand : base.color, bold: base.bold || (k === 1 && kind === 'npp') });
+        if (k === 6) return st({ ...base, h: 'center', bold: true, nf: '0.0%', color: p == null ? base.color : kind === 'area' ? (ok ? '9FE3BC' : 'FFB3B8') : ok ? C.good : C.bad, fill: kind === 'area' ? base.fill : p == null ? base.fill : ok ? C.goodBg : C.badBg });
+        if (k === 7) return st({ ...base, nf: '#,##0;[Color10]"Vượt "#,##0', bold: true });
+        if (k === 8 || k === 9) return st({ ...base, nf: '#,##0.0;[Color10]"Vượt "#,##0.0' });
+        if (k === 10) return st({ ...base, bold: true, h: 'center', nf: '#,##0', fill: kind === 'area' ? base.fill : C.soft, color: kind === 'area' ? C.white : o.xe == null ? C.muted : C.brand });
+        return st({ ...base, nf: '#,##0' });
+      });
+      put(v, s2, kind === 'area' || kind === 'grand' ? 22 : 18);
+    };
+    const totN = [];
+    byArea(npps).forEach(([a, cs]) => {
+      line(a, `${cs.length} NPP`, 'Tổng', add(cs.map(c => row(c, 'Tổng'))), 'area');
+      cs.forEach(c => { totN.push(row(c, 'Tổng')); LG.forEach((g, i) => line('', i === 0 ? c : '', g === 'Tổng' ? 'Tổng' : g.replace('Group ', ''), row(c, g), g === 'Tổng' ? 'tot' : i === 0 ? 'npp' : 'sub')); });
+    });
+    line('Tổng', '', '', add(totN), 'grand');
+    const T = add(totN);
+    put([], [], 10);
+    const cl = put(['Kết luận nhanh'], [st({ bold: true, color: C.white, fill: C.band, h: 'left', border: false })], 22); merges.push([cl, 0, N - 1]);
+    const AA = add(npps.map(c => row(c, 'Group AA'))), BB = add(npps.map(c => row(c, 'Group BB')));
+    [`Còn lại ${fmtC(Math.max(0, T.rc))} case (${nf2.format(Math.max(0, T.rh))} HL) sau khi trừ Sale In và Pending${T.on ? `, cộng Ontop ${nf2.format(T.on)} HL` : ''}${T.xe != null ? `, tương đương ${fmtC(T.xe)} xe` : ''}.`,
+     `Group AA còn ${fmtC(Math.max(0, AA.rc))} case${AA.xe != null ? ` (${fmtC(AA.xe)} xe)` : ''}; Group BB còn ${fmtC(Math.max(0, BB.rc))} case${BB.xe != null ? ` (${fmtC(BB.xe)} xe)` : ''}.`]
+      .forEach(t => { const r = put(['• ' + t], [st({ color: C.white, fill: C.band, h: 'left', border: false })], 18); merges.push([r, 0, N - 1]); });
+    // dựng sheet có định dạng (xlsx-js-style); thư viện thường thì xuất bảng số không màu
+    const aoa = rows.map(r => { const a = Array(N).fill(null); r.cells.forEach((v, k) => a[k] = v); return a; });
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    rows.forEach((r, ri) => { for (let k = 0; k < N; k++) { const ref = XLSX.utils.encode_cell({ r: ri, c: k }); const sty = r.styles[k] || r.styles[0];
+      if (!sty) continue; if (!ws[ref]) ws[ref] = { t: 's', v: '' }; ws[ref].s = sty; if (sty.numFmt && ws[ref].t === 'n') ws[ref].z = sty.numFmt; } });
+    ws['!merges'] = merges.map(([r, c1, c2]) => ({ s: { r, c: c1 }, e: { r, c: c2 } }));
+    ws['!cols'] = [10, 9, 8, 13, 13, 12, 12, 13, 12, 10, 11].map(w => ({ wch: w }));
+    ws['!rows'] = rows.map(r => r.height ? { hpt: r.height } : {});
+    ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: hr, c: 0 }, e: { r: hr, c: N - 1 } }) };
+    saveXlsx(`Tong_quan_${STATE.cur.month}_${scopeTag()}.xlsx`, [['Tổng quan', ws]], ev.currentTarget);
   }
   /* ---------- TAB: Tham chiếu xe (chỉ Admin) ---------- */
   function viewRef() {
@@ -867,7 +913,7 @@
   async function saveXlsx(filename, sheets, btn) {
     if (!window.XLSX) { toastBtn(btn, 'Chưa tải được thư viện Excel'); return; }
     const wb = XLSX.utils.book_new();
-    sheets.forEach(([name, aoa, widths]) => { const ws = XLSX.utils.aoa_to_sheet(aoa); if (widths) ws['!cols'] = widths.map(w => ({ wch: w })); XLSX.utils.book_append_sheet(wb, ws, name); });
+    sheets.forEach(([name, aoa, widths]) => { const ws = Array.isArray(aoa) ? XLSX.utils.aoa_to_sheet(aoa) : aoa; if (widths) ws['!cols'] = widths.map(w => ({ wch: w })); XLSX.utils.book_append_sheet(wb, ws, name); });
     const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
     const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const inHost = !!(window.claude && window.claude.use);
