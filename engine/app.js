@@ -603,7 +603,7 @@
     const wk = currentWeek(weeks), pw = weeks[weeks.indexOf(wk) - 1]; const nw = weeks[weeks.indexOf(wk) + 1];
     const siMap = {}; M.list.forEach(r => { siMap[r.c + '|' + r.sc] = (siMap[r.c + '|' + r.sc] || 0) + r.si; });
     const aSum = f => sumBy(A.filter(f), r => conv(r[3], r[2]));
-    const skus = [...new Set(A.map(r => r[2]))].map(sc => ({ sc, al: aSum(r => r[2] === sc) })).sort((a, b) => b.al - a.al).map(x => x.sc);
+    const skus = [...new Set(A.map(r => r[2]))].map(sc => ({ sc, al: aSum(r => r[2] === sc) })).sort((a, b) => GROUPS.indexOf(grp(a.sc)) - GROUPS.indexOf(grp(b.sc)) || b.al - a.al).map(x => x.sc);
     const npps = [...new Set(A.map(r => r[1]))].sort(nppCmp);
     const siOf = (c, sc) => conv(siMap[c + '|' + sc] || 0, sc);
     const bySku = skus.map(sc => { const w = {}; weeks.forEach(k => w[k] = aSum(r => r[2] === sc && r[0] === k));
@@ -637,7 +637,10 @@
     const latest = `<div class="card c12 wk-card"><div class="card-h"><div><div class="eyebrow">Current Week</div><h2 style="font-size:18px">${esc(wk)}<span class="note" style="font-weight:500;margin-left:8px">${esc(rangeTxt)}</span></h2></div>
         <div class="wk-total"><span class="kpi-l">Tổng allocation ${esc(wk)}</span><b>${fmt(wkTot)}</b><small>${U()}</small> ${pw ? delta(wkTot, pwTot) + `<span class="note">so với ${esc(pw)}</span>` : ''}</div></div>
       ${bIdx.length ? `<div class="tw" style="margin-top:10px"><table class="sticky1 tgt batch"><thead><tr><th>BrandFamily</th><th>SKU</th>${bIdx.map(bHead).join('')}<th>Tổng ${esc(wk)}</th><th>Sale In tuần</th><th>Tiến độ SI</th><th>So với ${esc(pw || '—')}</th></tr></thead><tbody>
-        ${bySku.map(s => `<tr class="sku"><td>${esc(item(s.sc).b || '—')}</td><td class="skuc">${esc(s.sc)}</td>${bIdx.map(i => `<td>${fmt(bval(s.sc, wk, i))}</td>`).join('')}<td><b>${fmt(s.w[wk])}</b></td>${prog(siWk(s.sc), s.w[wk])}<td>${delta(s.w[wk], pw ? s.w[pw] : null)}</td></tr>`).join('')}
+        ${GROUPS.map(g => { const gs = bySku.filter(s => grp(s.sc) === g); if (!gs.length) return '';
+          const gw = k => sumBy(gs, s => s.w[k] || 0);
+          return `<tr class="grp gsum"><td colspan="2">${esc(g)} <span class="note">· ${gs.length} SKU</span></td>${bIdx.map(i => `<td>${fmt(sumBy(gs, s => bval(s.sc, wk, i)))}</td>`).join('')}<td>${fmt(gw(wk))}</td>${prog(sumBy(gs, s => siWk(s.sc)), gw(wk))}<td>${delta(gw(wk), pw ? gw(pw) : null)}</td></tr>`
+            + gs.map(s => `<tr class="sku"><td>${esc(item(s.sc).b || '—')}</td><td class="skuc">${esc(s.sc)}</td>${bIdx.map(i => `<td>${fmt(bval(s.sc, wk, i))}</td>`).join('')}<td><b>${fmt(s.w[wk])}</b></td>${prog(siWk(s.sc), s.w[wk])}<td>${delta(s.w[wk], pw ? s.w[pw] : null)}</td></tr>`).join(''); }).join('')}
         ${bySku.length > 1 ? `<tr class="tot"><td colspan="2">Tổng</td>${bIdx.map(i => `<td>${fmt(bTot(i))}</td>`).join('')}<td>${fmt(wkTot)}</td>${prog(siWkTot, wkTot)}<td>${delta(wkTot, pwTot)}</td></tr>` : ''}
       </tbody></table></div>` : `<div class="wk-grid">${bySku.map(s => `<div class="wk-item"><div class="wk-sku">${esc(s.sc)}<span class="wk-b">${esc(item(s.sc).b || '')}</span></div><div class="wk-v num">${fmt(s.w[wk])}</div><div>${delta(s.w[wk], pw ? s.w[pw] : null)}</div></div>`).join('')}</div>`}
       ${nextTxt || siNote ? `<p class="note" style="margin:10px 0 0">${[siNote, nextTxt].filter(Boolean).join(' · ')}</p>` : ''}</div>`;
@@ -651,8 +654,10 @@
     let byNpp = '';
     if (npps.length > 1) {
       const AG = byArea(npps);
-      const bv = (cs, sc, i) => sumBy(A.filter(r => r[0] === wk && cs.includes(r[1]) && (sc == null || r[2] === sc)), r => conv(Array.isArray(r[4]) ? (r[4][i] || 0) : 0, r[2]));
-      const wv = (cs, sc) => aSum(r => r[0] === wk && cs.includes(r[1]) && (sc == null || r[2] === sc));
+      const inSc = (sc, x) => sc == null || (Array.isArray(sc) ? sc.includes(x) : x === sc);
+      const bv = (cs, sc, i) => sumBy(A.filter(r => r[0] === wk && cs.includes(r[1]) && inSc(sc, r[2])), r => conv(Array.isArray(r[4]) ? (r[4][i] || 0) : 0, r[2]));
+      const wv = (cs, sc) => aSum(r => r[0] === wk && cs.includes(r[1]) && inSc(sc, r[2]));
+      const byGrp = ss => GROUPS.map(g => [g, ss.filter(sc => grp(sc) === g)]).filter(([, l]) => l.length);
       const cells = (cs, sc) => bIdx.map(i => `<td>${fmt(bv(cs, sc, i))}</td>`).join('') + `<td><b>${fmt(wv(cs, sc))}</b></td>`;
       let tb = '';
       AG.forEach(([a, cs]) => { const k = 'al:' + a, op = isOpen(k, true);
@@ -663,8 +668,12 @@
           const nk = 'al:n:' + c, nOp = isOpen(nk, true) || ss.length < 2;
           const nm = `${ss.length > 1 ? `<span class="caret fold${nOp ? ' on' : ''}" data-fold="${esc(nk)}" role="button" aria-label="Mở/thu gọn ${esc(c)}">▸</span> ` : ''}<span class="click-npp" data-npp="${esc(c)}">${esc(c)}</span>`;
           if (ss.length > 1) tb += `<tr class="sub first"><td>${nm}</td><td class="note">${ss.length} SKU</td>${cells([c], null)}</tr>`;
-          if (nOp) ss.forEach((sc, i) => { tb += `<tr class="sku${ss.length < 2 && i === 0 ? ' first' : ''}"><td>${ss.length < 2 ? nm : ''}</td><td class="skuc">${esc(sc)}</td>${cells([c], sc)}</tr>`; }); }); });
-      if (AG.length > 1) tb += `<tr class="tot"><td colspan="2">Tổng</td>${cells(npps, null)}</tr>`;
+          if (!nOp) return; const G = byGrp(ss);
+          G.forEach(([g, l]) => { if (G.length > 1) tb += `<tr class="gsub"><td></td><td>${esc(g)}</td>${cells([c], l)}</tr>`;
+            l.forEach((sc, i) => { tb += `<tr class="sku${ss.length < 2 && i === 0 ? ' first' : ''}"><td>${ss.length < 2 ? nm : ''}</td><td class="skuc">${esc(sc)}</td>${cells([c], sc)}</tr>`; }); }); }); });
+      const GT = byGrp(skus.filter(sc => A.some(r => r[0] === wk && r[2] === sc)));
+      tb += `<tr class="tot"><td colspan="2">Tổng</td>${cells(npps, null)}</tr>`;
+      if (GT.length > 1) GT.forEach(([g, l]) => { tb += `<tr class="gsub gtot"><td colspan="2">${esc(g)} <span class="note">· ${l.length} SKU</span></td>${cells(npps, l)}</tr>`; });
       const table = `<table class="sticky1 trk batch"><thead><tr><th>Khu vực / NPP</th><th>SKU</th>${bIdx.map(bHead).join('')}<th>Tổng ${esc(wk)}</th></tr></thead><tbody>${tb}</tbody></table>`;
       byNpp = `<div class="card c12"><div class="card-h"><div><h2>Theo Khu vực / NPP · ${esc(wk)}</h2><p class="sub">Đơn vị ${U()} · số chia Current Week theo từng batch · bấm mũi tên để mở khu vực, NPP · số còn lại xem ở tab <button class="linkback" data-go="tracking" style="display:inline;margin:0">Tracking Allocation</button></p></div></div><div class="tw">${table}</div></div>`;
     }
