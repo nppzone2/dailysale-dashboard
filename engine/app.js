@@ -643,29 +643,21 @@
       ${bySku.map(s => `<tr class="sku"><td>${esc(item(s.sc).b || '—')}</td><td class="skuc">${esc(s.sc)}</td>${weeks.map(w => `<td>${fmt(s.w[w])}</td>`).join('')}<td>${fmt(s.al)}</td><td>${fmt(s.si)}</td><td>${usedBar(s.si, s.al)}</td>${remTd(s.al, s.si)}</tr>`).join('')}
       ${bySku.length > 1 ? `<tr class="tot"><td colspan="2">Tổng</td>${weeks.map(w => `<td>${fmt(sumBy(bySku, s => s.w[w]))}</td>`).join('')}<td>${fmt(totAl)}</td><td>${fmt(totSi)}</td><td>${usedBar(totSi, totAl)}</td>${remTd(totAl, totSi)}</tr>` : ''}
     </tbody></table></div></div>`;
-    // 3) by NPP: SKU switch keeps the table narrow however many SKUs exist
+    // 3) Theo Khu vực: số chia Current Week theo từng batch, mỗi SKU một dòng (số còn lại xem ở tab Tracking Allocation)
     let byNpp = '';
     if (npps.length > 1) {
-      if (ui.allocSku !== 'all' && !skus.includes(ui.allocSku)) ui.allocSku = 'all';
-      const chips = `<div class="chips" role="group" aria-label="Chọn SKU">${['all', ...skus].map(k => `<button data-asku="${esc(k)}" aria-pressed="${ui.allocSku === k}">${k === 'all' ? 'Tất cả SKU' : esc(k)}</button>`).join('')}</div>`;
-      let table; const AG = byArea(npps);
-      const aRow = (a, cs, inner) => { const k = 'al:' + a, op = isOpen(k, true); return { op, html: `<tr class="grp area click${op ? ' open' : ''}" data-fold="${esc(k)}"><td><span class="caret">▸</span> ${esc(a)}</td><td>${cs.length} NPP</td>${inner}</tr>` }; };
-      const nRow = (c, i, inner) => `<tr class="npp${i === 0 ? ' first' : ''}"><td></td><td><b class="nppn">${esc(c)}</b></td>${inner}</tr>`;
-      if (ui.allocSku === 'all') {
-        const cell = cs => { let tr = 0; const html = skus.map(sc => { const al = aSum(r => cs.includes(r[1]) && r[2] === sc), si = sumBy(cs, c => siOf(c, sc)); tr += al - si; const p = al ? si / al : 0;
-          return al || si ? `<td><div class="mx"><b class="${al - si < 0 ? 'over' : ''}">${al - si < 0 ? '−' + fmt(si - al) : fmt(al - si)}</b><span class="mini"><i style="width:${Math.min(100, p * 100)}%;background:${p >= 1 ? 'var(--good)' : 'var(--si)'}"></i></span></div></td>` : '<td><span class="note">–</span></td>'; }).join('');
-          return html + `<td class="rem">${fmt(tr)}</td>`; };
-        let tb = ''; AG.forEach(([a, cs]) => { const r = aRow(a, cs, cell(cs)); tb += r.html; if (r.op) cs.forEach((c, i) => { tb += nRow(c, i, cell([c])); }); });
-        table = `<table class="sticky1 ag"><thead><tr><th>Khu vực</th><th>NPP</th>${skus.map(sc => `<th>${esc(sc)}</th>`).join('')}<th>Tổng còn lại</th></tr></thead><tbody>${tb}</tbody></table>
-          <p class="note" style="margin:8px 0 0">Mỗi ô: allocation còn lại; thanh nhỏ là % đã sử dụng. Số âm là đã vượt allocation.</p>`;
-      } else {
-        const sc = ui.allocSku;
-        const cell = cs => { const w = weeks.map(k => aSum(r => cs.includes(r[1]) && r[2] === sc && r[0] === k)); const al = sumBy(w, x => x), si = sumBy(cs, c => siOf(c, sc));
-          return `${w.map(v => `<td>${fmt(v)}</td>`).join('')}<td>${fmt(al)}</td><td>${fmt(si)}</td><td>${usedBar(si, al)}</td>${remTd(al, si)}`; };
-        let tb = ''; AG.forEach(([a, cs]) => { const r = aRow(a, cs, cell(cs)); tb += r.html; if (r.op) cs.forEach((c, i) => { tb += nRow(c, i, cell([c])); }); });
-        table = `<table class="sticky1 ag"><thead><tr><th>Khu vực</th><th>NPP</th>${weeks.map(w => `<th>${esc(w)}</th>`).join('')}<th>Tổng allocation</th><th>Sale In MTD</th><th>% sử dụng</th><th>Còn lại</th></tr></thead><tbody>${tb}</tbody></table>`;
-      }
-      byNpp = `<div class="card c12"><div class="card-h"><div><h2>Theo Khu vực / NPP</h2><p class="sub">Đơn vị ${U()} · bấm mũi tên để mở từng khu vực · chọn SKU để xem chi tiết theo tuần</p></div>${chips}</div><div class="tw">${table}</div></div>`;
+      const AG = byArea(npps);
+      const bv = (cs, sc, i) => sumBy(A.filter(r => r[0] === wk && cs.includes(r[1]) && (sc == null || r[2] === sc)), r => conv(Array.isArray(r[4]) ? (r[4][i] || 0) : 0, r[2]));
+      const wv = (cs, sc) => aSum(r => r[0] === wk && cs.includes(r[1]) && (sc == null || r[2] === sc));
+      const cells = (cs, sc) => bIdx.map(i => `<td>${fmt(bv(cs, sc, i))}</td>`).join('') + `<td><b>${fmt(wv(cs, sc))}</b></td>`;
+      let tb = '';
+      AG.forEach(([a, cs]) => { const k = 'al:' + a, op = isOpen(k, true);
+        const ss = skus.filter(sc => A.some(r => r[0] === wk && cs.includes(r[1]) && r[2] === sc));
+        tb += `<tr class="grp area click${op ? ' open' : ''}" data-fold="${esc(k)}"><td><span class="caret">▸</span> ${esc(a)}</td><td>${cs.length} NPP · ${ss.length} SKU</td>${cells(cs, null)}</tr>`;
+        if (op) ss.forEach(sc => { tb += `<tr class="sku"><td>${esc(item(sc).b || '—')}</td><td class="skuc">${esc(sc)}</td>${cells(cs, sc)}</tr>`; }); });
+      if (AG.length > 1) tb += `<tr class="tot"><td colspan="2">Tổng</td>${cells(npps, null)}</tr>`;
+      const table = `<table class="sticky1 ag batch"><thead><tr><th>Khu vực</th><th>SKU</th>${bIdx.map(bHead).join('')}<th>Tổng ${esc(wk)}</th></tr></thead><tbody>${tb}</tbody></table>`;
+      byNpp = `<div class="card c12"><div class="card-h"><div><h2>Theo Khu vực · ${esc(wk)}</h2><p class="sub">Đơn vị ${U()} · số chia Current Week theo từng batch · bấm mũi tên để mở từng khu vực · số còn lại xem ở tab <button class="linkback" data-go="tracking" style="display:inline;margin:0">Tracking Allocation</button></p></div></div><div class="tw">${table}</div></div>`;
     }
     const over = bySku.filter(s => s.si > s.al);
     const main = bySku[0];
