@@ -637,10 +637,7 @@
     const latest = `<div class="card c12 wk-card"><div class="card-h"><div><div class="eyebrow">Current Week</div><h2 style="font-size:18px">${esc(wk)}<span class="note" style="font-weight:500;margin-left:8px">${esc(rangeTxt)}</span></h2></div>
         <div class="wk-total"><span class="kpi-l">Tổng allocation ${esc(wk)}</span><b>${fmt(wkTot)}</b><small>${U()}</small> ${pw ? delta(wkTot, pwTot) + `<span class="note">so với ${esc(pw)}</span>` : ''}</div></div>
       ${bIdx.length ? `<div class="tw" style="margin-top:10px"><table class="sticky1 tgt batch"><thead><tr><th>BrandFamily</th><th>SKU</th>${bIdx.map(bHead).join('')}<th>Tổng ${esc(wk)}</th><th>Sale In tuần</th><th>Tiến độ SI</th><th>So với ${esc(pw || '—')}</th></tr></thead><tbody>
-        ${GROUPS.map(g => { const gs = bySku.filter(s => grp(s.sc) === g); if (!gs.length) return '';
-          const gw = k => sumBy(gs, s => s.w[k] || 0);
-          return `<tr class="grp gsum"><td colspan="2">${esc(g)} <span class="note">· ${gs.length} SKU</span></td>${bIdx.map(i => `<td>${fmt(sumBy(gs, s => bval(s.sc, wk, i)))}</td>`).join('')}<td>${fmt(gw(wk))}</td>${prog(sumBy(gs, s => siWk(s.sc)), gw(wk))}<td>${delta(gw(wk), pw ? gw(pw) : null)}</td></tr>`
-            + gs.map(s => `<tr class="sku"><td>${esc(item(s.sc).b || '—')}</td><td class="skuc">${esc(s.sc)}</td>${bIdx.map(i => `<td>${fmt(bval(s.sc, wk, i))}</td>`).join('')}<td><b>${fmt(s.w[wk])}</b></td>${prog(siWk(s.sc), s.w[wk])}<td>${delta(s.w[wk], pw ? s.w[pw] : null)}</td></tr>`).join(''); }).join('')}
+        ${bySku.map(s => `<tr class="sku"><td>${esc(item(s.sc).b || '—')}</td><td class="skuc">${esc(s.sc)}</td>${bIdx.map(i => `<td>${fmt(bval(s.sc, wk, i))}</td>`).join('')}<td><b>${fmt(s.w[wk])}</b></td>${prog(siWk(s.sc), s.w[wk])}<td>${delta(s.w[wk], pw ? s.w[pw] : null)}</td></tr>`).join('')}
         ${bySku.length > 1 ? `<tr class="tot"><td colspan="2">Tổng</td>${bIdx.map(i => `<td>${fmt(bTot(i))}</td>`).join('')}<td>${fmt(wkTot)}</td>${prog(siWkTot, wkTot)}<td>${delta(wkTot, pwTot)}</td></tr>` : ''}
       </tbody></table></div>` : `<div class="wk-grid">${bySku.map(s => `<div class="wk-item"><div class="wk-sku">${esc(s.sc)}<span class="wk-b">${esc(item(s.sc).b || '')}</span></div><div class="wk-v num">${fmt(s.w[wk])}</div><div>${delta(s.w[wk], pw ? s.w[pw] : null)}</div></div>`).join('')}</div>`}
       ${nextTxt || siNote ? `<p class="note" style="margin:10px 0 0">${[siNote, nextTxt].filter(Boolean).join(' · ')}</p>` : ''}</div>`;
@@ -663,6 +660,7 @@
       AG.forEach(([a, cs]) => { const k = 'al:' + a, op = isOpen(k, true);
         const skusOf = list => skus.filter(sc => A.some(r => r[0] === wk && list.includes(r[1]) && r[2] === sc));
         tb += `<tr class="grp area click${op ? ' open' : ''}" data-fold="${esc(k)}"><td><span class="caret">▸</span> ${esc(a)}</td><td>${cs.length} NPP · ${skusOf(cs).length} SKU</td>${cells(cs, null)}</tr>`;
+        const GA = byGrp(skusOf(cs)); if (GA.length > 1) GA.forEach(([g, l]) => { tb += `<tr class="gsub garea"><td></td><td>${esc(g)}</td>${cells(cs, l)}</tr>`; });
         if (!op) return;
         cs.forEach(c => { const ss = skusOf([c]); if (!ss.length) return;
           const nk = 'al:n:' + c, nOp = isOpen(nk, true) || ss.length < 2;
