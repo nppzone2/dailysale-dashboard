@@ -390,3 +390,28 @@ select:disabled{opacity:1;color:var(--ink);background:var(--brand-soft);border-c
 .repbox-in{max-width:1240px;margin:0 auto;padding:10px 20px;display:flex;gap:16px;align-items:flex-start;justify-content:space-between;font-size:13px;color:var(--ink)}
 .repbox ul{margin:4px 0 0;padding-left:18px}.repbox li{margin:2px 0}.repbox li.error{color:var(--bad);font-weight:600}
 .repbox .linkbtn{color:var(--ink-2);white-space:nowrap}
+.pill.orange{background:#FDE9D7;color:#C2560C}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .pill.orange{background:#4A2A12;color:#FFB27A}}
+/* Tổng quan (landing) & Tham chiếu xe */
+.lnd th:nth-child(3),.lnd td:nth-child(3){text-align:left}
+.lnd .gs,.reft .gs{border-left:2px solid var(--line)}
+.lnd tr.lsub td{color:var(--ink-2);border-top:0}
+.lnd tr.lsub td:nth-child(3){padding-left:14px}
+.lnd tr.ltot td{font-weight:600;background:var(--surface-2)}
+.lnd tr.first td{border-top:2px solid var(--line)}
+.lnd tr.area + tr.first td{border-top:0}
+.lnd td.xe{background:var(--brand-soft);color:var(--brand)}
+.lnd tr.area td.xe{background:rgba(255,255,255,.12);color:var(--band-ink)}
+.lnd tr.tot td.xe{font-size:15px}
+.lnd .note{font-size:11.5px}
+.lnd tr.area .note{color:var(--band-ink-2)}
+.kpi.hero{background:var(--band);color:var(--band-ink);border-color:transparent}
+.kpi.hero .kpi-l,.kpi.hero .kpi-f,.kpi.hero small{color:var(--band-ink-2)}
+.kpi.hero .kpi-f b{color:var(--band-ink)}
+.reft{max-width:640px}
+.reft th:nth-child(-n+2),.reft td:nth-child(-n+2){text-align:left}
+.reft tr.ltot td{background:var(--surface-2);font-weight:600}
+.reft tr.first td{border-top:2px solid var(--line)}
+.reft tr.area td{font-size:13px;padding-block:7px}
+.rin{width:110px;text-align:right;font:inherit;font-variant-numeric:tabular-nums;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink)}
+.rin:focus{outline:2px solid var(--brand);outline-offset:0;border-color:var(--brand)}

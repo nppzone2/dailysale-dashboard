@@ -14,6 +14,7 @@ Dashboard theo dõi Target, Sale In, Sale Out và Allocation của các NPP vùn
 | Hằng tuần | `Allocation_Current_Month`: sheet **Allocation** có cột `Batch 1`, `Batch 2`… và sheet **Upload Date** ghi ngày chia từng batch |
 | Đầu tháng | `Target_Current_Month` |
 | Khi đổi mã SKU | `Item_Master` |
+| Khi đổi định mức xe hoặc Ontop | `Tham_chieu_xe` (tải từ tab **Tham chiếu xe** của tài khoản Admin): cột NPP, Group (AA / BB / Tổng), Ontop HL, HL trên 1 xe |
 | Chốt tháng | `Target_Total_YYYYMM` của tháng vừa kết thúc **cùng lúc với** `Target_Current_Month` của tháng mới |
 
 Dashboard nhận loại file theo **tiêu đề cột**, không theo tên file. Đổi tên file vẫn chạy được.

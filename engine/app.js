@@ -3,11 +3,11 @@
   const $ = (s, el = document) => el.querySelector(s);
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const GROUPS = ['Group AA', 'Group BB', 'Khác'];
-    const TABS = [['target', 'Target tháng'], ['progress', 'Sale In-Out MTD'], ['alloc', 'Allocation'], ['tracking', 'Tracking Allocation'], ['history', 'YTD as of M-1']];
+    const TABS = [['landing', 'Tổng quan'], ['target', 'Target tháng'], ['progress', 'Sale In-Out MTD'], ['alloc', 'Allocation'], ['tracking', 'Tracking Allocation'], ['history', 'YTD as of M-1']];
 
   let STATE = null; const ENC = window.ENC || { blobs: {} };
   let PUBLISHED = STATE; let previewing = false;
-  const ui = { trSku: 'all', tab: 'progress', scope: 'all', area: 'all', npp: 'all', brand: 'all', bgf: 'all', unit: 'case', tMonth: '', open: new Set(), allocSku: 'all' };
+  const ui = { trSku: 'all', tab: 'landing', scope: 'all', area: 'all', npp: 'all', brand: 'all', bgf: 'all', unit: 'case', tMonth: '', open: new Set(), allocSku: 'all' };
   try { const s = JSON.parse(localStorage.getItem('npp-ui') || '{}'); if (s.tab) ui.tab = s.tab; if (s.unit) ui.unit = s.unit; if (s.brand) ui.brand = s.brand; } catch (e) {}
   const saveUi = () => { try { localStorage.setItem('npp-ui', JSON.stringify({ tab: ui.tab, unit: ui.unit, scope: ui.scope, brand: ui.brand })); } catch (e) {} };
 
@@ -222,7 +222,7 @@
           <div><div class="brand-t">Distributor Sales Performance</div><div class="brand-s"><b>RTC - Future Fit</b> · HCM Zone 2 · ${esc(fM(cur.month))}</div></div></div>
         <div class="fresh"><span>Sale In <b>${fD(siD)}</b></span><span>Sale Out <b>${fD(soD)}</b></span><span>Allocation <b>${esc(wk || '—')}</b></span><span class="who">${esc(ROLE.type === 'npp' ? ROLE.id : ROLE.label)}<button id="logout" class="linkbtn">Đăng xuất</button></span></div>
       </div>
-      <nav class="tabs" role="tablist">${TABS.map(([k, l]) => `<button class="tab" role="tab" data-tab="${k}" aria-selected="${ui.tab === k || (ui.tab === 'pending' && k === 'progress')}">${l}</button>`).join('')}</nav>
+      <nav class="tabs" role="tablist">${TABS.concat(ROLE && ROLE.type === 'admin' ? [['ref', 'Tham chiếu xe']] : []).map(([k, l]) => `<button class="tab" role="tab" data-tab="${k}" aria-selected="${ui.tab === k || (ui.tab === 'pending' && k === 'progress')}">${l}</button>`).join('')}</nav>
     </div></header>
     <div class="filters"><div class="filters-in">
       <div class="fld"><label for="area">Khu vực</label><select id="area" ${ROLE.type !== 'admin' ? 'disabled' : ''}>
@@ -261,11 +261,115 @@
     return `<div class="repbox ${bad ? 'bad' : ''}"><div class="repbox-in"><div><b>${bad ? 'Cảnh báo dữ liệu nguồn' : 'Lưu ý dữ liệu'}</b> · lần tải ${esc(fTs(R.at))}<ul>${items.map(x => `<li class="${x.lv}">${x.t}</li>`).join('')}</ul></div><button class="linkbtn" id="rep-x">Đã xem</button></div></div>`;
   }
   function render() { missingHl.clear(); const v = $('#view'); chartId = 0; CHARTS = [];
-    v.innerHTML = ({ target: viewTarget, progress: viewProgress, alloc: viewAlloc, tracking: viewTracking, pending: viewPending, history: viewHistory }[ui.tab] || viewProgress)();
+    if (ui.tab === 'ref' && ROLE.type !== 'admin') ui.tab = 'landing';
+    v.innerHTML = ({ landing: viewLanding, ref: viewRef, target: viewTarget, progress: viewProgress, alloc: viewAlloc, tracking: viewTracking, pending: viewPending, history: viewHistory }[ui.tab] || viewProgress)();
     bindView(); drawCharts(); }
 
   const conclusion = pts => `<section class="concl"><svg class="star" width="18" height="18" viewBox="0 0 30 30" aria-hidden="true"><path d="M15 2l3.9 8.4 9.1 1-6.8 6.2 1.9 9-8.1-4.6-8.1 4.6 1.9-9L2 11.4l9.1-1z" fill="currentColor"/></svg><div><div class="eyebrow">Kết luận nhanh</div><ul>${pts.filter(Boolean).map(p => `<li>${p}</li>`).join('')}</ul></div></section>`;
   const hlNote = () => missingHl.size && ui.unit === 'hl' ? `<div class="warnbox">Chưa có hệ số HL trong Item Master cho: <b>${[...missingHl].sort().join(', ')}</b>. Các mã này tính 0 HL; xem theo Case để thấy đủ sản lượng.</div>` : '';
+
+  /* ---------- TAB: Tổng quan (landing) · Còn lại Target − Sale In − Pending, quy đổi số xe ---------- */
+  const LG = ['Group AA', 'Group BB', 'Tổng'];
+  const nf2 = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 1, minimumFractionDigits: 1 });
+  function refMap() { const m = {}; ((STATE.ref || {}).rows || []).forEach(([c, g, on, hx]) => { m[c + '|' + g] = { on: +on || 0, hx: +hx || 0 }; }); return m; }
+  function landingModel() {
+    const M = curModel(); const P = pendingOrders(); const by = {};
+    const R = (c, g) => { const n = by[c] || (by[c] = {}); return n[g] || (n[g] = { t: 0, si: 0, pd: 0, th: 0, sih: 0, pdh: 0 }); };
+    M.list.forEach(r => { const h = item(r.sc).hl || 0; [grp(r.sc), 'Tổng'].forEach(g => { const o = R(r.c, g); o.t += r.t; o.si += r.si; o.th += r.t * h; o.sih += r.si * h; }); });
+    P.forEach(o => { const h = item(o[3]).hl || 0; [grp(o[3]), 'Tổng'].forEach(g => { const x = R(o[0], g); x.pd += o[4]; x.pdh += o[4] * h; }); });
+    const RF = refMap(); const zero = { t: 0, si: 0, pd: 0, th: 0, sih: 0, pdh: 0 };
+    const row = (c, g) => { const o = (by[c] || {})[g] || zero; const rc = o.t - o.si - o.pd, rh = o.th - o.sih - o.pdh;
+      let on, xe; const rf = RF[c + '|' + g];
+      if (g !== 'Tổng') { on = rf ? rf.on : 0; xe = rf && rf.hx ? (Math.max(0, rh) + on) / rf.hx : null; }
+      else { const a = row(c, 'Group AA'), b = row(c, 'Group BB');
+        on = rf ? rf.on : a.on + b.on;
+        xe = rf && rf.hx ? (Math.max(0, rh) + on) / rf.hx : (a.xe == null && b.xe == null ? null : (a.xe || 0) + (b.xe || 0)); }
+      return { ...o, rc, rh, on, xe, hasRef: !!(rf && rf.hx) }; };
+    const npps = Object.keys(by).filter(c => by[c]['Tổng'] && (by[c]['Tổng'].t || by[c]['Tổng'].si || by[c]['Tổng'].pd)).sort(nppCmp);
+    const add = rows => { const o = { t: 0, si: 0, pd: 0, th: 0, sih: 0, pdh: 0, rc: 0, rh: 0, on: 0, xe: null };
+      rows.forEach(x => { ['t', 'si', 'pd', 'th', 'sih', 'pdh', 'rc', 'rh', 'on'].forEach(k => o[k] += x[k]); if (x.xe != null) o.xe = (o.xe || 0) + x.xe; }); return o; };
+    return { M, npps, row, add };
+  }
+  function viewLanding() {
+    const L = landingModel(); const { M, npps, row, add } = L;
+    if (!M.m) return '<div class="card empty">Chưa có dữ liệu tháng hiện hành.</div>';
+    const remC = v => v >= 0 ? fmtC(v) : `<span class="ov">Vượt ${fmtC(-v)}</span>`;
+    const remH = v => v >= 0 ? nf2.format(v) : `<span class="ov">Vượt ${nf2.format(-v)}</span>`;
+    const xeF = v => v == null ? '<span class="note">Chưa có</span>' : `<b>${nf2.format(v)}</b>`;
+    const cells = o => `<td class="gs">${fmtC(o.t)}</td><td>${fmtC(o.si)}<span class="note"> ${o.t ? pct(o.si / o.t) : ''}</span></td><td>${fmtC(o.pd)}</td><td class="rem">${remC(o.rc)}</td><td class="gs">${remH(o.rh)}</td><td>${o.on ? nf2.format(o.on) : '<span class="note">–</span>'}</td><td class="xe">${xeF(o.xe)}</td>`;
+    let body = ''; const totN = [];
+    byArea(npps).forEach(([a, cs]) => { const ak = 'ld:a:' + a, op = isOpen(ak, true);
+      const at = add(cs.map(c => row(c, 'Tổng')));
+      body += `<tr class="grp area click${op ? ' open' : ''}" data-fold="${esc(ak)}"><td><span class="caret">▸</span> ${esc(a)}</td><td>${cs.length} NPP</td><td>Tổng</td>${cells(at)}</tr>`;
+      cs.forEach(c => { totN.push([c, row(c, 'Tổng')]); if (!op) return; const nk = 'ld:n:' + c, nOp = isOpen(nk, true);
+        const nm = `<span class="caret fold${nOp ? ' on' : ''}" data-fold="${esc(nk)}" role="button" aria-label="Mở/thu gọn ${esc(c)}">▸</span> <span class="click-npp" data-npp="${esc(c)}">${esc(c)}</span>`;
+        (nOp ? LG : ['Tổng']).forEach((g, i) => { const o = row(c, g);
+          body += `<tr class="${g === 'Tổng' ? 'ltot' : 'lsub'}${i === 0 ? ' first' : ''}"><td></td><td>${i === 0 ? nm : ''}</td><td>${g === 'Tổng' ? '<b>Tổng</b>' : esc(g.replace('Group ', ''))}</td>${cells(o)}</tr>`; }); }); });
+    const T = add(totN.map(x => x[1]));
+    body += `<tr class="tot"><td>Tổng</td><td></td><td></td>${cells(T)}</tr>`;
+    const gT = g => add(npps.map(c => row(c, g)));
+    const AA = gT('Group AA'), BB = gT('Group BB');
+    const missing = npps.filter(c => !row(c, 'Group AA').hasRef && !row(c, 'Group BB').hasRef && !row(c, 'Tổng').hasRef);
+    const topXe = totN.filter(([, o]) => o.xe != null).sort((a, b) => b[1].xe - a[1].xe)[0];
+    const sk = !ROLE || ROLE.type !== 'admin' ? '' : `<button class="btn" data-go="ref">Tham chiếu xe</button>`;
+    return `
+    <section class="lead"><div><div class="eyebrow">Tổng quan · ${fM(M.m)} · cập nhật đến ${fD(M.lastSi)}</div><h1>${esc(scopeLabel())}</h1>
+      <p>Còn lại = Target − Sale In − Pending. Số xe còn lại = (Còn lại HL + Ontop HL) ÷ HL trên 1 xe.</p></div>
+      <div class="btns">${sk}<button class="btn" id="xl-landing">Tải Excel</button></div></section>
+    <div class="grid">
+      <div class="card c3 kpi"><div class="kpi-l">Target tháng</div><div class="kpi-v">${fmtC(T.t)}<small>Case</small></div><div class="kpi-f">${nf2.format(T.th)} HL</div></div>
+      <div class="card c3 kpi${T.t && T.si / T.t < M.tgSi ? ' slowcard' : ''}"><div class="kpi-l">Sale In MTD</div><div class="kpi-v">${fmtC(T.si)}<small>Case</small></div><div class="kpi-f"><b>${pctT(T.t ? T.si / T.t : NaN, M.tgSi)}</b> target · time gone ${pct(M.tgSi)}</div></div>
+      <div class="card c3 kpi" role="button" tabindex="0" data-go="pending" style="cursor:pointer"><div class="kpi-l">SO Pending</div><div class="kpi-v">${fmtC(T.pd)}<small>Case</small></div><div class="kpi-f">${nf2.format(T.pdh)} HL · xem chi tiết →</div></div>
+      <div class="card c3 kpi hero"><div class="kpi-l">Còn lại cần giao</div><div class="kpi-v">${fmtC(Math.max(0, T.rc))}<small>Case</small></div><div class="kpi-f">${nf2.format(Math.max(0, T.rh))} HL · <b>${T.xe == null ? '—' : nf2.format(T.xe)} xe</b></div></div>
+      <div class="card c12"><div class="card-h"><div><h2>Còn lại theo Khu vực / NPP / Group</h2><p class="sub">Target, Sale In, Pending, Còn lại theo Case · Còn lại, Ontop theo HL · bấm mũi tên để mở hoặc thu gọn</p></div></div>
+        <div class="tw"><table class="ag lnd"><thead><tr><th>Khu vực</th><th>NPP</th><th>Group</th><th class="gs">Target</th><th>Sale In</th><th>Pending</th><th>Còn lại (Case)</th><th class="gs">Còn lại (HL)</th><th>Ontop HL</th><th>Số xe còn lại</th></tr></thead><tbody>${body}</tbody></table></div>
+        ${missing.length ? `<p class="note" style="margin:8px 0 0">Chưa có HL trên 1 xe cho: ${missing.map(esc).join(', ')}${ROLE.type === 'admin' ? ' · cập nhật ở tab Tham chiếu xe' : ''}.</p>` : ''}</div>
+    </div>
+    ${conclusion([
+      `Còn lại <b>${fmtC(Math.max(0, T.rc))} case</b> (${nf2.format(Math.max(0, T.rh))} HL) sau khi trừ Sale In và Pending${T.on ? `, cộng Ontop ${nf2.format(T.on)} HL` : ''}${T.xe != null ? `, tương đương <b>${nf2.format(T.xe)} xe</b>` : ''}.`,
+      `Group AA còn <b>${fmtC(Math.max(0, AA.rc))} case</b>${AA.xe != null ? ` (${nf2.format(AA.xe)} xe)` : ''}; Group BB còn <b>${fmtC(Math.max(0, BB.rc))} case</b>${BB.xe != null ? ` (${nf2.format(BB.xe)} xe)` : ''}.`,
+      topXe && totN.length > 1 ? `NPP cần nhiều xe nhất: <b>${esc(topXe[0])}</b> (${nf2.format(topXe[1].xe)} xe).` : ''
+    ])}`;
+  }
+  function exportLanding(ev) {
+    const { npps, row } = landingModel();
+    const out = [['Khu vực', 'Mã NPP', 'Group', 'Target (Case)', 'Sale In (Case)', 'Pending (Case)', 'Còn lại (Case)', 'Còn lại (HL)', 'Ontop HL', 'Số xe còn lại']];
+    npps.forEach(c => LG.forEach(g => { const o = row(c, g); out.push([areaOf(c), c, g, Math.round(o.t), Math.round(o.si), Math.round(o.pd), Math.round(o.rc), Math.round(o.rh * 100) / 100, o.on, o.xe == null ? '' : Math.round(o.xe * 10) / 10]); }));
+    saveXlsx(`Tong_quan_${STATE.cur.month}_${scopeTag()}.xlsx`, [['Tổng quan', out, [9, 9, 10, 13, 13, 13, 13, 12, 10, 12]]], ev.currentTarget);
+  }
+  /* ---------- TAB: Tham chiếu xe (chỉ Admin) ---------- */
+  function viewRef() {
+    const RF = refMap(); const npps = npAll().filter(inScope);
+    const v = x => x ? String(x).replace('.', ',') : '';
+    let body = '';
+    byArea(npps).forEach(([a, cs]) => { body += `<tr class="grp area"><td colspan="4">${esc(a)}</td></tr>`;
+      cs.forEach(c => LG.forEach((g, i) => { const r = RF[c + '|' + g] || {};
+        body += `<tr class="${g === 'Tổng' ? 'ltot' : 'lsub'}${i === 0 ? ' first' : ''}"><td>${i === 0 ? `<b>${esc(c)}</b>` : ''}</td><td>${g === 'Tổng' ? '<b>Tổng</b>' : esc(g.replace('Group ', ''))}</td>
+          <td><input class="rin" inputmode="decimal" data-rc="${esc(c)}" data-rg="${esc(g)}" data-rk="on" value="${v(r.on)}" placeholder="0" aria-label="Ontop HL ${esc(c)} ${esc(g)}"></td>
+          <td><input class="rin" inputmode="decimal" data-rc="${esc(c)}" data-rg="${esc(g)}" data-rk="hx" value="${v(r.hx)}" placeholder="${g === 'Tổng' ? 'AA + BB' : '—'}" aria-label="HL trên 1 xe ${esc(c)} ${esc(g)}"></td></tr>`; })); });
+    const at = (STATE.ref || {}).at;
+    return `
+    <section class="lead"><div><div class="eyebrow">Tham chiếu xe · chỉ Admin</div><h1>Ontop HL và HL trên 1 xe</h1>
+      <p>Dùng để tính cột Ontop HL và Số xe còn lại ở tab Tổng quan. Để trống dòng Tổng thì số xe Tổng = xe AA + xe BB.</p></div>
+      <div class="btns"><button class="btn" id="ref-apply">Áp dụng xem thử</button><button class="btn primary" id="ref-xl">Tải file để upload</button></div></section>
+    ${at === 'draft' ? '<div class="warnbox">Đang xem thử số vừa nhập, chưa lưu. Bấm <b>Tải file để upload</b> rồi tải file lên thư mục <b>input/</b> trên GitHub để lưu cho mọi tài khoản.</div>' : ''}
+    <div class="grid"><div class="card c12"><div class="card-h"><div><h2>Bảng tham chiếu theo NPP / Group</h2><p class="sub">${at === 'draft' ? 'Đang xem thử' : at ? 'Cập nhật ' + esc(fTs(at)) : 'Chưa có bảng tham chiếu'} · đơn vị HL</p></div></div>
+      <div class="tw"><table class="ag reft"><thead><tr><th>NPP</th><th>Group</th><th>Ontop HL</th><th>HL trên 1 xe</th></tr></thead><tbody>${body}</tbody></table></div></div></div>
+    ${conclusion(['Cách lưu: nhập số → <b>Tải file để upload</b> → tải file <b>Tham_chieu_xe.xlsx</b> lên thư mục <b>input/</b> trên GitHub. Khoảng 2 phút sau, tab Tổng quan của NPP và ASM cập nhật theo.'])}`;
+  }
+  function readRefInputs() {
+    const rows = []; const n = s => { const x = parseFloat(String(s || '').replace(/\s/g, '').replace(',', '.')); return isFinite(x) ? x : 0; };
+    const by = {}; document.querySelectorAll('.rin').forEach(i => { const k = i.dataset.rc + '|' + i.dataset.rg; (by[k] = by[k] || { c: i.dataset.rc, g: i.dataset.rg })[i.dataset.rk] = n(i.value); });
+    Object.values(by).forEach(x => { if (x.on || x.hx) rows.push([x.c, x.g, x.on || 0, x.hx || 0]); });
+    return rows;
+  }
+  function exportRef(ev) {
+    const rows = readRefInputs(); const keep = new Set(rows.map(r => r[0] + '|' + r[1]));
+    ((STATE.ref || {}).rows || []).forEach(r => { if (!inScope(r[0]) && !keep.has(r[0] + '|' + r[1])) rows.push(r); }); // giữ dòng của NPP ngoài bộ lọc
+    const out = [['Khu vực', 'NPP', 'Group', 'Ontop HL', 'HL trên 1 xe']];
+    rows.sort((a, b) => nppCmp(a[0], b[0]) || LG.indexOf(a[1]) - LG.indexOf(b[1])).forEach(r => out.push([areaOf(r[0]), r[0], r[1], r[2], r[3]]));
+    saveXlsx('Tham_chieu_xe.xlsx', [['Tham chieu xe', out, [10, 9, 10, 11, 13]]], ev.currentTarget);
+  }
 
   /* ---------- TAB 1: Target ---------- */
   function targetMonths() { const s = new Set(Object.keys(STATE.months || {})); if ((STATE.cur.target || []).length) s.add(STATE.cur.month); return [...s].sort().reverse(); }
@@ -365,7 +469,7 @@
     const npps = [...new Set(L.map(r => r.c))];
     if (npps.length > 1) {
       const byN = aggregate(L, r => r.c);
-      const cells = o => `<td class="gs">${fmt(o.t)}</td><td class="gs">${fmt(o.si)}</td><td>${o.t ? pctT(o.si / o.t, M.tgSi) : '—'}</td><td class="rem">${fmt(Math.max(0, o.t - o.si))}</td><td class="gs">${fmt(o.so)}</td><td>${o.t ? pctT(o.so / o.t, M.tgSo) : '—'}</td><td class="rem">${fmt(Math.max(0, o.t - o.so))}</td><td class="gs">${status(o.t ? o.si / o.t : NaN, M.tgSi)}</td>`;
+      const cells = o => `<td class="gs">${fmt(o.t)}</td><td class="gs">${fmt(o.si)}</td><td>${o.t ? pctT(o.si / o.t, M.tgSi) : '—'}</td><td class="rem">${fmt(Math.max(0, o.t - o.si))}</td><td>${status(o.t ? o.si / o.t : NaN, M.tgSi)}</td><td class="gs">${fmt(o.so)}</td><td>${o.t ? pctT(o.so / o.t, M.tgSo) : '—'}</td><td class="rem">${fmt(Math.max(0, o.t - o.so))}</td><td>${status(o.t ? o.so / o.t : NaN, M.tgSo)}</td>`;
       const sumO = os => ({ t: sumBy(os, o => o.t), si: sumBy(os, o => o.si), so: sumBy(os, o => o.so) });
       const groupsA = byArea(Object.keys(byN).filter(c => byN[c].t || byN[c].si || byN[c].so));
       let rb = '';
@@ -378,7 +482,7 @@
         }); });
       rb += `<tr class="tot"><td>Tổng</td><td></td>${cells({ t: T, si: SI, so: SO })}</tr>`;
       board = `<div class="card c12"><div class="card-h"><div><h2>Tiến độ theo Khu vực / NPP</h2><p class="sub">Bấm mũi tên để xem chi tiết từng khu vực, NPP · bấm mã NPP để lọc · time gone ${pct(M.tgSi)} · đơn vị ${U()}</p></div></div>
-      <div class="tw"><table class="rank ag"><thead><tr><th>Khu vực</th><th>NPP</th><th class="gs">Target</th><th class="gs">Sale In</th><th>% đạt SI</th><th>Còn lại SI</th><th class="gs">Sale Out</th><th>% đạt SO</th><th>Còn lại SO</th><th class="gs">Trạng thái SI</th></tr></thead><tbody>${rb}</tbody></table></div></div>`;
+      <div class="tw"><table class="rank ag"><thead><tr><th>Khu vực</th><th>NPP</th><th class="gs">Target</th><th class="gs">Sale In</th><th>% đạt SI</th><th>Còn lại SI</th><th>Trạng thái SI</th><th class="gs">Sale Out</th><th>% đạt SO</th><th>Còn lại SO</th><th>Trạng thái SO</th></tr></thead><tbody>${rb}</tbody></table></div></div>`;
     }
     let cover = '';
     if (M.lastSo) {
@@ -416,6 +520,9 @@
       <div class="card c12"><div class="card-h"><div><h2>Còn lại theo BrandGroup</h2><p class="sub">Target − thực đạt lũy kế · bấm vào BrandGroup để xem từng SKU · đơn vị ${U()}</p></div></div>
         ${hlNote()}<div class="tw"><table class="sticky1 tgt"><thead><tr><th>BrandFamily</th><th>SKU</th><th>Target</th><th>Sale In</th><th>% SI</th><th>Còn lại SI</th><th>Sale Out</th><th>% SO</th><th>Còn lại SO</th></tr></thead><tbody>${body}</tbody></table></div></div>
 
+      ${board}
+      <div class="card c12"><div class="card-h"><div><h2>Tiến độ theo BrandFamily</h2><p class="sub">% đạt target tháng · vạch đứng là time gone ${pct(M.tgSi)}</p></div>${legend([['Sale In', cSi], ['Sale Out', cSo]])}</div>
+        ${brandProgress(Object.values(aggregate(L, r => brandOf(r.sc))).filter(o => o.k !== 'Khác'), M.tgSi, 'Time gone ' + pct(M.tgSi))}</div>
       <div class="card ${cover ? 'c7' : 'c12'}"><div class="card-h"><div><h2>Lũy kế MTD vs. tiến độ</h2><p class="sub">${U()} · tiến độ = target tháng chia đều theo ngày</p></div>
         ${legend([['Sale In', cSi], ...(soLine ? [['Sale Out', cSo]] : []), ['Tiến độ', cT, 'dash']])}</div>
         ${chart({ labels, lines: [{ name: 'Tiến độ', color: cT, values: pace, dash: true, dots: false }, { name: 'Sale In lũy kế', color: cSi, values: cum }, ...(soLine ? [{ name: 'Sale Out lũy kế', color: cSo, values: soCum }] : [])], tipTitle: i => 'Ngày ' + (i + 1) + '/' + M.m.slice(4, 6), aria: 'Sale In lũy kế theo ngày so với tiến độ' })}
@@ -424,9 +531,6 @@
         ${M.soDays.length < 2 ? '<p class="note" style="margin:8px 0 0">Sale Out lấy số lũy kế tại ngày cập nhật; xu hướng theo ngày hiển thị từ lần cập nhật thứ hai.</p>' : ''}
       </div>
       ${cover}
-      <div class="card c12"><div class="card-h"><div><h2>Tiến độ theo BrandFamily</h2><p class="sub">% đạt target tháng · vạch đứng là time gone ${pct(M.tgSi)}</p></div>${legend([['Sale In', cSi], ['Sale Out', cSo]])}</div>
-        ${brandProgress(Object.values(aggregate(L, r => brandOf(r.sc))).filter(o => o.k !== 'Khác'), M.tgSi, 'Time gone ' + pct(M.tgSi))}</div>
-      ${board}
     </div>
     ${conclusion([
       `Sale In đạt <b>${pct(aSi)}</b> target so với time gone <b>${pct(M.tgSi)}</b> (${aSi >= M.tgSi ? 'đi trước tiến độ' : 'chậm hơn tiến độ'}); còn <b>${fmt(remSi)} ${U()}</b> để đạt target.`,
@@ -462,7 +566,7 @@
     const wkTot = sumBy(bySku, s => s.w[wk]); const pwTot = pw ? sumBy(bySku, s => s.w[pw]) : null;
     const bTot = i => sumBy(bySku, s => bval(s.sc, wk, i));
     const bHead = i => { const d = (AD[wk] || [])[i]; const done = d && d <= today;
-      return `<th class="bh"><span class="bd">${d ? fd(d) : 'Chưa có ngày'}</span><span class="bn">${esc(BC[i])}</span><span class="pill ${done ? 'good' : 'info'}">${done ? 'Đã Upload' : 'Chờ Upload'}</span></th>`; };
+      return `<th class="bh"><span class="bd">${d ? fd(d) : 'Chưa có ngày'}</span><span class="bn">${esc(BC[i])}</span><span class="pill ${done ? 'good' : 'orange'}">${done ? 'Đã Upload' : 'Chờ Upload'}</span></th>`; };
     const wkRange = (AD[wk] || []).filter(Boolean); const rangeTxt = wkRange.length ? `Lịch Upload Portal ${wkRange.map(fd).join(' · ')}` : '';
     const nextTxt = nw && (AD[nw] || []).some(Boolean) ? `Tuần tới <b>${esc(nw)}</b>: ${BC.map((b, i) => (AD[nw] || [])[i] ? `${esc(b)} ngày ${fd(AD[nw][i])}` : '').filter(Boolean).join(' · ')}` : '';
     // Sale In trong tuần hiện tại: từ ngày Upload đầu tiên của tuần đến trước ngày Upload đầu tiên của tuần sau
@@ -760,6 +864,9 @@
     v.querySelectorAll('[data-go]').forEach(b => { const go = () => { ui.tab = b.dataset.go; saveUi(); shell(); window.scrollTo({ top: 0 }); render(); }; b.onclick = go; b.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } }; });
     v.querySelectorAll('[data-tsku]').forEach(b => b.onclick = () => { ui.trSku = b.dataset.tsku; render(); });
     const xpd = $('#xl-pending'); if (xpd) xpd.onclick = exportPending;
+    const xld = $('#xl-landing'); if (xld) xld.onclick = exportLanding;
+    const ra = $('#ref-apply'); if (ra) ra.onclick = () => { STATE.ref = { rows: readRefInputs(), at: 'draft' }; render(); };
+    const rx2 = $('#ref-xl'); if (rx2) rx2.onclick = exportRef;
   }
 
   /* ---------- Excel export ---------- */

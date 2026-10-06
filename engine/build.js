@@ -132,6 +132,7 @@ function slice(st, keep) {
   c.lines = (c.lines || []).filter(l => keep(l[1]));
   c.orders = (c.orders || []).filter(o => keep(o[0]));
   c.sbd = (c.sbd || []).filter(r => keep(r[0]));
+  if (s.ref) s.ref.rows = (s.ref.rows || []).filter(r => keep(r[0]));
   const ships = new Set(c.lines.map(l => l[4])); c.ship = Object.fromEntries(Object.entries(c.ship || {}).filter(([id]) => ships.has(id)));
   return s;
 }

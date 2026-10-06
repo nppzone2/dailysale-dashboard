@@ -8,9 +8,10 @@ const KINDS = {
   alloc:   { label: 'Allocation Current Month', need: ['WEEK', 'Alpha_Name', 'Allocation'] },
   allocdates: { label: 'Allocation · Upload Date', need: ['WEEK', 'WEEK No'] },
   orders:  { label: 'Online Order (SO chờ giao)', need: ['Order Number', 'Status', 'ShortCode', 'Sum of Case'] },
+  ref:     { label: 'Tham chiếu xe (Ontop HL, HL/xe)', need: ['NPP', 'Group', ['HL trên 1 xe', 'HL/xe', 'HL/Xe', 'HL per truck']] },
   sbd:     { label: 'Dis Sale by Date (Sale In theo ngày order)', need: [['Order Date', 'OrderDate'], ['Calendar_Day_Name', 'ConfirmDate', 'Invoice Date', 'InvoiceDate'], 'ShortCode', 'Unit'] }
 };
-const KIND_ORDER = ['items', 'hist', 'si', 'sbd', 'so', 'orders', 'alloc', 'allocdates', 'target'];
+const KIND_ORDER = ['items', 'hist', 'si', 'sbd', 'so', 'orders', 'alloc', 'allocdates', 'target', 'ref'];
 
 function cleanStr(v) { return v == null ? '' : String(v).trim(); }
 function num(v) { const n = typeof v === 'number' ? v : parseFloat(String(v ?? '').replace(/,/g, '')); return isFinite(n) ? n : 0; }
@@ -220,6 +221,17 @@ function applyParsed(state, p, opts = {}) {
       return [c, sc, num(g(r, 'Unit'))];
     }).filter(Boolean);
     msg.note = 'Gán cho tháng ' + fmtMonth(state.cur.month);
+  }
+
+  if (p.kind === 'ref') {
+    // Bảng tham chiếu: mỗi dòng NPP × Group (Group AA / Group BB / Tổng): Ontop HL, HL trên 1 xe. Thay toàn bộ bảng cũ.
+    const col = ['HL trên 1 xe', 'HL/xe', 'HL/Xe', 'HL per truck'].find(has);
+    const normG = v => { const t = cleanStr(v).toLowerCase().replace(/^group\s*/, ''); return t === 'aa' ? 'Group AA' : t === 'bb' ? 'Group BB' : /^(tổng|tong|total)$/.test(t) ? 'Tổng' : ''; };
+    const rows = [];
+    p.rows.forEach(r => { const c = nppCode(g(r, 'NPP')); const gr = normG(g(r, 'Group')); if (!c || !gr) return;
+      const on = has('Ontop HL') ? num(g(r, 'Ontop HL')) : 0; const hx = num(g(r, col)); rows.push([c, gr, on, hx]); });
+    state.ref = { rows, at: now };
+    msg.note = rows.length + ' dòng NPP × Group';
   }
 
   state.updatedAt[p.kind] = now;
