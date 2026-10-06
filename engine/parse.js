@@ -84,16 +84,26 @@ function applyParsed(state, p, opts = {}) {
   if (p.kind === 'si') {
     const si = {}; let maxM = '';
     const inv = {}; const lines = []; const ship = {};
+    // Nhận diện đơn vị UOM_Invoice: file có thể xuất theo Case hoặc theo HL.
+    // Theo HL khi phần lớn giá trị là số lẻ và chia cho hệ số HL của SKU ra số Case chẵn.
+    const hlOf = sc => { const it = state.items[cleanStr(sc)]; return it && it.hl ? it.hl : 0; };
+    const vals = p.rows.map(r => [num(g(r, 'UOM_Invoice')), hlOf(g(r, 'ShortCode'))]).filter(([v]) => v);
+    const nonInt = vals.filter(([v]) => Math.abs(v - Math.round(v)) > 1e-6).length;
+    const fitHl = vals.filter(([v, h]) => h && Math.abs(v / h - Math.round(v / h)) < 0.02).length;
+    const isHl = vals.length > 0 && nonInt / vals.length > 0.5 && fitHl / vals.length > 0.8;
+    const noHl = new Set();
+    const qtyOf = r => { const v = num(g(r, 'UOM_Invoice')); if (!isHl) return v; const h = hlOf(g(r, 'ShortCode')); if (!h) { noHl.add(cleanStr(g(r, 'ShortCode'))); return 0; } return Math.round(v / h * 1000) / 1000; };
     p.rows.forEach(r => {
       const d = cleanStr(g(r, 'Date_ID')).replace(/\D/g, '').slice(0, 8); const sc = cleanStr(g(r, 'ShortCode'));
       if (d.length !== 8 || !sc) return;
       if (d.slice(0, 6) > maxM) maxM = d.slice(0, 6);
       const c = touchNpp(state, g(r, 'Distributor_Name'), has('Area_Name') ? g(r, 'Area_Name') : '', has('Distributor_ID') ? g(r, 'Distributor_ID') : null);
       const day = si[d] || (si[d] = {});
-      day[c + '|' + sc] = (day[c + '|' + sc] || 0) + num(g(r, 'UOM_Invoice'));
+      const q = qtyOf(r);
+      day[c + '|' + sc] = (day[c + '|' + sc] || 0) + q;
       (inv[d + '|' + c] = inv[d + '|' + c] || new Set()).add(cleanStr(g(r, 'InvoiceNumber')));
       const st = has('ShipTo') ? cleanStr(g(r, 'ShipTo')) : ''; if (st && has('ShipTo_Name')) ship[st] = cleanStr(g(r, 'ShipTo_Name'));
-      lines.push([d, c, cleanStr(g(r, 'InvoiceNumber')), has('Document Type') ? cleanStr(g(r, 'Document Type')) : '', st, sc, num(g(r, 'UOM_Invoice'))]);
+      lines.push([d, c, cleanStr(g(r, 'InvoiceNumber')), has('Document Type') ? cleanStr(g(r, 'Document Type')) : '', st, sc, q]);
     });
     if (maxM && maxM !== state.cur.month) {
       const keepTarget = opts.month === maxM ? state.cur.target : [];
@@ -109,7 +119,7 @@ function applyParsed(state, p, opts = {}) {
     state.cur.si = out; state.cur.inv = invOut;
     state.cur.lines = lines.filter(l => l[0].slice(0, 6) === state.cur.month).sort((a, b) => (a[0] + a[1] + a[2]).localeCompare(b[0] + b[1] + b[2])); state.cur.ship = ship;
     const days = Object.keys(out).sort();
-    msg.note = days.length ? ('Ngày ' + fmtDate(days[0]) + ' → ' + fmtDate(days[days.length - 1])) : 'Không có dòng thuộc tháng hiện hành';
+    msg.note = (days.length ? ('Ngày ' + fmtDate(days[0]) + ' → ' + fmtDate(days[days.length - 1])) : 'Không có dòng thuộc tháng hiện hành') + (isHl ? ' · UOM_Invoice theo HL, đã quy đổi sang Case' : ' · UOM_Invoice theo Case') + (noHl.size ? ' · thiếu hệ số HL: ' + [...noHl].join(', ') : '');
   }
 
   if (p.kind === 'so') {
