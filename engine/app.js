@@ -139,22 +139,24 @@
     const D = m ? dim(m) : 30;
     const dSi = lastSi ? +lastSi.slice(6) : 0; const dSo = lastSo ? +lastSo.slice(6) : 0;
     const rows = {};
-    const R = (c, sc) => rows[c + '|' + sc] || (rows[c + '|' + sc] = { c, sc, t: 0, si: 0, so: 0 });
+    const R = (c, sc) => rows[c + '|' + sc] || (rows[c + '|' + sc] = { c, sc, t: 0, si: 0, so: 0, st0: 0, dso: 0 });
     (cur.target || []).forEach(([c, sc, v]) => { if (inScope(c) && inBrand(sc)) R(c, sc).t += v; });
     siDays.forEach(d => cur.si[d].forEach(([c, sc, v]) => { if (inScope(c) && inBrand(sc)) R(c, sc).si += v; }));
     if (lastSo) cur.so[lastSo].rows.forEach(([c, sc, v]) => { if (inScope(c) && inBrand(sc)) R(c, sc).so += v; });
     // Thực đạt Sale In = SO Invoice + đơn Delivery (Online Order) chưa có trong SO Invoice (InvoiceNumber = Order Number)
     const invNo = new Set((cur.lines || []).map(l => String(l[2]))); let delivQ = 0; const delivNo = new Set();
     (cur.orders || []).forEach(o => { if (/deliver/i.test(o[2]) && !invNo.has(String(o[1])) && inScope(o[0]) && inBrand(o[3])) { R(o[0], o[3]).si += o[4]; delivQ += conv(o[4], o[3]); delivNo.add(o[1]); } });
+    // Tồn kho đầu tháng (file Stock) + Sale Out bình quân ngày để tính số ngày tồn
+    ((cur.stock || {}).rows || []).forEach(([c, sc, st, dso]) => { if (inScope(c) && inBrand(sc)) { const o = R(c, sc); o.st0 += st; o.dso += dso; } });
     const list = Object.values(rows);
     list.forEach(r => { if ((r.t || r.si || r.so) && item(r.sc).hl == null) missingHl.add(r.sc); });
-    return { m, D, siDays, soDays, lastSi, lastSo, dSi, dSo, tgSi: dSi / D, tgSo: dSo / D, list, delivQ, delivN: delivNo.size };
+    return { stockDate: (cur.stock || {}).date || '', m, D, siDays, soDays, lastSi, lastSo, dSi, dSo, tgSi: dSi / D, tgSo: dSo / D, list, delivQ, delivN: delivNo.size };
   }
   const sumBy = (list, f) => list.reduce((s, r) => s + f(r), 0);
   function aggregate(list, keyF) {
     const out = {};
-    list.forEach(r => { const k = keyF(r); const o = out[k] || (out[k] = { k, t: 0, si: 0, so: 0, rows: [] });
-      o.t += conv(r.t, r.sc); o.si += conv(r.si, r.sc); o.so += conv(r.so, r.sc); o.rows.push(r); });
+    list.forEach(r => { const k = keyF(r); const o = out[k] || (out[k] = { k, t: 0, si: 0, so: 0, st0: 0, dso: 0, rows: [] });
+      o.t += conv(r.t, r.sc); o.si += conv(r.si, r.sc); o.so += conv(r.so, r.sc); o.st0 += conv(r.st0 || 0, r.sc); o.dso += conv(r.dso || 0, r.sc); o.rows.push(r); });
     return out;
   }
 
@@ -490,7 +492,7 @@
     GROUPS.filter(g => groups[g] && (groups[g].t || groups[g].si || groups[g].so)).forEach(g => {
       const o = groups[g]; const gOpen = ui.open.has(g);
       body += rowHtml(`<span class="caret">▸</span> ${esc(g)}`, o, 'grp click' + (gOpen ? ' open' : ''), `data-g="${esc(g)}"`);
-      if (gOpen) { const sk = aggregate(o.rows, r => r.sc); const bo = ['Heineken', 'Tiger', 'Bia Viet', 'Larue', 'Bivina', 'Strongbow', 'Edelweiss']; const bi = sc => (bo.indexOf(brandOf(sc)) + 1) || 99; Object.values(sk).sort((a, b) => bi(a.k) - bi(b.k) || b.t - a.t).forEach(s => { body += rowHtml(s.k, s, 'sku'); }); }
+      if (gOpen) { const sk = aggregate(o.rows, r => r.sc); const bo = ['Heineken', 'Tiger', 'Bia Viet', 'Larue', 'Bivina', 'Strongbow', 'Edelweiss']; const bi = sc => (bo.indexOf(brandOf(sc)) + 1) || 99; Object.values(sk).filter(s => s.t || s.si || s.so).sort((a, b) => bi(a.k) - bi(b.k) || b.t - a.t).forEach(s => { body += rowHtml(s.k, s, 'sku'); }); }
     });
     body += rowHtml('Tổng', { t: T, si: SI, so: SO }, 'tot');
     function rowHtml(label, o, cls, attr = '') {
@@ -509,8 +511,13 @@
     const npps = [...new Set(L.map(r => r.c))];
     if (npps.length > 1) {
       const byN = aggregate(L, r => r.c);
-      const cells = o => `<td class="gs">${fmt(o.t)}</td><td class="gs">${fmt(o.si)}</td><td>${o.t ? pctT(o.si / o.t, M.tgSi) : '—'}</td><td class="rem">${fmt(Math.max(0, o.t - o.si))}</td><td>${status(o.t ? o.si / o.t : NaN, M.tgSi)}</td><td class="gs">${fmt(o.so)}</td><td>${o.t ? pctT(o.so / o.t, M.tgSo) : '—'}</td><td class="rem">${fmt(Math.max(0, o.t - o.so))}</td><td>${status(o.t ? o.so / o.t : NaN, M.tgSo)}</td>`;
-      const sumO = os => ({ t: sumBy(os, o => o.t), si: sumBy(os, o => o.si), so: sumBy(os, o => o.so) });
+      const hasStock = !!M.stockDate && L.some(r => r.st0 || r.dso);
+      const SD = ENC.stockDays || { low: 2, high: 4 };
+      const stockCells = o => { const now = o.st0 + o.si - o.so; const d = o.dso ? Math.max(0, now) / o.dso : NaN;
+        const pill = !isFinite(d) ? '<span class="note">—</span>' : d < SD.low ? '<span class="pill bad">Tồn thấp</span>' : d > SD.high ? '<span class="pill warn">Tồn cao</span>' : '<span class="pill good">Phù hợp</span>';
+        return `<td class="gs">${fmt(o.st0)}</td><td><b>${fmt(now)}</b></td><td>${isFinite(d) ? nf1.format(d) : '—'}</td><td>${pill}</td>`; };
+      const cells = o => `<td class="gs">${fmt(o.t)}</td><td class="gs">${fmt(o.si)}</td><td>${o.t ? pctT(o.si / o.t, M.tgSi) : '—'}</td><td class="rem">${fmt(Math.max(0, o.t - o.si))}</td><td>${status(o.t ? o.si / o.t : NaN, M.tgSi)}</td><td class="gs">${fmt(o.so)}</td><td>${o.t ? pctT(o.so / o.t, M.tgSo) : '—'}</td><td class="rem">${fmt(Math.max(0, o.t - o.so))}</td><td>${status(o.t ? o.so / o.t : NaN, M.tgSo)}</td>${hasStock ? stockCells(o) : ''}`;
+      const sumO = os => ({ t: sumBy(os, o => o.t), si: sumBy(os, o => o.si), so: sumBy(os, o => o.so), st0: sumBy(os, o => o.st0), dso: sumBy(os, o => o.dso) });
       const groupsA = byArea(Object.keys(byN).filter(c => byN[c].t || byN[c].si || byN[c].so));
       let rb = '';
       groupsA.forEach(([a, cs]) => { const ak = 'rk:a:' + a, aOpen = isOpen(ak, true);
@@ -520,9 +527,9 @@
           rb += `<tr class="npp click${nOpen ? ' open' : ''}${i === 0 ? ' first' : ''}" data-fold="${esc(nk)}"><td></td><td><span class="caret">▸</span> <span class="click-npp" data-npp="${esc(c)}" title="Lọc theo ${esc(c)}">${esc(c)}</span></td>${cells(o)}</tr>`;
           if (nOpen) { const g = aggregate(o.rows, r => grp(r.sc)); GROUPS.filter(k => g[k] && (g[k].t || g[k].si || g[k].so)).forEach(k => { rb += `<tr class="sku"><td></td><td class="skuc">${esc(k)}</td>${cells(g[k])}</tr>`; }); }
         }); });
-      rb += `<tr class="tot"><td>Tổng</td><td></td>${cells({ t: T, si: SI, so: SO })}</tr>`;
-      board = `<div class="card c12"><div class="card-h"><div><h2>Tiến độ theo Khu vực / NPP</h2><p class="sub">Bấm mũi tên để xem chi tiết từng khu vực, NPP · bấm mã NPP để lọc · time gone ${pct(M.tgSi)} · đơn vị ${U()}</p></div></div>
-      <div class="tw"><table class="rank ag"><thead><tr><th>Khu vực</th><th>NPP</th><th class="gs">Target</th><th class="gs">Sale In</th><th>% đạt SI</th><th>Còn lại SI</th><th>Trạng thái SI</th><th class="gs">Sale Out</th><th>% đạt SO</th><th>Còn lại SO</th><th>Trạng thái SO</th></tr></thead><tbody>${rb}</tbody></table></div></div>`;
+      rb += `<tr class="tot"><td>Tổng</td><td></td>${cells(sumO(Object.values(byN)))}</tr>`;
+      board = `<div class="card c12"><div class="card-h"><div><h2>Tiến độ theo Khu vực / NPP</h2><p class="sub">Bấm mũi tên để xem chi tiết từng khu vực, NPP · bấm mã NPP để lọc · time gone ${pct(M.tgSi)} · đơn vị ${U()}${hasStock ? ` · Tồn hiện tại = Tồn ${fD(M.stockDate)} + Sale In − Sale Out (ước tính); Ngày tồn theo Sale Out bình quân ngày, phù hợp ${nf1.format(SD.low)}–${nf1.format(SD.high)} ngày` : ''}</p></div></div>
+      <div class="tw"><table class="rank ag"><thead><tr><th>Khu vực</th><th>NPP</th><th class="gs">Target</th><th class="gs">Sale In</th><th>% đạt SI</th><th>Còn lại SI</th><th>Trạng thái SI</th><th class="gs">Sale Out</th><th>% đạt SO</th><th>Còn lại SO</th><th>Trạng thái SO</th>${hasStock ? `<th class="gs" title="Tồn đầu ngày theo file Stock">Tồn ${fD(M.stockDate)}</th><th title="Tồn đầu tháng + Sale In MTD − Sale Out MTD">Tồn hiện tại</th><th title="Tồn hiện tại ÷ Sale Out bình quân ngày (30 ngày trước ${fD(M.stockDate)})">Ngày tồn</th><th>Đánh giá tồn</th>` : ''}</tr></thead><tbody>${rb}</tbody></table></div></div>`;
     }
     let cover = '';
     if (M.lastSo) {
@@ -575,6 +582,11 @@
     ${conclusion([
       `Sale In đạt <b>${pct(aSi)}</b> target so với time gone <b>${pct(M.tgSi)}</b> (${aSi >= M.tgSi ? 'đi trước tiến độ' : 'chậm hơn tiến độ'}); còn <b>${fmt(remSi)} ${U()}</b> để đạt target.`,
       `Sale Out đạt <b>${pct(aSo)}</b>, còn <b>${fmt(remSo)} ${U()}</b>. ${soGap > 0 ? `Sale In cao hơn Sale Out <b>${fmt(soGap)} ${U()}</b>, tồn kho NPP đang tăng.` : `Sale Out cao hơn Sale In <b>${fmt(-soGap)} ${U()}</b>, cần đặt hàng bổ sung.`}`,
+      (() => { if (!M.stockDate) return ''; const SD = ENC.stockDays || { low: 2, high: 4 };
+        const ns = Object.values(aggregate(L, r => r.c)).filter(o => o.dso > 0).map(o => ({ c: o.k, d: Math.max(0, o.st0 + o.si - o.so) / o.dso })).sort((a, b) => nppCmp(a.c, b.c));
+        if (!ns.length) return ''; const tot = Object.values(aggregate(L, () => 'all'))[0]; const td = tot && tot.dso ? Math.max(0, tot.st0 + tot.si - tot.so) / tot.dso : NaN;
+        const lo = ns.filter(x => x.d < SD.low), hi = ns.filter(x => x.d > SD.high);
+        return `Tồn kho ước tính hiện tại đủ bán <b>${isFinite(td) ? nf1.format(td) : '—'} ngày</b>${lo.length ? `; tồn thấp: ${lo.map(x => `<b>${esc(x.c)}</b> (${nf1.format(x.d)} ngày)`).join(', ')}` : ''}${hi.length ? `; tồn cao: ${hi.map(x => `<b>${esc(x.c)}</b> (${nf1.format(x.d)} ngày)`).join(', ')}` : ''}${!lo.length && !hi.length ? ', các NPP đều trong mức phù hợp' : ''}.`; })(),
       behind.length ? `BrandGroup cần ưu tiên: ${behind.map(b => `<b>${esc(b.g)}</b> (đạt ${pct(b.a)}, còn ${fmt(b.rem)} ${U()})`).join(', ')}.` : 'Các BrandGroup đều đúng hoặc vượt tiến độ.'
     ])}`;
   }

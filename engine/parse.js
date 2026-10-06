@@ -8,10 +8,11 @@ const KINDS = {
   alloc:   { label: 'Allocation Current Month', need: ['WEEK', 'Alpha_Name', 'Allocation'] },
   allocdates: { label: 'Allocation · Upload Date', need: ['WEEK', 'WEEK No'] },
   orders:  { label: 'Online Order (SO chờ giao)', need: ['Order Number', 'Status', 'ShortCode', 'Sum of Case'] },
+  stock:   { label: 'Tồn kho đầu tháng (Stock)', need: ['Alpha_Name', 'ShortCode', ['Sum of Stock', 'Stock']] },
   ref:     { label: 'Tham chiếu xe (Ontop HL, HL của 1 xe)', need: ['NPP', ['HL của 1 xe', 'HL trên 1 xe', 'HL/xe', 'HL/Xe']] },
   sbd:     { label: 'Dis Sale by Date (Sale In theo ngày order)', need: [['Order Date', 'OrderDate'], ['Calendar_Day_Name', 'ConfirmDate', 'Invoice Date', 'InvoiceDate'], 'ShortCode', 'Unit'] }
 };
-const KIND_ORDER = ['items', 'hist', 'si', 'sbd', 'so', 'orders', 'alloc', 'allocdates', 'target', 'ref'];
+const KIND_ORDER = ['items', 'hist', 'si', 'sbd', 'so', 'orders', 'alloc', 'allocdates', 'target', 'stock', 'ref'];
 
 function cleanStr(v) { return v == null ? '' : String(v).trim(); }
 function num(v) { const n = typeof v === 'number' ? v : parseFloat(String(v ?? '').replace(/,/g, '')); return isFinite(n) ? n : 0; }
@@ -26,7 +27,8 @@ function detect(aoa) {
       if (KINDS[k].need.every(n => Array.isArray(n) ? n.some(x => row.includes(x)) : row.includes(n))) {
         const idx = {}; row.forEach((h, i) => { if (h && !(h in idx)) idx[h] = i; });
         const rows = aoa.slice(r + 1).filter(x => x && x.some(v => v != null && v !== ''));
-        return { kind: k, idx, rows };
+        const pre = aoa.slice(0, r).flat().filter(v => typeof v === 'string').join(' ');
+        return { kind: k, idx, rows, pre };
       }
     }
   }
@@ -109,7 +111,8 @@ function applyParsed(state, p, opts = {}) {
     if (maxM && maxM !== state.cur.month) {
       const keepTarget = opts.month === maxM ? state.cur.target : [];
       const keepAlloc = opts.month === maxM ? state.cur.alloc : [];
-      resetCur(state, maxM); state.cur.target = keepTarget; state.cur.alloc = keepAlloc;
+      const keepStock = state.cur.stock && (state.cur.stock.date || '').slice(0, 6) === maxM ? state.cur.stock : null;
+      resetCur(state, maxM); state.cur.target = keepTarget; state.cur.alloc = keepAlloc; if (keepStock) state.cur.stock = keepStock;
     }
     const out = {};
     Object.keys(si).filter(d => d.slice(0, 6) === state.cur.month).forEach(d => {
@@ -221,6 +224,23 @@ function applyParsed(state, p, opts = {}) {
       return [c, sc, num(g(r, 'Unit'))];
     }).filter(Boolean);
     msg.note = 'Gán cho tháng ' + fmtMonth(state.cur.month);
+  }
+
+  if (p.kind === 'stock') {
+    // Tồn kho đầu ngày (CurrentDate trong phần filter, mặc định ngày 01 tháng hiện hành) theo NPP × SKU, kèm Sale In / Sale Out bình quân ngày
+    const m = String(p.pre || '').match(/CurrentDate\s*is\s*(\d{8})/i);
+    const date = m ? m[1] : (state.cur.month ? state.cur.month + '01' : '');
+    const col = ['Sum of Stock', 'Stock'].find(has);
+    const pick = re => Object.keys(p.idx).find(h => re.test(h));
+    const cDso = pick(/daily sales out/i), cDsi = pick(/daily sales in/i);
+    const agg = {};
+    p.rows.forEach(r => { const c = nppCode(g(r, 'Alpha_Name')); const sc = cleanStr(g(r, 'ShortCode')); if (!c || !sc) return;
+      if (has('Area_Name') && state.npps[c] && !state.npps[c].area) state.npps[c].area = cleanStr(g(r, 'Area_Name'));
+      const k = c + '|' + sc; const o = agg[k] || (agg[k] = [c, sc, 0, 0, 0]);
+      o[2] += num(g(r, col)); o[3] += cDso ? num(g(r, cDso)) : 0; o[4] += cDsi ? num(g(r, cDsi)) : 0; });
+    if (date && state.cur.month && date.slice(0, 6) !== state.cur.month) msg.note = `Ngày tồn ${fmtDate(date)} khác tháng hiện hành ${fmtMonth(state.cur.month)}`;
+    state.cur.stock = { date, rows: Object.values(agg) };
+    msg.note = (msg.note ? msg.note + ' · ' : '') + `Tồn đầu ngày ${fmtDate(date)} · ${Object.keys(agg).length} dòng NPP × SKU`;
   }
 
   if (p.kind === 'ref') {

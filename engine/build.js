@@ -133,6 +133,7 @@ function slice(st, keep) {
   c.orders = (c.orders || []).filter(o => keep(o[0]));
   c.sbd = (c.sbd || []).filter(r => keep(r[0]));
   if (s.ref) s.ref.rows = (s.ref.rows || []).filter(r => keep(r[0]));
+  if (c.stock) c.stock.rows = (c.stock.rows || []).filter(r => keep(r[0]));
   const ships = new Set(c.lines.map(l => l[4])); c.ship = Object.fromEntries(Object.entries(c.ship || {}).filter(([id]) => ships.has(id)));
   return s;
 }
@@ -162,7 +163,7 @@ if (warn.length) console.log('Cảnh báo: chưa tạo tài khoản cho ' + warn
 /* ---------- ghi trang ---------- */
 const vn = new Date(Date.now() + 7 * 3600e3), p2 = n => String(n).padStart(2, '0');
 const built = `${p2(vn.getUTCHours())}:${p2(vn.getUTCMinutes())} ${p2(vn.getUTCDate())}/${p2(vn.getUTCMonth() + 1)}/${vn.getUTCFullYear()}`;
-const ENC = { iter: ITER, built, blobs, maint: MAINT };
+const ENC = { iter: ITER, built, blobs, maint: MAINT, stockDays: CFG.stock_days || { low: 2, high: 4 } };
 const rd = f => fs.readFileSync(path.join(__dirname, f), 'utf8');
 const safe = s => s.replace(/<\/(script)/gi, '<\\/$1');
 const page = `<!doctype html><html lang="vi"><head><meta charset="utf-8">
