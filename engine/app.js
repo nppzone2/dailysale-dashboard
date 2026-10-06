@@ -3,7 +3,7 @@
   const $ = (s, el = document) => el.querySelector(s);
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const GROUPS = ['Group AA', 'Group BB', 'Khác'];
-    const TABS = [['landing', 'Tổng quan'], ['target', 'Target tháng'], ['progress', 'Sale In-Out MTD'], ['alloc', 'Allocation'], ['tracking', 'Tracking Allocation'], ['history', 'YTD as of M-1']];
+    const TABS = [['target', 'Target tháng'], ['landing', 'Tổng quan'], ['progress', 'Sale In-Out MTD'], ['alloc', 'Allocation'], ['tracking', 'Tracking Allocation'], ['history', 'YTD as of M-1']];
 
   let STATE = null; const ENC = window.ENC || { blobs: {} };
   let PUBLISHED = STATE; let previewing = false;
@@ -271,7 +271,7 @@
   /* ---------- TAB: Tổng quan (landing) · Còn lại Target − Sale In − Pending, quy đổi số xe ---------- */
   const LG = ['Group AA', 'Group BB', 'Tổng'];
   const nf2 = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 1, minimumFractionDigits: 1 });
-  function refMap() { const m = {}; ((STATE.ref || {}).rows || []).forEach(([c, g, on, hx]) => { m[c + '|' + g] = { on: +on || 0, hx: +hx || 0 }; }); return m; }
+  function refMap() { const m = {}; ((STATE.ref || {}).rows || []).forEach(([c, aa, bb, hx]) => { if (typeof aa === 'string') return; m[c] = { aa: +aa || 0, bb: +bb || 0, hx: +hx || 0 }; }); return m; }
   function landingModel() {
     const M = curModel(); const P = pendingOrders(); const by = {};
     const R = (c, g) => { const n = by[c] || (by[c] = {}); return n[g] || (n[g] = { t: 0, si: 0, pd: 0, th: 0, sih: 0, pdh: 0 }); };
@@ -279,11 +279,8 @@
     P.forEach(o => { const h = item(o[3]).hl || 0; [grp(o[3]), 'Tổng'].forEach(g => { const x = R(o[0], g); x.pd += o[4]; x.pdh += o[4] * h; }); });
     const RF = refMap(); const zero = { t: 0, si: 0, pd: 0, th: 0, sih: 0, pdh: 0 };
     const row = (c, g) => { const o = (by[c] || {})[g] || zero; const rc = o.t - o.si - o.pd, rh = o.th - o.sih - o.pdh;
-      let on, xe; const rf = RF[c + '|' + g];
-      if (g !== 'Tổng') { on = rf ? rf.on : 0; xe = rf && rf.hx ? (Math.max(0, rh) + on) / rf.hx : null; }
-      else { const a = row(c, 'Group AA'), b = row(c, 'Group BB');
-        on = rf ? rf.on : a.on + b.on;
-        xe = rf && rf.hx ? (Math.max(0, rh) + on) / rf.hx : (a.xe == null && b.xe == null ? null : (a.xe || 0) + (b.xe || 0)); }
+      const rf = RF[c]; const on = !rf ? 0 : g === 'Group AA' ? rf.aa : g === 'Group BB' ? rf.bb : rf.aa + rf.bb;
+      const xe = rf && rf.hx ? (Math.max(0, rh) + on) / rf.hx : null;
       return { ...o, rc, rh, on, xe, hasRef: !!(rf && rf.hx) }; };
     const npps = Object.keys(by).filter(c => by[c]['Tổng'] && (by[c]['Tổng'].t || by[c]['Tổng'].si || by[c]['Tổng'].pd)).sort(nppCmp);
     const add = rows => { const o = { t: 0, si: 0, pd: 0, th: 0, sih: 0, pdh: 0, rc: 0, rh: 0, on: 0, xe: null };
@@ -296,7 +293,7 @@
     const remC = v => v >= 0 ? fmtC(v) : `<span class="ov">Vượt ${fmtC(-v)}</span>`;
     const remH = v => v >= 0 ? nf2.format(v) : `<span class="ov">Vượt ${nf2.format(-v)}</span>`;
     const xeF = v => v == null ? '<span class="note">Chưa có</span>' : `<b>${nf2.format(v)}</b>`;
-    const cells = o => `<td class="gs">${fmtC(o.t)}</td><td>${fmtC(o.si)}<span class="note"> ${o.t ? pct(o.si / o.t) : ''}</span></td><td>${fmtC(o.pd)}</td><td class="rem">${remC(o.rc)}</td><td class="gs">${remH(o.rh)}</td><td>${o.on ? nf2.format(o.on) : '<span class="note">–</span>'}</td><td class="xe">${xeF(o.xe)}</td>`;
+    const cells = o => `<td class="gs">${fmtC(o.t)}</td><td>${fmtC(o.si)}</td><td>${fmtC(o.pd)}</td><td>${o.t ? pctT((o.si + o.pd) / o.t, M.tgSi) : '—'}</td><td class="rem">${remC(o.rc)}</td><td class="gs">${remH(o.rh)}</td><td>${o.on ? nf2.format(o.on) : '<span class="note">–</span>'}</td><td class="xe">${xeF(o.xe)}</td>`;
     let body = ''; const totN = [];
     byArea(npps).forEach(([a, cs]) => { const ak = 'ld:a:' + a, op = isOpen(ak, true);
       const at = add(cs.map(c => row(c, 'Tổng')));
@@ -309,21 +306,21 @@
     body += `<tr class="tot"><td>Tổng</td><td></td><td></td>${cells(T)}</tr>`;
     const gT = g => add(npps.map(c => row(c, g)));
     const AA = gT('Group AA'), BB = gT('Group BB');
-    const missing = npps.filter(c => !row(c, 'Group AA').hasRef && !row(c, 'Group BB').hasRef && !row(c, 'Tổng').hasRef);
+    const missing = npps.filter(c => !row(c, 'Tổng').hasRef);
     const topXe = totN.filter(([, o]) => o.xe != null).sort((a, b) => b[1].xe - a[1].xe)[0];
     const sk = !ROLE || ROLE.type !== 'admin' ? '' : `<button class="btn" data-go="ref">Tham chiếu xe</button>`;
     return `
     <section class="lead"><div><div class="eyebrow">Tổng quan · ${fM(M.m)} · cập nhật đến ${fD(M.lastSi)}</div><h1>${esc(scopeLabel())}</h1>
-      <p>Còn lại = Target − Sale In − Pending. Số xe còn lại = (Còn lại HL + Ontop HL) ÷ HL trên 1 xe.</p></div>
+      <p>Còn lại = Target − Sale In − Pending. Số xe còn lại = (Còn lại HL + Ontop HL) ÷ HL của 1 xe.</p></div>
       <div class="btns">${sk}<button class="btn" id="xl-landing">Tải Excel</button></div></section>
     <div class="grid">
       <div class="card c3 kpi"><div class="kpi-l">Target tháng</div><div class="kpi-v">${fmtC(T.t)}<small>Case</small></div><div class="kpi-f">${nf2.format(T.th)} HL</div></div>
       <div class="card c3 kpi${T.t && T.si / T.t < M.tgSi ? ' slowcard' : ''}"><div class="kpi-l">Sale In MTD</div><div class="kpi-v">${fmtC(T.si)}<small>Case</small></div><div class="kpi-f"><b>${pctT(T.t ? T.si / T.t : NaN, M.tgSi)}</b> target · time gone ${pct(M.tgSi)}</div></div>
       <div class="card c3 kpi" role="button" tabindex="0" data-go="pending" style="cursor:pointer"><div class="kpi-l">SO Pending</div><div class="kpi-v">${fmtC(T.pd)}<small>Case</small></div><div class="kpi-f">${nf2.format(T.pdh)} HL · xem chi tiết →</div></div>
       <div class="card c3 kpi hero"><div class="kpi-l">Còn lại cần giao</div><div class="kpi-v">${fmtC(Math.max(0, T.rc))}<small>Case</small></div><div class="kpi-f">${nf2.format(Math.max(0, T.rh))} HL · <b>${T.xe == null ? '—' : nf2.format(T.xe)} xe</b></div></div>
-      <div class="card c12"><div class="card-h"><div><h2>Còn lại theo Khu vực / NPP / Group</h2><p class="sub">Target, Sale In, Pending, Còn lại theo Case · Còn lại, Ontop theo HL · bấm mũi tên để mở hoặc thu gọn</p></div></div>
-        <div class="tw"><table class="ag lnd"><thead><tr><th>Khu vực</th><th>NPP</th><th>Group</th><th class="gs">Target</th><th>Sale In</th><th>Pending</th><th>Còn lại (Case)</th><th class="gs">Còn lại (HL)</th><th>Ontop HL</th><th>Số xe còn lại</th></tr></thead><tbody>${body}</tbody></table></div>
-        ${missing.length ? `<p class="note" style="margin:8px 0 0">Chưa có HL trên 1 xe cho: ${missing.map(esc).join(', ')}${ROLE.type === 'admin' ? ' · cập nhật ở tab Tham chiếu xe' : ''}.</p>` : ''}</div>
+      <div class="card c12"><div class="card-h"><div><h2>Còn lại theo Khu vực / NPP / Group</h2><p class="sub">Target, Sale In, Pending, Còn lại theo Case · Còn lại, Ontop theo HL · % = (Sale In + Pending) ÷ Target, xanh khi ≥ time gone ${pct(M.tgSi)} · bấm mũi tên để mở hoặc thu gọn</p></div></div>
+        <div class="tw"><table class="ag lnd"><thead><tr><th>Khu vực</th><th>NPP</th><th>Group</th><th class="gs">Target</th><th>Sale In</th><th>Pending</th><th title="(Sale In + Pending) ÷ Target, so với time gone">% (SI + Pending)</th><th>Còn lại (Case)</th><th class="gs">Còn lại (HL)</th><th>Ontop HL</th><th>Số xe còn lại</th></tr></thead><tbody>${body}</tbody></table></div>
+        ${missing.length ? `<p class="note" style="margin:8px 0 0">Chưa có HL của 1 xe cho: ${missing.map(esc).join(', ')}${ROLE.type === 'admin' ? ' · cập nhật ở tab Tham chiếu xe' : ''}.</p>` : ''}</div>
     </div>
     ${conclusion([
       `Còn lại <b>${fmtC(Math.max(0, T.rc))} case</b> (${nf2.format(Math.max(0, T.rh))} HL) sau khi trừ Sale In và Pending${T.on ? `, cộng Ontop ${nf2.format(T.on)} HL` : ''}${T.xe != null ? `, tương đương <b>${nf2.format(T.xe)} xe</b>` : ''}.`,
@@ -341,34 +338,31 @@
   function viewRef() {
     const RF = refMap(); const npps = npAll().filter(inScope);
     const v = x => x ? String(x).replace('.', ',') : '';
+    const inp = (c, k, val, lb) => `<input class="rin" inputmode="decimal" data-rc="${esc(c)}" data-rk="${k}" value="${v(val)}" placeholder="0" aria-label="${lb} ${esc(c)}">`;
     let body = '';
-    byArea(npps).forEach(([a, cs]) => { body += `<tr class="grp area"><td colspan="4">${esc(a)}</td></tr>`;
-      cs.forEach(c => LG.forEach((g, i) => { const r = RF[c + '|' + g] || {};
-        body += `<tr class="${g === 'Tổng' ? 'ltot' : 'lsub'}${i === 0 ? ' first' : ''}"><td>${i === 0 ? `<b>${esc(c)}</b>` : ''}</td><td>${g === 'Tổng' ? '<b>Tổng</b>' : esc(g.replace('Group ', ''))}</td>
-          <td><input class="rin" inputmode="decimal" data-rc="${esc(c)}" data-rg="${esc(g)}" data-rk="on" value="${v(r.on)}" placeholder="0" aria-label="Ontop HL ${esc(c)} ${esc(g)}"></td>
-          <td><input class="rin" inputmode="decimal" data-rc="${esc(c)}" data-rg="${esc(g)}" data-rk="hx" value="${v(r.hx)}" placeholder="${g === 'Tổng' ? 'AA + BB' : '—'}" aria-label="HL trên 1 xe ${esc(c)} ${esc(g)}"></td></tr>`; })); });
+    byArea(npps).forEach(([a, cs]) => cs.forEach((c, i) => { const r = RF[c] || {};
+      body += `<tr class="${i === 0 ? 'first' : ''}"><td>${i === 0 ? `<b>${esc(a)}</b>` : ''}</td><td><b>${esc(c)}</b></td><td>${inp(c, 'aa', r.aa, 'Ontop HL Group AA')}</td><td>${inp(c, 'bb', r.bb, 'Ontop HL Group BB')}</td><td>${inp(c, 'hx', r.hx, 'HL của 1 xe')}</td></tr>`; }));
     const at = (STATE.ref || {}).at;
     return `
-    <section class="lead"><div><div class="eyebrow">Tham chiếu xe · chỉ Admin</div><h1>Ontop HL và HL trên 1 xe</h1>
-      <p>Dùng để tính cột Ontop HL và Số xe còn lại ở tab Tổng quan. Để trống dòng Tổng thì số xe Tổng = xe AA + xe BB.</p></div>
+    <section class="lead"><div><div class="eyebrow">Tham chiếu xe · chỉ Admin</div><h1>Ontop HL và HL của 1 xe</h1>
+      <p>Dùng để tính cột Ontop HL và Số xe còn lại ở tab Tổng quan.</p></div>
       <div class="btns"><button class="btn" id="ref-apply">Áp dụng xem thử</button><button class="btn primary" id="ref-xl">Tải file để upload</button></div></section>
     ${at === 'draft' ? '<div class="warnbox">Đang xem thử số vừa nhập, chưa lưu. Bấm <b>Tải file để upload</b> rồi tải file lên thư mục <b>input/</b> trên GitHub để lưu cho mọi tài khoản.</div>' : ''}
-    <div class="grid"><div class="card c12"><div class="card-h"><div><h2>Bảng tham chiếu theo NPP / Group</h2><p class="sub">${at === 'draft' ? 'Đang xem thử' : at ? 'Cập nhật ' + esc(fTs(at)) : 'Chưa có bảng tham chiếu'} · đơn vị HL</p></div></div>
-      <div class="tw"><table class="ag reft"><thead><tr><th>NPP</th><th>Group</th><th>Ontop HL</th><th>HL trên 1 xe</th></tr></thead><tbody>${body}</tbody></table></div></div></div>
+    <div class="grid"><div class="card c12"><div class="card-h"><div><h2>Bảng tham chiếu theo NPP</h2><p class="sub">${at === 'draft' ? 'Đang xem thử' : at ? 'Cập nhật ' + esc(fTs(at)) : 'Chưa có bảng tham chiếu'} · đơn vị HL</p></div></div>
+      <div class="tw"><table class="reft"><thead><tr><th>Khu vực</th><th>NPP</th><th>OnTop HL Group AA</th><th>OnTop HL Group BB</th><th>HL của 1 xe</th></tr></thead><tbody>${body}</tbody></table></div></div></div>
     ${conclusion(['Cách lưu: nhập số → <b>Tải file để upload</b> → tải file <b>Tham_chieu_xe.xlsx</b> lên thư mục <b>input/</b> trên GitHub. Khoảng 2 phút sau, tab Tổng quan của NPP và ASM cập nhật theo.'])}`;
   }
   function readRefInputs() {
-    const rows = []; const n = s => { const x = parseFloat(String(s || '').replace(/\s/g, '').replace(',', '.')); return isFinite(x) ? x : 0; };
-    const by = {}; document.querySelectorAll('.rin').forEach(i => { const k = i.dataset.rc + '|' + i.dataset.rg; (by[k] = by[k] || { c: i.dataset.rc, g: i.dataset.rg })[i.dataset.rk] = n(i.value); });
-    Object.values(by).forEach(x => { if (x.on || x.hx) rows.push([x.c, x.g, x.on || 0, x.hx || 0]); });
-    return rows;
+    const n = s => { const x = parseFloat(String(s || '').replace(/\s/g, '').replace(',', '.')); return isFinite(x) ? x : 0; };
+    const by = {}; document.querySelectorAll('.rin').forEach(i => { (by[i.dataset.rc] = by[i.dataset.rc] || { aa: 0, bb: 0, hx: 0 })[i.dataset.rk] = n(i.value); });
+    return Object.entries(by).filter(([, x]) => x.aa || x.bb || x.hx).map(([c, x]) => [c, x.aa, x.bb, x.hx]);
   }
   function exportRef(ev) {
-    const rows = readRefInputs(); const keep = new Set(rows.map(r => r[0] + '|' + r[1]));
-    ((STATE.ref || {}).rows || []).forEach(r => { if (!inScope(r[0]) && !keep.has(r[0] + '|' + r[1])) rows.push(r); }); // giữ dòng của NPP ngoài bộ lọc
-    const out = [['Khu vực', 'NPP', 'Group', 'Ontop HL', 'HL trên 1 xe']];
-    rows.sort((a, b) => nppCmp(a[0], b[0]) || LG.indexOf(a[1]) - LG.indexOf(b[1])).forEach(r => out.push([areaOf(r[0]), r[0], r[1], r[2], r[3]]));
-    saveXlsx('Tham_chieu_xe.xlsx', [['Tham chieu xe', out, [10, 9, 10, 11, 13]]], ev.currentTarget);
+    const rows = readRefInputs(); const seen = new Set(rows.map(r => r[0]));
+    ((STATE.ref || {}).rows || []).forEach(r => { if (typeof r[1] !== 'string' && !inScope(r[0]) && !seen.has(r[0])) rows.push(r); }); // giữ dòng NPP ngoài bộ lọc
+    const out = [['Khu vực', 'NPP', 'OnTop HL Group AA', 'OnTop HL Group BB', 'HL của 1 xe']];
+    rows.sort((a, b) => nppCmp(a[0], b[0])).forEach(r => out.push([areaOf(r[0]), r[0], r[1], r[2], r[3]]));
+    saveXlsx('Tham_chieu_xe.xlsx', [['Tham chieu xe', out, [10, 9, 18, 18, 13]]], ev.currentTarget);
   }
 
   /* ---------- TAB 1: Target ---------- */

@@ -408,8 +408,9 @@ select:disabled{opacity:1;color:var(--ink);background:var(--brand-soft);border-c
 .kpi.hero{background:var(--band);color:var(--band-ink);border-color:transparent}
 .kpi.hero .kpi-l,.kpi.hero .kpi-f,.kpi.hero small{color:var(--band-ink-2)}
 .kpi.hero .kpi-f b{color:var(--band-ink)}
-.reft{max-width:640px}
+.reft{max-width:760px}
 .reft th:nth-child(-n+2),.reft td:nth-child(-n+2){text-align:left}
+.reft th{white-space:normal}
 .reft tr.ltot td{background:var(--surface-2);font-weight:600}
 .reft tr.first td{border-top:2px solid var(--line)}
 .reft tr.area td{font-size:13px;padding-block:7px}

@@ -8,7 +8,7 @@ const KINDS = {
   alloc:   { label: 'Allocation Current Month', need: ['WEEK', 'Alpha_Name', 'Allocation'] },
   allocdates: { label: 'Allocation · Upload Date', need: ['WEEK', 'WEEK No'] },
   orders:  { label: 'Online Order (SO chờ giao)', need: ['Order Number', 'Status', 'ShortCode', 'Sum of Case'] },
-  ref:     { label: 'Tham chiếu xe (Ontop HL, HL/xe)', need: ['NPP', 'Group', ['HL trên 1 xe', 'HL/xe', 'HL/Xe', 'HL per truck']] },
+  ref:     { label: 'Tham chiếu xe (Ontop HL, HL của 1 xe)', need: ['NPP', ['HL của 1 xe', 'HL trên 1 xe', 'HL/xe', 'HL/Xe']] },
   sbd:     { label: 'Dis Sale by Date (Sale In theo ngày order)', need: [['Order Date', 'OrderDate'], ['Calendar_Day_Name', 'ConfirmDate', 'Invoice Date', 'InvoiceDate'], 'ShortCode', 'Unit'] }
 };
 const KIND_ORDER = ['items', 'hist', 'si', 'sbd', 'so', 'orders', 'alloc', 'allocdates', 'target', 'ref'];
@@ -224,14 +224,14 @@ function applyParsed(state, p, opts = {}) {
   }
 
   if (p.kind === 'ref') {
-    // Bảng tham chiếu: mỗi dòng NPP × Group (Group AA / Group BB / Tổng): Ontop HL, HL trên 1 xe. Thay toàn bộ bảng cũ.
-    const col = ['HL trên 1 xe', 'HL/xe', 'HL/Xe', 'HL per truck'].find(has);
-    const normG = v => { const t = cleanStr(v).toLowerCase().replace(/^group\s*/, ''); return t === 'aa' ? 'Group AA' : t === 'bb' ? 'Group BB' : /^(tổng|tong|total)$/.test(t) ? 'Tổng' : ''; };
+    // Bảng tham chiếu: mỗi NPP 1 dòng gồm Ontop HL Group AA, Ontop HL Group BB, HL của 1 xe. Thay toàn bộ bảng cũ.
+    const find = re => Object.keys(p.idx).find(h => re.test(h.toLowerCase().replace(/\s+/g, ' ')));
+    const cAA = find(/ontop.*aa/), cBB = find(/ontop.*bb/), cX = find(/hl (của|trên) 1 xe|hl\/xe/);
     const rows = [];
-    p.rows.forEach(r => { const c = nppCode(g(r, 'NPP')); const gr = normG(g(r, 'Group')); if (!c || !gr) return;
-      const on = has('Ontop HL') ? num(g(r, 'Ontop HL')) : 0; const hx = num(g(r, col)); rows.push([c, gr, on, hx]); });
+    p.rows.forEach(r => { const c = nppCode(g(r, 'NPP')); if (!c) return;
+      rows.push([c, cAA ? num(g(r, cAA)) : 0, cBB ? num(g(r, cBB)) : 0, cX ? num(g(r, cX)) : 0]); });
     state.ref = { rows, at: now };
-    msg.note = rows.length + ' dòng NPP × Group';
+    msg.note = rows.length + ' NPP';
   }
 
   state.updatedAt[p.kind] = now;
