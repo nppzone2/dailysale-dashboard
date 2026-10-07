@@ -386,6 +386,77 @@
     ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: hr, c: 0 }, e: { r: hr, c: N - 1 } }) };
     saveXlsx(`Tong_quan_${STATE.cur.month}_${scopeTag()}.xlsx`, [['Tổng quan', ws]], ev.currentTarget);
   }
+  /* ---------- Xuất Excel có định dạng như web (xlsx-js-style) ---------- */
+  const XC = { band: '0A4A2A', brand: '0B6B39', soft: 'E3F1E8', sub: 'F3F5F4', line: 'D9DED9', ink: '14201A', muted: '6B7A70', good: '137A3F', goodBg: 'DDF2E5', bad: 'C8102E', badBg: 'FBE3E5', warn: '9A6700', warnBg: 'FFF3D6', org: 'C2560C', orgBg: 'FDE9D7', white: 'FFFFFF', bandInk2: 'B9D3C2' };
+  const xst = (o = {}) => ({ font: { name: 'Arial', sz: 10, color: { rgb: o.color || XC.ink }, bold: !!o.bold }, fill: o.fill ? { patternType: 'solid', fgColor: { rgb: o.fill } } : undefined,
+    alignment: { horizontal: o.h || 'right', vertical: 'center', wrapText: !!o.wrap }, border: o.border === false ? undefined : { top: { style: 'thin', color: { rgb: XC.line } }, bottom: { style: 'thin', color: { rgb: XC.line } }, left: o.bl ? { style: 'medium', color: { rgb: XC.line } } : undefined }, numFmt: o.nf });
+  const kindBase = kind => kind === 'area' ? { fill: XC.band, color: XC.white, bold: true } : kind === 'tot' ? { fill: XC.sub, bold: true } : kind === 'grand' ? { fill: XC.soft, bold: true } : {};
+  // spec: { file, sheet, title, sub, note, H, body: [{ v, kind, s(k, base) }], concl: [], widths, leftCols, sepCols }
+  function styledXlsx(spec, btn) {
+    const N = spec.H.length; const rows = []; const merges = [];
+    const put = (cells, styles, height, merge) => { rows.push({ cells, styles, height }); if (merge) merges.push(rows.length - 1); };
+    put([spec.title], [xst({ bold: true, color: XC.white, fill: XC.band, h: 'left', border: false })], 30, true);
+    put([spec.sub], [xst({ color: XC.bandInk2, fill: XC.band, h: 'left', border: false })], 20, true);
+    if (spec.note) put([spec.note], [xst({ color: XC.muted, h: 'left', border: false })], 18, true);
+    put([], [], 8);
+    const hr = rows.length; const sep = new Set(spec.sepCols || []);
+    put(spec.H, spec.H.map((_, k) => xst({ bold: true, color: XC.muted, fill: XC.soft, h: k < (spec.leftCols || 2) ? 'left' : 'center', wrap: true, bl: sep.has(k) })), 32);
+    spec.body.forEach(r => { const base = kindBase(r.kind); put(r.v, r.v.map((_, k) => xst({ ...base, h: k < (spec.leftCols || 2) ? 'left' : 'right', bl: sep.has(k), ...(r.s ? r.s(k, base) || {} : {}) })), r.kind === 'area' || r.kind === 'grand' ? 22 : 18); });
+    if ((spec.concl || []).length) { put([], [], 10); put(['Kết luận nhanh'], [xst({ bold: true, color: XC.white, fill: XC.band, h: 'left', border: false })], 22, true);
+      spec.concl.forEach(t => put(['• ' + t], [xst({ color: XC.white, fill: XC.band, h: 'left', border: false })], 18, true)); }
+    const aoa = rows.map(r => { const a = Array(N).fill(null); r.cells.forEach((v, k) => a[k] = v); return a; });
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    rows.forEach((r, ri) => { for (let k = 0; k < N; k++) { const sty = r.styles[k] || r.styles[0]; if (!sty) continue; const ref = XLSX.utils.encode_cell({ r: ri, c: k });
+      if (!ws[ref]) ws[ref] = { t: 's', v: '' }; ws[ref].s = sty; if (sty.numFmt && ws[ref].t === 'n') ws[ref].z = sty.numFmt; } });
+    ws['!merges'] = merges.map(r => ({ s: { r, c: 0 }, e: { r, c: N - 1 } }));
+    ws['!cols'] = (spec.widths || []).map(w => ({ wch: w }));
+    ws['!rows'] = rows.map(r => r.height ? { hpt: r.height } : {});
+    ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: hr, c: 0 }, e: { r: hr, c: N - 1 } }) };
+    saveXlsx(spec.file, [[spec.sheet, ws]], btn);
+  }
+  const stTxt = (a, tg) => { if (!isFinite(a)) return ['Chưa có target', 'info']; const r = tg > 0 ? a / tg : 1; return r >= 1 ? ['Đúng tiến độ', 'good'] : r >= 0.9 ? ['Sát tiến độ', 'warn'] : ['Chậm tiến độ', 'bad']; };
+  const lvStyle = (lv, onDark) => onDark ? { color: lv === 'good' ? '9FE3BC' : lv === 'warn' ? 'FFD27A' : lv === 'bad' ? 'FFB3B8' : lv === 'org' ? 'FFB27A' : XC.white, h: 'center', bold: true }
+    : { color: lv === 'good' ? XC.good : lv === 'warn' ? XC.warn : lv === 'bad' ? XC.bad : lv === 'org' ? XC.org : XC.muted, fill: lv === 'good' ? XC.goodBg : lv === 'warn' ? XC.warnBg : lv === 'bad' ? XC.badBg : lv === 'org' ? XC.orgBg : undefined, h: 'center', bold: true };
+  let lastBoard = null;
+  function exportBoard(ev) {
+    const B = lastBoard; if (!B) return; const { M, byN, groupsA, sumO, hasStock, SD } = B;
+    const nfU = ui.unit === 'hl' ? '#,##0.0' : '#,##0'; const rnd = v => ui.unit === 'hl' ? Math.round(v * 10) / 10 : Math.round(v);
+    const H = ['Khu vực', 'NPP', 'Target', 'Sale In', '% đạt SI', 'Còn lại SI', 'Trạng thái SI', 'Sale Out', '% đạt SO', 'Còn lại SO', 'Trạng thái SO', ...(hasStock ? [`Tồn ${fD(M.stockDate)}`, 'Tồn hiện tại', 'Ngày tồn', 'Đánh giá tồn'] : [])];
+    const line = (a, n, o, kind) => {
+      const aSi = o.t ? o.si / o.t : NaN, aSo = o.t ? o.so / o.t : NaN; const sSi = stTxt(aSi, M.tgSi), sSo = stTxt(aSo, M.tgSo);
+      const now = o.st0 + o.si - o.so; const d = o.dso ? Math.max(0, now) / o.dso : NaN;
+      const sSt = !isFinite(d) ? ['—', 'info'] : d < SD.low ? ['Tồn thấp', 'org'] : d > SD.high ? ['Tồn cao', 'bad'] : ['Phù hợp', 'good'];
+      const v = [a, n, rnd(o.t), rnd(o.si), isFinite(aSi) ? aSi : null, rnd(Math.max(0, o.t - o.si)), sSi[0], rnd(o.so), isFinite(aSo) ? aSo : null, rnd(Math.max(0, o.t - o.so)), sSo[0],
+        ...(hasStock ? [rnd(o.st0), rnd(now), isFinite(d) ? Math.round(d * 10) / 10 : null, sSt[0]] : [])];
+      const dark = kind === 'area';
+      return { v, kind, s: (k, base) => {
+        if (k === 1 && kind === 'npp') return { color: XC.brand, bold: true };
+        if (k < 2) return null;
+        if (k === 4 || k === 8) { const ok = (k === 4 ? aSi >= M.tgSi : aSo >= M.tgSo); const val = k === 4 ? aSi : aSo; return { nf: '0.0%', bold: true, h: 'center', ...(isFinite(val) ? (dark ? { color: ok ? '9FE3BC' : 'FFB3B8' } : { color: ok ? XC.good : XC.bad, fill: ok ? XC.goodBg : XC.badBg }) : {}) }; }
+        if (k === 6) return lvStyle(sSi[1], dark); if (k === 10) return lvStyle(sSo[1], dark);
+        if (k === 5 || k === 9) return { nf: nfU, bold: true };
+        if (hasStock && k === 13) return { nf: '0.0', h: 'center' };
+        if (hasStock && k === 14) return lvStyle(sSt[1], dark);
+        if (hasStock && k === 12) return { nf: nfU, bold: true };
+        return { nf: nfU };
+      } };
+    };
+    const body = [];
+    groupsA.forEach(([a, cs]) => { body.push(line(a, `${cs.length} NPP`, sumO(cs.map(c => byN[c])), 'area'));
+      cs.forEach(c => { const o = byN[c]; body.push(line('', c, o, 'npp'));
+        const g = aggregate(o.rows, r => grp(r.sc)); GROUPS.filter(k => g[k] && (g[k].t || g[k].si || g[k].so)).forEach(k => body.push(line('', '   ' + k, g[k], 'sub'))); }); });
+    body.push(line('Tổng', '', sumO(Object.values(byN)), 'grand'));
+    const T = sumO(Object.values(byN));
+    styledXlsx({ file: `Tien_do_Khu_vuc_NPP_${M.m}_${M.lastSi}_${scopeTag()}.xlsx`, sheet: 'Tiến độ KV-NPP',
+      title: `Distributor Sales Performance · Tiến độ theo Khu vực / NPP ${fM(M.m)}`,
+      sub: `RTC - Future Fit · HCM Zone 2 · ${scopeLabel()} · cập nhật đến ${fD(M.lastSi)} · time gone ${pct(M.tgSi)} · đơn vị ${U()}`,
+      note: 'Trạng thái: Đúng tiến độ khi % đạt ≥ time gone, Sát tiến độ khi ≥ 90% time gone.' + (hasStock ? ` Tồn hiện tại = Tồn ${fD(M.stockDate)} + Sale In − Sale Out (ước tính); Ngày tồn theo Sale Out bình quân ngày; phù hợp ${nf1.format(SD.low)}–${nf1.format(SD.high)} ngày.` : ''),
+      H, body, leftCols: 2, sepCols: hasStock ? [2, 3, 7, 11] : [2, 3, 7],
+      widths: [10, 13, 12, 12, 9, 12, 14, 12, 9, 12, 14, ...(hasStock ? [11, 12, 9, 12] : [])],
+      concl: [`Sale In đạt ${pct(T.t ? T.si / T.t : NaN)} target so với time gone ${pct(M.tgSi)}; Sale Out đạt ${pct(T.t ? T.so / T.t : NaN)}.`,
+        hasStock && T.dso ? `Tồn kho ước tính hiện tại đủ bán ${nf1.format(Math.max(0, T.st0 + T.si - T.so) / T.dso)} ngày.` : ''].filter(Boolean) }, ev.currentTarget);
+  }
+
   /* ---------- TAB: Tham chiếu xe (chỉ Admin) ---------- */
   function viewRef() {
     const RF = refMap(); const npps = npAll().filter(inScope);
@@ -532,8 +603,9 @@
           if (nOpen) { const g = aggregate(o.rows, r => grp(r.sc)); GROUPS.filter(k => g[k] && (g[k].t || g[k].si || g[k].so)).forEach(k => { rb += `<tr class="sku"><td></td><td class="skuc">${esc(k)}</td>${cells(g[k])}</tr>`; }); }
         }); });
       rb += `<tr class="tot"><td>Tổng</td><td></td>${cells(sumO(Object.values(byN)))}</tr>`;
-      board = `<div class="card c12"><div class="card-h"><div><h2>Tiến độ theo Khu vực / NPP</h2><p class="sub">Bấm mũi tên hoặc tên NPP để xem chi tiết · time gone ${pct(M.tgSi)} · đơn vị ${U()}${hasStock ? ` · Tồn hiện tại = Tồn ${fD(M.stockDate)} + Sale In − Sale Out (ước tính); Ngày tồn theo Sale Out bình quân ngày, phù hợp ${nf1.format(SD.low)}–${nf1.format(SD.high)} ngày` : ''}</p></div></div>
-      <div class="tw"><table class="rank ag"><thead><tr><th>Khu vực</th><th>NPP</th><th class="gs">Target</th><th class="gs">Sale In</th><th>% đạt SI</th><th>Còn lại SI</th><th>Trạng thái SI</th><th class="gs">Sale Out</th><th>% đạt SO</th><th>Còn lại SO</th><th>Trạng thái SO</th>${hasStock ? `<th class="gs" title="Tồn đầu ngày theo file Stock">Tồn ${fD(M.stockDate)}</th><th title="Tồn đầu tháng + Sale In MTD − Sale Out MTD">Tồn hiện tại</th><th title="Tồn hiện tại ÷ Sale Out bình quân ngày (30 ngày trước ${fD(M.stockDate)})">Ngày tồn</th><th>Đánh giá tồn</th>` : ''}</tr></thead><tbody>${rb}</tbody></table></div></div>`;
+      lastBoard = { M, byN, groupsA, sumO, hasStock, SD };
+      board = `<div class="card c12"><div class="card-h"><div><h2>Tiến độ theo Khu vực / NPP</h2><p class="sub">Bấm mũi tên hoặc tên NPP để xem chi tiết · time gone ${pct(M.tgSi)} · đơn vị ${U()}${hasStock ? ` · Tồn hiện tại = Tồn ${fD(M.stockDate)} + Sale In − Sale Out (ước tính); Ngày tồn theo Sale Out bình quân ngày, phù hợp ${nf1.format(SD.low)}–${nf1.format(SD.high)} ngày` : ''}</p></div><button class="btn" id="xl-board">Tải Excel</button></div>
+      <div class="tw"><table class="rank ag frz2"><thead><tr><th>Khu vực</th><th>NPP</th><th class="gs">Target</th><th class="gs">Sale In</th><th>% đạt SI</th><th>Còn lại SI</th><th>Trạng thái SI</th><th class="gs">Sale Out</th><th>% đạt SO</th><th>Còn lại SO</th><th>Trạng thái SO</th>${hasStock ? `<th class="gs" title="Tồn đầu ngày theo file Stock">Tồn ${fD(M.stockDate)}</th><th title="Tồn đầu tháng + Sale In MTD − Sale Out MTD">Tồn hiện tại</th><th title="Tồn hiện tại ÷ Sale Out bình quân ngày (30 ngày trước ${fD(M.stockDate)})">Ngày tồn</th><th>Đánh giá tồn</th>` : ''}</tr></thead><tbody>${rb}</tbody></table></div></div>`;
     }
     let cover = '';
     if (M.lastSo) {
@@ -933,6 +1005,7 @@
     v.querySelectorAll('[data-tsku]').forEach(b => b.onclick = () => { ui.trSku = b.dataset.tsku; render(); });
     const xpd = $('#xl-pending'); if (xpd) xpd.onclick = exportPending;
     const xld = $('#xl-landing'); if (xld) xld.onclick = exportLanding;
+    const xb = $('#xl-board'); if (xb) xb.onclick = exportBoard;
     const ra = $('#ref-apply'); if (ra) ra.onclick = () => { STATE.ref = { rows: readRefInputs(), at: 'draft' }; render(); };
     const rx2 = $('#ref-xl'); if (rx2) rx2.onclick = exportRef;
   }

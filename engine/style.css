@@ -425,3 +425,12 @@ select:disabled{opacity:1;color:var(--ink);background:var(--brand-soft);border-c
 .trk tr.garea td:nth-child(2){color:var(--brand)}
 .batch tr.gsum td{background:var(--brand-soft);color:var(--brand);font-weight:700;border-top:0}
 .batch tr.gsum td:first-child{font-size:13px}
+/* Freeze cột Khu vực + NPP */
+.frz2 th:nth-child(1),.frz2 td:nth-child(1){position:sticky;left:0;z-index:2;width:96px;min-width:96px;max-width:96px;background:var(--surface)}
+.frz2 th:nth-child(2),.frz2 td:nth-child(2){position:sticky;left:96px;z-index:2;min-width:118px;background:var(--surface);box-shadow:inset -2px 0 0 var(--line)}
+.frz2 thead th:nth-child(-n+2){z-index:3}
+.frz2 tr.area td:nth-child(-n+2){background:var(--band)!important}
+.frz2 tr.tot td:nth-child(-n+2){background:var(--surface)}
+.frz2 tr.npp.click:hover td:nth-child(-n+2){background:var(--surface-2)}
+@media (max-width:640px){.frz2 th:nth-child(1),.frz2 td:nth-child(1){width:78px;min-width:78px;max-width:78px}.frz2 th:nth-child(2),.frz2 td:nth-child(2){left:78px;min-width:96px}}
+.card-h:has(#xl-board){flex-wrap:nowrap;align-items:flex-start}.card-h:has(#xl-board)>div{flex:1;min-width:0}.card-h #xl-board{flex:none}
