@@ -419,7 +419,7 @@
   const stTxt = (a, tg) => { if (!isFinite(a)) return ['—', 'info']; const r = tg > 0 ? a / tg : 1; return r >= 1 ? ['Đạt', 'good'] : r >= 0.9 ? ['Sát', 'warn'] : ['Chậm', 'bad']; };
   const lvStyle = (lv, onDark) => onDark ? { color: lv === 'good' ? '9FE3BC' : lv === 'warn' ? 'FFD27A' : lv === 'bad' ? 'FFB3B8' : lv === 'org' ? 'FFB27A' : XC.white, h: 'center', bold: true }
     : { color: lv === 'good' ? XC.good : lv === 'warn' ? XC.warn : lv === 'bad' ? XC.bad : lv === 'org' ? XC.org : XC.muted, fill: lv === 'good' ? XC.goodBg : lv === 'warn' ? XC.warnBg : lv === 'bad' ? XC.badBg : lv === 'org' ? XC.orgBg : undefined, h: 'center', bold: true };
-  let lastBoard = null; let allocExport = null;
+  let lastBoard = null; let allocExport = null; let trackExport = null;
   function exportBoard(ev) {
     const B = lastBoard; if (!B) return; const { M, byN, groupsA, sumO, hasStock, SD } = B;
     const nfU = ui.unit === 'hl' ? '#,##0.0' : '#,##0'; const rnd = v => ui.unit === 'hl' ? Math.round(v * 10) / 10 : Math.round(v);
@@ -926,6 +926,33 @@
         ss.forEach((sc, i) => { const z = calc([c], [sc]); body += `<tr class="sku${i === 0 ? ' first' : ''}${isFinite(z.ps) && z.ps < gone ? ' slow' : ''}"><td>${i === 0 ? nm : ''}</td><td class="skuc">${esc(sc)}</td>${tdv(z)}</tr>`; });
         }); });
     const T = calc(npps, shown); body += `<tr class="tot"><td>Tổng</td><td>${shown.length > 1 ? '' : esc(shown[0])}</td>${tdv(T)}</tr>`;
+    // Xuất Excel có định dạng như web: đủ mọi Khu vực / NPP / SKU
+    trackExport = ev => {
+      const nf = ui.unit === 'hl' ? '#,##0.0' : '#,##0'; const rnd = v => ui.unit === 'hl' ? Math.round(v * 10) / 10 : Math.round(v);
+      const body = [];
+      const line = (a, n, sc, x, kind) => { const slowR = isFinite(x.ps) && x.ps < gone;
+        body.push({ v: [a, n, sc, rnd(x.al), rnd(x.si), isFinite(x.ps) ? x.ps : null, rnd(x.pd), isFinite(x.use) ? x.use : null, rnd(x.rem)], kind,
+          s: (k, base) => { const dark = kind === 'area';
+            if (k === 1 && kind === 'npp') return { color: XC.brand, bold: true };
+            if (k < 3) return kind === 'sub' && slowR ? { fill: XC.badBg } : null;
+            const rowFill = kind === 'sub' && slowR ? { fill: XC.badBg } : {};
+            if (k === 5) return isFinite(x.ps) ? { nf: '0.0%', h: 'center', bold: true, ...(dark ? { color: slowR ? 'FFB3B8' : '9FE3BC' } : { color: slowR ? XC.bad : XC.good, fill: slowR ? XC.badBg : XC.goodBg }) } : { h: 'center' };
+            if (k === 7) return { nf: '0.0%', h: 'center', ...rowFill };
+            if (k === 8) return { nf: nf + ';[Color10]"Vượt "' + nf, bold: true, ...rowFill };
+            return { nf, ...rowFill }; } }); };
+      byArea(npps).forEach(([a, cs]) => { line(a, `${cs.length} NPP`, shown.length > 1 ? 'Tổng' : shown[0], calc(cs, shown), 'area');
+        cs.forEach(c => { const ss = shown.filter(sc => A.some(r => r[1] === c && r[2] === sc && r[0] === wk)); if (!ss.length) return;
+          line('', c, ss.length > 1 ? `Tổng · ${ss.length} SKU` : ss[0], calc([c], shown), 'npp');
+          if (ss.length > 1) ss.forEach(sc => line('', '', '   ' + sc, calc([c], [sc]), 'sub')); }); });
+      const TT = calc(npps, shown); line('Tổng', '', shown.length > 1 ? '' : shown[0], TT, 'grand');
+      styledXlsx({ file: `Tracking_Allocation_${wk}_${D}_${scopeTag()}.xlsx`, sheet: 'Tracking ' + wk,
+        title: `Distributor Sales Performance · Tracking Allocation ${wk}`,
+        sub: `RTC - Future Fit · HCM Zone 2 · ${scopeLabel()} · tuần ${wStart ? fd(wStart) + ' → ' + fd(wEnd) : wk} · tiến độ tuần ${pct(gone)} · đơn vị ${U()}`,
+        note: `Tính theo ngày order thuộc ${wk}. Sale In = Dis Sale by Date có Invoice Date đến ${fd(sbdMax)} (D-1) + Online Order Delivery. SO Pending = Online Order Approve / Schedule. Dòng đỏ: % Sale In thấp hơn tiến độ tuần.`,
+        H: ['Khu vực', 'NPP', 'SKU', `Allocation ${wk}`, `Sale In ${wk}`, '% Sale In', 'SO Pending', '% đã dùng', 'Còn lại'], body, leftCols: 3, sepCols: [3, 6],
+        widths: [10, 10, 16, 14, 13, 11, 12, 11, 13],
+        concl: [`Sale In đạt ${pct(TT.ps)} allocation so với tiến độ tuần ${pct(gone)}; tính cả Pending đã dùng ${pct(TT.use)}, ${TT.rem >= 0 ? 'còn ' + fmt(TT.rem) : 'vượt ' + fmt(-TT.rem)} ${U()}.`] }, ev.currentTarget);
+    };
     const slow = flat.filter(([, y]) => isFinite(y.ps) && y.ps < gone).sort((a, b) => a[1].ps - b[1].ps);
     const over = flat.filter(([, y]) => y.rem < 0);
     const chips = `<div class="chips" role="group" aria-label="Chọn SKU">${['all', ...skus].map(k => `<button data-tsku="${esc(k)}" aria-pressed="${ui.trSku === k}">${k === 'all' ? 'Tất cả SKU' : esc(k)}</button>`).join('')}</div>`;
@@ -946,7 +973,7 @@
       <div class="card c3 kpi"><div class="kpi-l">Sale In ${esc(wk)}</div><div class="kpi-v">${fmt(T.si)}<small>${U()}</small></div><div class="kpi-f"><span class="${T.ps < gone ? 'lo' : 'hi'}">${pct(T.ps)}</span> allocation · tiến độ ${pct(gone)}</div></div>
       <div class="card c3 kpi" role="button" tabindex="0" data-go="pending" style="cursor:pointer"><div class="kpi-l">SO Pending ${esc(wk)}</div><div class="kpi-v">${fmt(T.pd)}<small>${U()}</small></div><div class="kpi-f">Xem theo SKU →</div></div>
       <div class="card c3 kpi"><div class="kpi-l">Còn lại ${esc(wk)}</div><div class="kpi-v" style="color:${T.rem < 0 ? 'var(--good)' : 'inherit'}">${fmt(T.rem)}<small>${U()}</small></div><div class="kpi-f">Đã dùng <b>${pct(T.use)}</b> (Sale In + Pending)</div><div class="bar"><i style="width:${Math.min(100, (T.use || 0) * 100)}%;background:${T.use > 1 ? 'var(--good)' : 'var(--si)'}"></i></div></div>
-      <div class="card c12"><h2>Theo khu vực / NPP / SKU · ${esc(wk)}</h2><p class="sub">Đơn vị ${U()}</p><div class="tw"><table class="sticky1 trk"><thead><tr><th>Khu vực / NPP</th><th>SKU</th><th>Allocation ${esc(wk)}</th><th>Sale In ${esc(wk)}</th><th>% Sale In</th><th>SO Pending</th><th>% đã dùng</th><th>Còn lại</th></tr></thead><tbody>${body}</tbody></table></div>
+      <div class="card c12"><div class="card-h"><div><h2>Theo khu vực / NPP / SKU · ${esc(wk)}</h2><p class="sub">Đơn vị ${U()}</p></div><button class="btn xl-r" id="xl-track">Tải Excel</button></div><div class="tw"><table class="sticky1 trk"><thead><tr><th>Khu vực / NPP</th><th>SKU</th><th>Allocation ${esc(wk)}</th><th>Sale In ${esc(wk)}</th><th>% Sale In</th><th>SO Pending</th><th>% đã dùng</th><th>Còn lại</th></tr></thead><tbody>${body}</tbody></table></div>
         <p class="note" style="margin:8px 0 0">Tính theo ngày order thuộc ${esc(wk)} (${wStart ? fd(wStart) + ' → ' + fd(wEnd) : '—'}). ${hasSbd ? `Sale In = Dis Sale by Date có Invoice Date đến ${fd(sbdMax)} (D-1)` : 'Chưa có file Dis Sale by Date'}${deliv.length ? ` + ${fmt(sumBy(deliv.filter(o => shown.includes(o[3])), o => conv(o[4], o[3])))} ${U()} đơn Delivery` : ''}. Pending = Online Order trạng thái Order Approve / Schedule (${new Set(P.map(o => o[1])).size} đơn).</p></div>
     </div>
     ${conclusion([
@@ -1049,6 +1076,7 @@
     const xld = $('#xl-landing'); if (xld) xld.onclick = exportLanding;
     const xb = $('#xl-board'); if (xb) xb.onclick = exportBoard;
     const xa = $('#xl-alloc'); if (xa) xa.onclick = ev => allocExport && allocExport(ev);
+    const xt2 = $('#xl-track'); if (xt2) xt2.onclick = ev => trackExport && trackExport(ev);
     const bgg = $('#bg-g'); if (bgg) bgg.onchange = () => { ui.bgG = bgg.value; ui.bgS = ''; render(); };
     const bgs = $('#bg-s'); if (bgs) bgs.onchange = () => { ui.bgS = bgs.value; render(); };
     const ra = $('#ref-apply'); if (ra) ra.onclick = () => { STATE.ref = { rows: readRefInputs(), at: 'draft' }; render(); };
