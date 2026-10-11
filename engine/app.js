@@ -566,18 +566,28 @@
     const groups = aggregate(L, r => grp(r.sc));
     const cSi = css('--si'), cSo = css('--so'), cT = css('--target');
     let body = '';
-    GROUPS.filter(g => groups[g] && (groups[g].t || groups[g].si || groups[g].so)).forEach(g => {
-      const o = groups[g]; const gOpen = ui.open.has(g);
+    // Bộ lọc riêng của bảng: Group, SKU (SKU đã chọn thì tự mở chi tiết theo NPP)
+    const gList = GROUPS.filter(g => groups[g] && (groups[g].t || groups[g].si || groups[g].so));
+    if (ui.bgG && !gList.includes(ui.bgG)) { ui.bgG = ''; ui.bgS = ''; }
+    const bo0 = ['Heineken', 'Tiger', 'Bia Viet', 'Larue', 'Bivina', 'Strongbow', 'Edelweiss']; const bi0 = sc => (bo0.indexOf(brandOf(sc)) + 1) || 99;
+    const skuOpts = [...new Set(L.filter(r => (r.t || r.si || r.so) && (!ui.bgG || grp(r.sc) === ui.bgG)).map(r => r.sc))].sort((a, b) => GROUPS.indexOf(grp(a)) - GROUPS.indexOf(grp(b)) || bi0(a) - bi0(b) || a.localeCompare(b));
+    if (ui.bgS && !skuOpts.includes(ui.bgS)) ui.bgS = '';
+    const bgFilter = `<div class="minif"><div class="fld"><label for="bg-g">Group</label><select id="bg-g"><option value="">Tất cả</option>${gList.map(g => `<option value="${esc(g)}"${ui.bgG === g ? ' selected' : ''}>${esc(g)}</option>`).join('')}</select></div>
+      <div class="fld"><label for="bg-s">SKU</label><select id="bg-s"><option value="">Tất cả</option>${skuOpts.map(sc => `<option value="${esc(sc)}"${ui.bgS === sc ? ' selected' : ''}>${esc(sc)}${item(sc).b ? ' · ' + esc(item(sc).b) : ''}</option>`).join('')}</select></div></div>`;
+    const fRows = L.filter(r => (!ui.bgG || grp(r.sc) === ui.bgG) && (!ui.bgS || r.sc === ui.bgS));
+    const fT = sumBy(fRows, r => conv(r.t, r.sc)), fSI = sumBy(fRows, r => conv(r.si, r.sc)), fSO = sumBy(fRows, r => conv(r.so, r.sc));
+    gList.filter(g => (!ui.bgG || g === ui.bgG) && (!ui.bgS || grp(ui.bgS) === g)).forEach(g => {
+      const o = ui.bgS ? Object.values(aggregate(groups[g].rows.filter(r => r.sc === ui.bgS), () => g))[0] : groups[g]; const gOpen = ui.open.has(g) || !!ui.bgS || !!ui.bgG;
       body += rowHtml(`<span class="caret">▸</span> ${esc(g)}`, o, 'grp click' + (gOpen ? ' open' : ''), `data-g="${esc(g)}"`);
       if (gOpen) { const sk = aggregate(o.rows, r => r.sc); const bo = ['Heineken', 'Tiger', 'Bia Viet', 'Larue', 'Bivina', 'Strongbow', 'Edelweiss']; const bi = sc => (bo.indexOf(brandOf(sc)) + 1) || 99; const multiN = new Set(o.rows.map(r => r.c)).size > 1;
         Object.values(sk).filter(s => s.t || s.si || s.so).sort((a, b) => bi(a.k) - bi(b.k) || b.t - a.t).forEach(s => {
           if (!multiN) { body += rowHtml(s.k, s, 'sku'); return; }
-          const fk = 'bg:s:' + g + ':' + s.k, op = isOpen(fk, false);
+          const fk = 'bg:s:' + g + ':' + s.k, op = isOpen(fk, !!ui.bgS);
           body += rowHtml(s.k, s, 'sku click' + (op ? ' open' : ''), `data-fold="${esc(fk)}"`);
           if (op) Object.values(aggregate(s.rows, r => r.c)).filter(n => n.t || n.si || n.so).sort((a, b) => nppCmp(a.k, b.k)).forEach(n => { body += rowHtml(n.k, n, 'nsku'); });
         }); }
     });
-    body += rowHtml('Tổng', { t: T, si: SI, so: SO }, 'tot');
+    body += rowHtml(ui.bgG || ui.bgS ? 'Tổng (theo bộ lọc)' : 'Tổng', ui.bgG || ui.bgS ? { t: fT, si: fSI, so: fSO } : { t: T, si: SI, so: SO }, 'tot');
     function rowHtml(label, o, cls, attr = '') {
       const a1 = o.t ? o.si / o.t : NaN, a2 = o.t ? o.so / o.t : NaN; const r1 = o.t - o.si, r2 = o.t - o.so;
       const bar = (a, c) => `<span class="mini"><i style="width:${Math.min(100, (a || 0) * 100)}%;background:${c}"></i></span>`;
@@ -651,7 +661,7 @@
         <div class="remrow"><span class="dot" style="background:var(--so)"></span><span>Sale Out</span><b class="num">${fmt(remSo)}</b><small>${U()}</small></div></div>
 
       ${pendingCard()}
-      <div class="card c12"><div class="card-h"><div><h2>Còn lại theo BrandGroup</h2><p class="sub">Target − thực đạt lũy kế · bấm BrandGroup để xem từng SKU, bấm SKU để xem theo NPP · đơn vị ${U()}</p></div></div>
+      <div class="card c12"><div class="card-h"><div><h2>Còn lại theo BrandGroup</h2><p class="sub">Target − thực đạt lũy kế · bấm BrandGroup để xem từng SKU, bấm SKU để xem theo NPP · đơn vị ${U()}</p></div>${bgFilter}</div>
         ${hlNote()}<div class="tw"><table class="sticky1 tgt"><thead><tr><th>BrandFamily</th><th>SKU</th><th>Target</th><th>Sale In</th><th>% SI</th><th>Còn lại SI</th><th>Sale Out</th><th>% SO</th><th>Còn lại SO</th></tr></thead><tbody>${body}</tbody></table></div></div>
 
       ${board}
@@ -1018,6 +1028,8 @@
     const xpd = $('#xl-pending'); if (xpd) xpd.onclick = exportPending;
     const xld = $('#xl-landing'); if (xld) xld.onclick = exportLanding;
     const xb = $('#xl-board'); if (xb) xb.onclick = exportBoard;
+    const bgg = $('#bg-g'); if (bgg) bgg.onchange = () => { ui.bgG = bgg.value; ui.bgS = ''; render(); };
+    const bgs = $('#bg-s'); if (bgs) bgs.onchange = () => { ui.bgS = bgs.value; render(); };
     const ra = $('#ref-apply'); if (ra) ra.onclick = () => { STATE.ref = { rows: readRefInputs(), at: 'draft' }; render(); };
     const rx2 = $('#ref-xl'); if (rx2) rx2.onclick = exportRef;
   }

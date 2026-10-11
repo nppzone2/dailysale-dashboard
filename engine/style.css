@@ -448,3 +448,6 @@ tr.nsku td{font-size:12.5px;color:var(--ink-2);background:color-mix(in srgb,var(
 tr.nsku td:first-child{padding-left:34px}
 tr.nsku .nppn{color:var(--brand)}
 .cmp tr.h2 th{text-align:right!important}
+.minif{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+.minif .fld{display:flex;flex-direction:column;gap:3px}.minif label{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600}
+.minif select{min-width:130px;font-size:13px;padding:6px 8px}
