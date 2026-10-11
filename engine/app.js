@@ -16,14 +16,16 @@
   const areaCode = a => String(a || '').replace(/\s+/g, '').toUpperCase();
   const b64 = x => Uint8Array.from(atob(x), c => c.charCodeAt(0));
   /* Dữ liệu từng tài khoản được mã hoá AES-GCM, khoá PBKDF2-SHA256 từ mật khẩu: chỉ mở được gói của chính mình. */
+  let CRED = null; // khoá tài khoản đang đăng nhập (chỉ giữ trong bộ nhớ) để mở file Order Detail
+  async function openBlob(blob, pass) {
+    const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(String(pass || '').trim()), 'PBKDF2', false, ['deriveKey']);
+    const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: b64(blob.salt), iterations: ENC.iter, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+    const gz = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64(blob.iv) }, key, b64(blob.ct));
+    return JSON.parse(await new Response(new Blob([gz]).stream().pipeThrough(new DecompressionStream('gzip'))).text());
+  }
   async function unlock(user, pass) {
-    const blob = ENC.blobs[String(user || '').replace(/\s+/g, '').toLowerCase()]; if (!blob) return null;
-    try {
-      const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(String(pass || '').trim()), 'PBKDF2', false, ['deriveKey']);
-      const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: b64(blob.salt), iterations: ENC.iter, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
-      const gz = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64(blob.iv) }, key, b64(blob.ct));
-      return JSON.parse(await new Response(new Blob([gz]).stream().pipeThrough(new DecompressionStream('gzip'))).text());
-    } catch (e) { return null; }
+    const k = String(user || '').replace(/\s+/g, '').toLowerCase(); const blob = ENC.blobs[k]; if (!blob) return null;
+    try { const D = await openBlob(blob, pass); CRED = { k, pass }; return D; } catch (e) { return null; }
   }
   function applyRole() {
     if (!ROLE) return;
@@ -33,11 +35,11 @@
     ui.scope = ui.npp !== 'all' ? ui.npp : ui.area !== 'all' ? 'A:' + ui.area : 'all';
   }
   function enter(role) { ROLE = role; const h = (location.hash || '').slice(1); if (h && STATE.npps[h] && role.type !== 'npp') { ui.npp = h; ui.area = STATE.npps[h].area; } applyRole(); shell(); render(); }
-  function logout() { ROLE = null; STATE = null; loginView.admin = false; loginView(); }
+  function logout() { ROLE = null; STATE = null; CRED = null; loginView.admin = false; loginView(); }
   async function tryLogin(u, pw) {
     if (!Object.keys(ENC.blobs).length) return 'Dashboard chưa có dữ liệu.';
     const D = await unlock(u, pw); if (!D) return ENC.maint && String(u || '').trim().toLowerCase() !== 'admin' ? 'Hệ thống đang bảo trì, hiện chỉ tài khoản Admin đăng nhập được.' : 'Sai tên đăng nhập hoặc mật khẩu.';
-    STATE = D.state; PUBLISHED = STATE; ui.area = 'all'; ui.npp = 'all'; ui.tMonth = ''; ui.open.clear(); enter(D.role); return true;
+    STATE = D.state; PUBLISHED = STATE; SOD = null; ui.area = 'all'; ui.npp = 'all'; ui.tMonth = ''; ui.open.clear(); enter(D.role); return true;
   }
   function loginView(msg) {
     const M = ENC.maint;
@@ -625,7 +627,7 @@
     return `
     <section class="lead"><div><div class="eyebrow">Sale In-Out MTD · ${fM(M.m)} · cập nhật đến ${fD(M.lastSi)}</div><h1>${esc(scopeLabel())}</h1>
 </div>
-      <div class="btns"><button class="btn" id="xl-invoice">Tải SO Invoice</button><button class="btn" id="xl-progress">Tải Excel tiến độ</button></div></section>
+      <div class="btns"><button class="btn" id="xl-invoice">Tải SO Invoice</button>${CRED && (ENC.od || []).includes(CRED.k) ? '<button class="btn" id="xl-order">Tải Order Detail</button>' : ''}<button class="btn" id="xl-progress">Tải Excel tiến độ</button></div></section>
     <div class="wkbar card mbar">
       <div class="wkbar-h"><b>Time gone ${fM(M.m)}</b><span class="legend"><span><i class="sq" style="background:var(--si)"></i>Sale In ${pct(aSi)}</span><span><i class="sq" style="background:var(--so)"></i>Sale Out ${pct(aSo)}</span><span><i style="background:var(--ink)"></i>Time gone ${pct(M.tgSi)} · ${M.dSi}/${M.D} ngày</span></span></div>
       ${[['si', aSi, M.tgSi, 'SI'], ['so', aSo, M.tgSo, 'SO']].map(([k, a, tg, lb]) => `<div class="mb-row"><span class="mb-l">${lb}</span><div class="mb-t${a < tg ? ' slow' : ''}"><i class="mb-${k}" style="width:${Math.min(100, (a || 0) * 100)}%"></i><span class="wb-mk" style="left:${tg * 100}%"></span></div><span class="mb-v ${a < tg ? 'lo' : 'hi'}">${pct(a)}</span></div>`).join('')}
@@ -1001,6 +1003,7 @@
     const xt = $('#xl-target'); if (xt) xt.onclick = exportTarget;
     const xp = $('#xl-progress'); if (xp) xp.onclick = exportProgress;
     const xi = $('#xl-invoice'); if (xi) xi.onclick = exportInvoice;
+    const xo = $('#xl-order'); if (xo) xo.onclick = exportOrderDetail;
     v.querySelectorAll('[data-go]').forEach(b => { const go = () => { ui.tab = b.dataset.go; saveUi(); shell(); window.scrollTo({ top: 0 }); render(); }; b.onclick = go; b.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } }; });
     v.querySelectorAll('[data-tsku]').forEach(b => b.onclick = () => { ui.trSku = b.dataset.tsku; render(); });
     const xpd = $('#xl-pending'); if (xpd) xpd.onclick = exportPending;
@@ -1050,6 +1053,24 @@
     GROUPS.forEach(g => { const rr = rows.filter(r => grp(r.sc) === g); if (!rr.length) return;
       piv.push([g, ...npps.flatMap(c => { const x = rr.filter(r => r.c === c); return [Math.round(sumBy(x, r => r.tc)), Math.round(sumBy(x, r => r.th) * 10) / 10]; }), Math.round(sumBy(rr, r => r.tc)), Math.round(sumBy(rr, r => r.th) * 10) / 10]); });
     saveXlsx(`Target_${m}_${scopeTag()}.xlsx`, [['Target chi tiết', long, [10, 10, 9, 10, 12, 13, 12]], ['Theo BrandGroup', piv, [16]]], ev.currentTarget);
+  }
+  /* Order Detail: chi tiết Sale Out theo ngày giao (file SaleOut by DeliveryDate), theo phạm vi tài khoản và bộ lọc */
+  let SOD = null;
+  async function exportOrderDetail(ev) {
+    const btn = ev.currentTarget;
+    if (!SOD) { const t = btn.textContent; btn.textContent = 'Đang tải…'; btn.disabled = true;
+      try { const r = await fetch('od/' + CRED.k + '.json', { cache: 'no-store' }); if (!r.ok) throw 0; SOD = await openBlob(await r.json(), CRED.pass); }
+      catch (e) { btn.textContent = t; btn.disabled = false; toastBtn(btn, 'Chưa tải được dữ liệu'); return; }
+      btn.textContent = t; btn.disabled = false; }
+    ev = { currentTarget: btn };
+    const sod = SOD || {}; const O = sod.outlets || {}; const fd8 = d => d ? d.slice(6, 8) + '/' + d.slice(4, 6) + '/' + d.slice(0, 4) : '';
+    const rows = [['Ngày giao', 'Khu vực', 'Mã NPP', 'Outlet_ID', 'Outlet_Name', 'Outlet_Address', 'Outlet_Segment', 'OrderFrom', 'Source DocNo', 'DIS DocNo', 'Sales_Type', 'Ngày đặt', 'BrandFamily', 'BrandGroup', 'ShortCode', 'Số lượng (Case)', 'Sản lượng (HL)']];
+    (sod.lines || []).filter(l => inScope(l[0]) && inBrand(l[8])).sort((a, b) => a[1].localeCompare(b[1]) || nppCmp(a[0], b[0]) || a[3].localeCompare(b[3]))
+      .forEach(([c, d, o, src, dis, from, typ, od, sc, q]) => { const x = O[o] || ['', '', ''];
+        rows.push([fd8(d), areaOf(c), c, o, x[0], x[1], x[2], from, src, dis, typ, fd8(od), item(sc).b || '', grp(sc), sc, q, Math.round(q * (item(sc).hl || 0) * 100) / 100]); });
+    if (rows.length === 1) { toastBtn(ev.currentTarget, 'Không có đơn trong phạm vi này'); return; }
+    const days = Object.keys(STATE.cur.so || {}).sort();
+    saveXlsx(`Order_Detail_SaleOut_${STATE.cur.month}_${days[days.length - 1] || ''}_${scopeTag()}.xlsx`, [['Order Detail', rows, [11, 9, 9, 11, 28, 36, 20, 9, 16, 16, 9, 11, 11, 10, 9, 13, 12]]], ev.currentTarget);
   }
   function exportInvoice(ev) {
     const cur = STATE.cur || {}; const ship = cur.ship || {};

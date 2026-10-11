@@ -134,6 +134,7 @@ function slice(st, keep) {
   c.sbd = (c.sbd || []).filter(r => keep(r[0]));
   if (s.ref) s.ref.rows = (s.ref.rows || []).filter(r => keep(r[0]));
   if (c.stock) c.stock.rows = (c.stock.rows || []).filter(r => keep(r[0]));
+  if (c.sod) { c.sod.lines = (c.sod.lines || []).filter(l => keep(l[0])); const ou = new Set(c.sod.lines.map(l => l[2])); c.sod.outlets = Object.fromEntries(Object.entries(c.sod.outlets || {}).filter(([o]) => ou.has(o))); }
   const ships = new Set(c.lines.map(l => l[4])); c.ship = Object.fromEntries(Object.entries(c.ship || {}).filter(([id]) => ships.has(id)));
   return s;
 }
@@ -144,26 +145,31 @@ let MAINT = null;
 try { const m = JSON.parse(fs.readFileSync(path.join(__dirname, 'maintenance.json'), 'utf8')); if (m && m.on) MAINT = { msg: String(m.message || '').slice(0, 300), since: m.since || '' }; } catch (e) {}
 if (MAINT) console.log('Chế độ bảo trì: BẬT (chỉ Admin đăng nhập được).');
 if (!hasData) console.log('Chưa có dữ liệu: trang sẽ báo "Dashboard chưa có dữ liệu" khi đăng nhập.');
-if (hasData) blobs.admin = seal({ role: { type: 'admin', id: 'ADMIN', label: 'Admin · toàn vùng' }, state }, ADMIN);
+// Chi tiết đơn Sale Out (cur.sod) tách thành file mã hoá riêng docs/od/<tài khoản>.json, chỉ tải khi bấm "Tải Order Detail"
+const odFiles = {};
+const sealAcct = (key, payload, pw) => { const st = payload.state; const sod = st.cur && st.cur.sod;
+  const lean = { ...st, cur: { ...st.cur } }; delete lean.cur.sod;
+  blobs[key] = seal({ ...payload, state: lean }, pw); if (sod && (sod.lines || []).length) odFiles[key] = seal(sod, pw); };
+if (hasData) sealAcct('admin', { role: { type: 'admin', id: 'ADMIN', label: 'Admin · toàn vùng' }, state }, ADMIN);
 const areas = !hasData ? [] : [...new Set(Object.values(state.npps).map(n => n.area).filter(Boolean))];
 const warn = [];
 for (const a of (MAINT ? [] : areas)) {
   const code = areaCode(a); const pw = String(ASMS_PW[code] || ASM).trim();
   if (!pw) { warn.push('ASM ' + code); continue; }
-  blobs[code.toLowerCase()] = seal({ role: { type: 'asm', id: code, area: a, label: 'ASM · ' + a }, state: slice(state, c => (state.npps[c] || {}).area === a) }, pw);
+  sealAcct(code.toLowerCase(), { role: { type: 'asm', id: code, area: a, label: 'ASM · ' + a }, state: slice(state, c => (state.npps[c] || {}).area === a) }, pw);
 }
 for (const [c, n] of (MAINT ? [] : Object.entries(state.npps))) {
   if (!n.dis) { warn.push(`NPP ${c} (chưa có DisCode)`); continue; }
   const pw = String(NPPS_PW[c] || NPPS_PW[n.dis] || NPP).trim();
   if (!pw) { warn.push('NPP ' + c); continue; }
-  blobs[n.dis.toLowerCase()] = seal({ role: { type: 'npp', id: c, area: n.area, label: 'NPP · ' + c }, state: slice(state, x => x === c) }, pw);
+  sealAcct(n.dis.toLowerCase(), { role: { type: 'npp', id: c, area: n.area, label: 'NPP · ' + c }, state: slice(state, x => x === c) }, pw);
 }
 if (warn.length) console.log('Cảnh báo: chưa tạo tài khoản cho ' + warn.join(', ') + ' (thiếu mật khẩu hoặc DisCode).');
 
 /* ---------- ghi trang ---------- */
 const vn = new Date(Date.now() + 7 * 3600e3), p2 = n => String(n).padStart(2, '0');
 const built = `${p2(vn.getUTCHours())}:${p2(vn.getUTCMinutes())} ${p2(vn.getUTCDate())}/${p2(vn.getUTCMonth() + 1)}/${vn.getUTCFullYear()}`;
-const ENC = { iter: ITER, built, blobs, maint: MAINT, stockDays: CFG.stock_days || { low: 3, high: 3.5 } };
+const ENC = { iter: ITER, built, blobs, od: Object.keys(odFiles), maint: MAINT, stockDays: CFG.stock_days || { low: 3, high: 3.5 } };
 const rd = f => fs.readFileSync(path.join(__dirname, f), 'utf8');
 const safe = s => s.replace(/<\/(script)/gi, '<\\/$1');
 const page = `<!doctype html><html lang="vi"><head><meta charset="utf-8">
@@ -181,6 +187,8 @@ ${rd('style.css')}</style></head><body><div id="app"></div>
 fs.mkdirSync(path.join(ROOT, 'docs'), { recursive: true });
 fs.writeFileSync(path.join(ROOT, 'docs', 'index.html'), page);
 fs.writeFileSync(path.join(ROOT, 'docs', '.nojekyll'), '');
+const OD = path.join(ROOT, 'docs', 'od'); fs.rmSync(OD, { recursive: true, force: true }); fs.mkdirSync(OD, { recursive: true });
+Object.entries(odFiles).forEach(([k, b]) => fs.writeFileSync(path.join(OD, k + '.json'), JSON.stringify(b)));
 console.log(`Đã dựng docs/index.html (${Math.round(page.length / 1024)} KB) · ${Object.keys(blobs).length} tài khoản · tháng hiện hành ${state.cur.month || '—'}.`);
 
 /* ---------- báo cáo cho GitHub Actions ---------- */

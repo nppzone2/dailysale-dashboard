@@ -10,7 +10,7 @@ Dashboard theo dõi Target, Sale In, Sale Out và Allocation của các NPP vùn
 
 | Khi nào | File cần tải |
 |---|---|
-| Hằng ngày | `SO_Invoice`, `SaleOut_by_Seller`, `Dis_Sale_by_Date`, `Online_Order`. Tracking Allocation: Sale In thực tế = Dis Sale by Date đến D-1 (theo ngày order) + đơn Delivery; Pending = đơn khác Backorder và Delivery |
+| Hằng ngày | `SO_Invoice`, `SaleOut_by_DeliveryDate`, `Dis_Sale_by_Date`, `Online_Order`. Tracking Allocation: Sale In thực tế = Dis Sale by Date đến D-1 (theo ngày order) + đơn Delivery; Pending = đơn khác Backorder và Delivery |
 | Hằng tuần | `Allocation_Current_Month`: sheet **Allocation** có cột `Batch 1`, `Batch 2`… và sheet **Upload Date** ghi ngày chia từng batch |
 | Đầu tháng | `Target_Current_Month` |
 | Đầu tháng (tồn kho) | File **Stock** tồn đầu ngày 01 (cột `Alpha_Name`, `ShortCode`, `Sum of Stock`, `Sum of Daily Sales Out`). Dashboard tính Tồn hiện tại = Tồn đầu tháng + Sale In MTD − Sale Out MTD và số ngày tồn; ngưỡng đánh giá sửa ở `stock_days` trong `engine/config.json` |
@@ -21,7 +21,7 @@ Dashboard theo dõi Target, Sale In, Sale Out và Allocation của các NPP vùn
 Dashboard nhận loại file theo **tiêu đề cột**, không theo tên file. Đổi tên file vẫn chạy được.
 
 - **SO Invoice:** đây là số lũy kế từ đầu tháng. Mỗi lần tải lên, file mới thay toàn bộ Sale In của tháng.
-- **SaleOut by Seller:** file không có cột ngày. Mỗi lần tải được lưu thành một mốc lũy kế, gắn với ngày Sale In mới nhất, để vẽ xu hướng Sale Out theo ngày.
+- **SaleOut by DeliveryDate:** Sale Out lũy kế từ đầu tháng theo ngày giao hàng (`FullDelivDateTime`), chi tiết từng đơn. Mỗi lần tải lên, file mới thay toàn bộ Sale Out của tháng. Dòng của NPP ngoài HCM Zone 2 tự bị bỏ qua. Chi tiết đơn tải bằng nút **Tải Order Detail** ở tab Sale In-Out MTD. File `SaleOut by Seller` cũ vẫn đọc được nếu cần.
 - **Chốt tháng:** khi tháng đang chạy đã có file `Target_Total`, file Target hoặc Allocation tải sau đó được tự gán sang tháng kế tiếp. Tháng cũ chuyển vào **YTD as of M-1**.
 - **Trường hợp đặc biệt:** cần ép tháng hoặc ép ngày chốt Sale Out thì sửa `engine/config.json`, chạy xong thì xoá lại về rỗng.
 
