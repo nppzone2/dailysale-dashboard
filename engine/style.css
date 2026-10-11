@@ -486,3 +486,15 @@ tr.nsku .nppn{color:var(--brand)}
 .alw tr.npp td{font-weight:500}
 .seg.alv{align-self:flex-start}.seg.alv button{white-space:nowrap}
 .card-h:has(.alv){flex-wrap:wrap}.card-h:has(.alv) > div:first-child{flex:1 1 360px}.card-h:has(.alv) > .seg{flex:none}
+/* ô Allocation: tổng tuần + batch */
+.alw td.sc{line-height:1.25;padding-top:5px;padding-bottom:5px}
+.alw td.sc b{display:block;font-weight:700}
+.alw td.sc .bb{display:block;font-size:10.5px;color:var(--muted);font-weight:500;white-space:nowrap}
+.alw td.sc .bb i,.bleg i{font-style:normal;opacity:.45;margin:0 4px}
+.alw tr.area td.sc .bb{color:var(--band-ink-2)}
+.alw td.gt .bb{color:color-mix(in srgb,var(--brand) 70%,var(--muted))}
+.bleg{display:flex;flex-direction:column;align-items:flex-end;gap:2px;font-size:11.5px;color:var(--muted);align-self:center;text-align:right}
+.bleg b{color:var(--ink);font-size:12px}
+.bleg em{font-style:normal;font-weight:600;font-size:10.5px;padding:1px 6px;border-radius:999px;margin-left:2px}
+.bleg em.up{background:var(--good-bg);color:var(--good)}.bleg em.wait{background:#FDE9D7;color:#C2560C}
+.card-h:has(.bleg){flex-wrap:wrap}.card-h:has(.bleg) > div:first-child{flex:1 1 360px}.card-h:has(.bleg) > .bleg{flex:none}
