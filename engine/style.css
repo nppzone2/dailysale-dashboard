@@ -455,3 +455,4 @@ tr.nsku .nppn{color:var(--brand)}
 .bgt th:nth-child(n+3),.bgt td:nth-child(n+3){text-align:center}
 .bgt tr.grp td:nth-child(n+2),.bgt tr.tot td:nth-child(n+2){text-align:center}
 .bgt td .mini{margin-left:6px}
+.card-h:has(.xl-r){flex-wrap:nowrap;align-items:flex-start}.card-h:has(.xl-r)>div{flex:1;min-width:0}.card-h .xl-r{flex:none}

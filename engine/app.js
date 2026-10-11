@@ -419,7 +419,7 @@
   const stTxt = (a, tg) => { if (!isFinite(a)) return ['—', 'info']; const r = tg > 0 ? a / tg : 1; return r >= 1 ? ['Đạt', 'good'] : r >= 0.9 ? ['Sát', 'warn'] : ['Chậm', 'bad']; };
   const lvStyle = (lv, onDark) => onDark ? { color: lv === 'good' ? '9FE3BC' : lv === 'warn' ? 'FFD27A' : lv === 'bad' ? 'FFB3B8' : lv === 'org' ? 'FFB27A' : XC.white, h: 'center', bold: true }
     : { color: lv === 'good' ? XC.good : lv === 'warn' ? XC.warn : lv === 'bad' ? XC.bad : lv === 'org' ? XC.org : XC.muted, fill: lv === 'good' ? XC.goodBg : lv === 'warn' ? XC.warnBg : lv === 'bad' ? XC.badBg : lv === 'org' ? XC.orgBg : undefined, h: 'center', bold: true };
-  let lastBoard = null;
+  let lastBoard = null; let allocExport = null;
   function exportBoard(ev) {
     const B = lastBoard; if (!B) return; const { M, byN, groupsA, sumO, hasStock, SD } = B;
     const nfU = ui.unit === 'hl' ? '#,##0.0' : '#,##0'; const rnd = v => ui.unit === 'hl' ? Math.round(v * 10) / 10 : Math.round(v);
@@ -771,7 +771,31 @@
       tb += `<tr class="tot"><td>Tổng</td><td></td>${cells(npps, null)}</tr>`;
       GT.forEach(([g, l]) => { tb += `<tr class="gsub gtot"><td></td><td>${esc(g)} <span class="note">· ${l.length} SKU</span></td>${cells(npps, l)}</tr>`; });
       const table = `<table class="sticky1 trk batch"><thead><tr><th>Khu vực / NPP</th><th>SKU</th>${bIdx.map(bHead).join('')}<th>Tổng ${esc(wk)}</th></tr></thead><tbody>${tb}</tbody></table>`;
-      byNpp = `<div class="card c12"><div class="card-h"><div><h2>Theo Khu vực / NPP · ${esc(wk)}</h2><p class="sub">Đơn vị ${U()} · số chia Current Week theo từng batch · bấm mũi tên để mở khu vực, NPP · số còn lại xem ở tab <button class="linkback" data-go="tracking" style="display:inline;margin:0">Tracking Allocation</button></p></div></div><div class="tw">${table}</div></div>`;
+      // Xuất Excel có định dạng như web: đủ mọi Khu vực / NPP / Group / SKU
+      allocExport = ev => {
+        const skusOf = list => skus.filter(sc => A.some(r => r[0] === wk && list.includes(r[1]) && r[2] === sc));
+        const nf = ui.unit === 'hl' ? '#,##0.0' : '#,##0'; const rnd = v => ui.unit === 'hl' ? Math.round(v * 10) / 10 : Math.round(v);
+        const vals = (cs, sc) => [...bIdx.map(i => rnd(bv(cs, sc, i))), rnd(wv(cs, sc))];
+        const nB = bIdx.length; const body = [];
+        const line = (a, n, lab, cs, sc, kind) => body.push({ v: [a, n, lab, ...vals(cs, sc)], kind, s: (k) => k === 1 && kind === 'npp' ? { color: XC.brand, bold: true } : k < 3 ? (kind === 'gsub' ? { color: XC.muted } : null) : { nf, bold: k === 3 + nB } });
+        AG.forEach(([a, cs]) => { const GA = byGrp(skusOf(cs));
+          line(a, `${cs.length} NPP`, GA.length === 1 ? GA[0][0] : 'Tổng', cs, null, 'area');
+          if (GA.length > 1) GA.forEach(([g, l]) => line('', '', `${g} · ${l.length} SKU`, cs, l, 'gsub'));
+          cs.forEach(c => { const ss = skusOf([c]); if (!ss.length) return; const G = byGrp(ss);
+            line('', c, `${G.length === 1 ? G[0][0] + ' · ' : ''}${ss.length} SKU`, [c], null, 'npp');
+            G.forEach(([g, l]) => { if (G.length > 1) line('', '', `${g} · ${l.length} SKU`, [c], l, 'gsub'); l.forEach(sc => line('', '', '   ' + sc, [c], sc, 'sub')); }); }); });
+        const GT = byGrp(skus.filter(sc => A.some(r => r[0] === wk && r[2] === sc)));
+        line('Tổng', '', 'Tổng', npps, null, 'grand'); GT.forEach(([g, l]) => line('', '', `${g} · ${l.length} SKU`, npps, l, 'gsub'));
+        const bName = i => `${BC[i]} · ${(AD[wk] || [])[i] ? fd(AD[wk][i]) : 'chưa có ngày'}${(AD[wk] || [])[i] && AD[wk][i] <= today ? ' (Đã Upload)' : ' (Chờ Upload)'}`;
+        styledXlsx({ file: `Allocation_${wk}_${scopeTag()}.xlsx`, sheet: 'Allocation ' + wk,
+          title: `Distributor Sales Performance · Allocation theo Khu vực / NPP · ${wk}`,
+          sub: `RTC - Future Fit · HCM Zone 2 · ${scopeLabel()} · ${rangeTxt || 'Current Week ' + wk} · đơn vị ${U()}`,
+          note: 'Số chia Current Week theo từng batch. Số còn lại sau Sale In và Pending xem ở tab Tracking Allocation.',
+          H: ['Khu vực', 'NPP', 'Group / SKU', ...bIdx.map(bName), `Tổng ${wk}`], body, leftCols: 3, sepCols: [3, 3 + nB],
+          widths: [10, 10, 22, ...bIdx.map(() => 20), 13],
+          concl: [`Tổng allocation ${wk}: ${fmt(wkTot)} ${U()}${bIdx.length ? ' (' + bIdx.map(i => `${BC[i]} ${fmt(bTot(i))}`).join(', ') + ')' : ''}.`] }, ev.currentTarget);
+      };
+      byNpp = `<div class="card c12"><div class="card-h"><div><h2>Theo Khu vực / NPP · ${esc(wk)}</h2><p class="sub">Đơn vị ${U()} · số chia Current Week theo từng batch · bấm mũi tên để mở khu vực, NPP · số còn lại xem ở tab <button class="linkback" data-go="tracking" style="display:inline;margin:0">Tracking Allocation</button></p></div><button class="btn xl-r" id="xl-alloc">Tải Excel</button></div><div class="tw">${table}</div></div>`;
     }
     const over = bySku.filter(s => s.si > s.al);
     const main = bySku[0];
@@ -1028,6 +1052,7 @@
     const xpd = $('#xl-pending'); if (xpd) xpd.onclick = exportPending;
     const xld = $('#xl-landing'); if (xld) xld.onclick = exportLanding;
     const xb = $('#xl-board'); if (xb) xb.onclick = exportBoard;
+    const xa = $('#xl-alloc'); if (xa) xa.onclick = ev => allocExport && allocExport(ev);
     const bgg = $('#bg-g'); if (bgg) bgg.onchange = () => { ui.bgG = bgg.value; ui.bgS = ''; render(); };
     const bgs = $('#bg-s'); if (bgs) bgs.onchange = () => { ui.bgS = bgs.value; render(); };
     const ra = $('#ref-apply'); if (ra) ra.onclick = () => { STATE.ref = { rows: readRefInputs(), at: 'draft' }; render(); };
