@@ -1063,6 +1063,7 @@
   /* ---------- bindings ---------- */
   function bindView() {
     const v = $('#view');
+    addImgButtons(v);
     v.querySelectorAll('tr[data-g]').forEach(tr => tr.onclick = () => { const g = tr.dataset.g; ui.open.has(g) ? ui.open.delete(g) : ui.open.add(g); render(); });
     v.querySelectorAll('[data-fold]').forEach(el => el.onclick = e => { e.stopPropagation(); const k = el.dataset.fold; ui.flip.has(k) ? ui.flip.delete(k) : ui.flip.add(k); render(); });
     // Bấm tên NPP: mở/thu gọn chi tiết của NPP đó (không lọc, để bảng giữ nguyên)
@@ -1089,6 +1090,81 @@
   }
 
   /* ---------- Excel export ---------- */
+  /* ---------- Tải ảnh PNG của một khung (tự vẽ lại nền, viền, chữ lên canvas, không cần thư viện ngoài) ---------- */
+  function saveBlob(filename, blob, btn) {
+    const u = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = u; a.download = filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 4000); toastBtn(btn, 'Đã tải');
+  }
+  const isClear = c => !c || c === 'transparent' || /rgba\([^)]*,\s*0\)$/.test(c);
+  async function snapCard(card, name, btn) {
+    const hideSel = '.btn, .img-dl, .linkback, button.tab';
+    const hidden = [...card.querySelectorAll(hideSel)]; hidden.forEach(e => { e.dataset.vis = e.style.visibility; e.style.visibility = 'hidden'; });
+    // mở rộng khung cuộn ngang để chụp đủ bảng
+    const tws = [...card.querySelectorAll('.tw')]; const old = { w: card.style.width, mw: card.style.maxWidth };
+    const need = Math.max(card.clientWidth, ...tws.map(t => t.scrollWidth + (card.clientWidth - t.clientWidth)));
+    tws.forEach(t => { t.dataset.ov = t.style.overflow; t.style.overflow = 'visible'; });
+    if (need > card.clientWidth) { card.style.width = need + 'px'; card.style.maxWidth = 'none'; }
+    try {
+      if (document.fonts && document.fonts.ready) await document.fonts.ready;
+      const R = card.getBoundingClientRect(); const pad = 16, foot = 26, S = Math.min(2, Math.max(1, window.devicePixelRatio || 1)) * 1.5;
+      const W = Math.ceil(R.width + pad * 2), H = Math.ceil(R.height + pad * 2 + foot);
+      const cv = document.createElement('canvas'); cv.width = Math.round(W * S); cv.height = Math.round(H * S);
+      const g = cv.getContext('2d'); g.scale(S, S);
+      const bodyBg = getComputedStyle(document.body).backgroundColor; g.fillStyle = isClear(bodyBg) ? '#f3f5f4' : bodyBg; g.fillRect(0, 0, W, H);
+      const ox = pad - R.left, oy = pad - R.top;
+      const rr = (x, y, w, h, r) => { r = Math.min(r, w / 2, h / 2); g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); };
+      const els = [card, ...card.querySelectorAll('*')];
+      // 1) nền + viền
+      els.forEach(el => { if (el.closest(hideSel) && el !== card) return; const cs = getComputedStyle(el); if (cs.display === 'none' || cs.visibility === 'hidden') return;
+        const rects = el.getClientRects(); if (!rects.length) return; const b = el.getBoundingClientRect(); if (b.width < .5 || b.height < .5) return;
+        const x = b.left + ox, y = b.top + oy;
+        if (!isClear(cs.backgroundColor)) { g.fillStyle = cs.backgroundColor; rr(x, y, b.width, b.height, parseFloat(cs.borderTopLeftRadius) || 0); g.fill(); }
+        [['Top', x, y, b.width, 0], ['Bottom', x, y + b.height, b.width, 0], ['Left', x, y, 0, b.height], ['Right', x + b.width, y, 0, b.height]].forEach(([s, x1, y1, w, h]) => {
+          const bw = parseFloat(cs['border' + s + 'Width']) || 0; const bc = cs['border' + s + 'Color']; if (!bw || isClear(bc) || cs['border' + s + 'Style'] === 'none') return;
+          if (parseFloat(cs.borderTopLeftRadius) > 3 && s !== 'Bottom' && s !== 'Top' && el.tagName !== 'TD' && el.tagName !== 'TH') return;
+          g.fillStyle = bc; if (w) g.fillRect(x1, s === 'Top' ? y1 : y1 - bw, w, bw); else g.fillRect(s === 'Left' ? x1 : x1 - bw, y1, bw, h); });
+        // vạch ngăn cột cố định (box-shadow inset)
+        const m = /inset\s+(-?\d+)px\s+0px\s+0px\s+0px\s+(rgba?\([^)]*\))|(rgba?\([^)]*\))\s+(-?\d+)px\s+0px\s+0px\s+0px\s+inset/.exec(cs.boxShadow || '');
+        if (m) { const off = +(m[1] || m[4]), col = m[2] || m[3]; g.fillStyle = col; g.fillRect(off < 0 ? x + b.width + off : x, y, Math.abs(off), b.height); }
+        if (el.tagName === 'SELECT') { const t = el.options[el.selectedIndex] ? el.options[el.selectedIndex].text : ''; g.fillStyle = cs.color; g.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`; g.textBaseline = 'middle'; g.fillText(t, x + (parseFloat(cs.paddingLeft) || 8), y + b.height / 2); }
+      });
+      // 2) chữ: vẽ từng từ đúng vị trí trên trang
+      const tw = document.createTreeWalker(card, NodeFilter.SHOW_TEXT); const range = document.createRange(); let n;
+      while ((n = tw.nextNode())) { const p = n.parentElement; if (!p || !n.nodeValue.trim() || p.closest(hideSel) || p.closest('select, option')) continue;
+        const cs = getComputedStyle(p); if (cs.visibility === 'hidden' || cs.display === 'none') continue;
+        g.fillStyle = cs.color; g.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`; g.textBaseline = 'alphabetic';
+        if ('letterSpacing' in g) g.letterSpacing = cs.letterSpacing === 'normal' ? '0px' : cs.letterSpacing;
+        const tt = cs.textTransform; const txt = n.nodeValue; const re = /\S+/g; let mm;
+        while ((mm = re.exec(txt))) { range.setStart(n, mm.index); range.setEnd(n, mm.index + mm[0].length); const rc = range.getBoundingClientRect(); if (!rc.width) continue;
+          let w = mm[0]; if (tt === 'uppercase') w = w.toUpperCase();
+          if (w === '▸' && cs.transform && cs.transform !== 'none') w = '▾';
+          const fs = parseFloat(cs.fontSize); g.fillText(w, rc.left + ox, rc.top + oy + rc.height / 2 + fs * 0.35); }
+      }
+      // chân ảnh
+      g.fillStyle = '#6B7A70'; g.font = `500 11px ${getComputedStyle(document.body).fontFamily}`; g.textBaseline = 'middle';
+      if ('letterSpacing' in g) g.letterSpacing = '0px';
+      g.fillText(`Distributor Sales Performance · RTC - Future Fit · ${scopeLabel()} · cập nhật ${ENC.built || ''}`, pad, H - foot / 2);
+      await new Promise(res => cv.toBlob(b => { saveBlob(name, b, btn); res(); }, 'image/png'));
+    } catch (e) { toastBtn(btn, 'Chưa tạo được ảnh'); }
+    finally {
+      hidden.forEach(e => { e.style.visibility = e.dataset.vis || ''; }); tws.forEach(t => { t.style.overflow = t.dataset.ov || ''; });
+      card.style.width = old.w; card.style.maxWidth = old.mw;
+    }
+  }
+  // gắn nút "Tải ảnh" cho mọi khung có bảng
+  function addImgButtons(v) {
+    v.querySelectorAll('.card').forEach((card, i) => { if (!card.querySelector('table') || card.querySelector('.img-dl')) return;
+      const h2 = card.querySelector('h2'); const title = h2 ? h2.textContent.trim() : 'Bang';
+      const b = document.createElement('button'); b.className = 'btn img-dl'; b.type = 'button'; b.title = 'Tải ảnh PNG của bảng này';
+      b.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M21 17l-5-5-8 7"/></svg> Tải ảnh';
+      const slug = title.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 50);
+      b.onclick = () => { const t = b.innerHTML; b.disabled = true; b.textContent = 'Đang tạo…'; snapCard(card, `${slug}_${STATE.cur.month || ''}_${scopeTag()}.png`, b).finally(() => { b.disabled = false; b.innerHTML = t; }); };
+      const head = card.querySelector('.card-h');
+      if (head) { const xl = head.querySelector(':scope > .btn'); let box = head.querySelector(':scope > .hbtns');
+        if (!box) { box = document.createElement('div'); box.className = 'hbtns'; if (xl) { head.insertBefore(box, xl); box.appendChild(xl); } else head.appendChild(box); }
+        box.insertBefore(b, box.firstChild); }
+      else { card.classList.add('has-img'); b.classList.add('abs'); card.insertBefore(b, card.firstChild); }
+    });
+  }
   async function saveXlsx(filename, sheets, btn) {
     if (!window.XLSX) { toastBtn(btn, 'Chưa tải được thư viện Excel'); return; }
     const wb = XLSX.utils.book_new();
