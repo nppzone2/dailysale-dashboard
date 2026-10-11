@@ -883,39 +883,32 @@
     const AD = cur.allocDates || {}; const fd = d => d ? d.slice(6, 8) + '/' + d.slice(4, 6) : '';
     const wStart = (AD[wk] || []).find(Boolean) || null; const nStart = nw ? ((AD[nw] || []).find(Boolean) || null) : null;
     const wEnd = wStart ? (nStart ? addDay(nStart, -1) : addDay(wStart, 6)) : null; const inWk = d => d && wStart && d >= wStart && d <= wEnd;
-    // ngày order của từng hoá đơn (ghép InvoiceNumber = Order Number trong Online Order); không ghép được thì dùng ngày hoá đơn
-    // Sale In thực tế theo ngày order = Dis Sale by Date (hoá đơn theo ngày order) + đơn Delivery chưa có hoá đơn trong SO Invoice
-    const oDate = {}; (cur.orders || []).forEach(o => { const k = orderDateKey(o[5]); if (k) oDate[String(o[1])] = k; });
-    const hasSbd = (cur.sbd || []).length > 0;
-    const D = todayKey(); // D-1: chỉ lấy hoá đơn có Calendar_Day_Name trước hôm nay
+    // Logic theo Allocation tool: Thực hiện = hoá đơn (Dis Sale by Date) + Online Order chưa có trong hoá đơn (mọi trạng thái).
+    // Dis Sale by Date không có số đơn, nên đơn Online được coi là "đã có trong hoá đơn" khi Invoice Date ≤ ngày hoá đơn mới nhất của Dis Sale.
     // Tab này chỉ dùng 2 file: Dis Sale by Date và Online Order (không dùng SO Invoice)
-    const lines = hasSbd ? cur.sbd.filter(r => r[1] < D && inScope(r[0]) && inBrand(r[3])).map(r => ({ c: r[0], sc: r[3], q: r[4], d: r[2], w: r[5] || '', byOrder: true })) : [];
-    // đơn Delivery: cộng vào Sale In; bỏ đơn đã xuất hoá đơn trước hôm nay (đã nằm trong số D-1)
-    // Delivery: Order Number chưa có trong SO Invoice -> cộng Sale In; đã có trong SO Invoice -> đã nằm trong hoá đơn (trừ hoá đơn hôm nay, chưa vào số D-1)
-    // Sale In = Dis Sale by Date đến D-1 + toàn bộ đơn Online Order có Invoice Date = hôm nay (trừ Backorder)
-    // Công thức: Dis Sale (ConfirmDate < hôm nay, đúng tuần order) + Online Order trạng thái Delivery chưa Synced (Order Number chưa có trong SO Invoice)
-    // Delivery chưa Synced: theo cột Synced nếu file có; nếu không, là đơn chưa nằm trong Dis Sale đến D-1 (Invoice Date trống hoặc từ hôm nay)
-    const synced = o => o[9] != null && o[9] !== '' ? /^synced$/i.test(o[9]) : !!(orderDateKey(o[8]) && orderDateKey(o[8]) < D);
-    const deliv = (cur.orders || []).filter(o => /deliver/i.test(o[2]) && !synced(o) && inScope(o[0]) && inBrand(o[3]));
-    const delivNo = new Set(deliv.map(o => String(o[1])));
-    deliv.forEach(o => lines.push({ c: o[0], sc: o[3], q: o[4], d: orderDateKey(o[5]), w: wk, byOrder: true, deliv: true }));
+    const hasSbd = (cur.sbd || []).length > 0;
+    const D = todayKey();
+    const sbdMax = hasSbd ? cur.sbd.reduce((m, r) => r[1] > m ? r[1] : m, '') : '';
+    const lines = hasSbd ? cur.sbd.filter(r => inScope(r[0]) && inBrand(r[3])).map(r => ({ c: r[0], sc: r[3], q: r[4], d: r[2], w: r[5] || '' })) : [];
+    const inSbd = o => { const k = orderDateKey(o[8]); return !!(k && sbdMax && k <= sbdMax); };
+    const online = (cur.orders || []).filter(o => !inSbd(o) && inScope(o[0]) && inBrand(o[3]));
     const lastData = addDay(todayKey(), -1);
     // Tiến độ tuần chỉ tính ngày làm việc thứ 2 – thứ 7 (bỏ Chủ nhật)
     const isWork = d => new Date(Date.UTC(+d.slice(0, 4), +d.slice(4, 6) - 1, +d.slice(6, 8))).getUTCDay() !== 0;
     const workDays = (a, b) => { let n = 0; for (let d = a; d <= b; d = addDay(d, 1)) if (isWork(d)) n++; return n; };
     const span = wStart ? workDays(wStart, wEnd) || 1 : 6; const goneDays = wStart && lastData >= wStart ? workDays(wStart, lastData < wEnd ? lastData : wEnd) : 0;
     const gone = wStart ? Math.min(1, goneDays / span) : 1;
-    const skus = [...new Set(A.map(r => r[2]))].map(sc => ({ sc, al: sumBy(A.filter(r => r[2] === sc && r[0] === wk), r => r[3]) })).sort((a, b) => b.al - a.al).map(x => x.sc);
+    // chỉ theo dõi SKU có allocation trong tuần hiện tại (SKU chỉ có ở tuần khác không cộng Sale In vào tổng)
+    const skus = [...new Set(A.map(r => r[2]))].map(sc => ({ sc, al: sumBy(A.filter(r => r[2] === sc && r[0] === wk), r => r[3]) })).filter(x => x.al > 0).sort((a, b) => b.al - a.al).map(x => x.sc);
     if (ui.trSku !== 'all' && !skus.includes(ui.trSku)) ui.trSku = 'all';
     const shown = ui.trSku === 'all' ? skus : [ui.trSku];
-    const P = (cur.orders || []).filter(o => /approve|schedule/i.test(o[2]) && inScope(o[0]) && inBrand(o[3]) && shown.includes(o[3]));
+    const P = online.filter(o => shown.includes(o[3]));
     const npps = [...new Set(A.map(r => r[1]))].sort(nppCmp);
     const calc = (cs, ss) => {
       const al = sumBy(A.filter(r => cs.includes(r[1]) && ss.includes(r[2]) && r[0] === wk), r => conv(r[3], r[2]));
       const si = sumBy(lines.filter(l => cs.includes(l.c) && ss.includes(l.sc) && (l.w ? l.w === wk : inWk(l.d))), l => conv(l.q, l.sc));
       const pd = sumBy(P.filter(o => cs.includes(o[0]) && ss.includes(o[3])), o => conv(o[4], o[3]));
-      const dup = sumBy(P.filter(o => cs.includes(o[0]) && ss.includes(o[3]) && delivNo.has(String(o[1]))), o => conv(o[4], o[3])); // đơn Delivery đã tính trong Sale In
-      return { al, si, pd, rem: al - si - (pd - dup), ps: al ? si / al : NaN, use: al ? (si + pd - dup) / al : NaN };
+      return { al, si, pd, rem: al - si - pd, ps: al ? si / al : NaN, use: al ? (si + pd) / al : NaN };
     };
     const bar = (v, col) => `<span class="mini"><i style="width:${Math.min(100, (v || 0) * 100)}%;background:${col}"></i></span>`;
     const tdv = x => `<td>${fmt(x.al)}</td><td>${fmt(x.si)}</td><td>${!isFinite(x.ps) ? '—' : `<span class="${x.ps < gone ? 'lo' : 'hi'}">${pct(x.ps)}</span>`}</td><td>${fmt(x.pd)}</td><td>${isFinite(x.use) ? pct(x.use) : '—'}${bar(x.use, x.use > 1 ? 'var(--good)' : 'var(--si)')}</td><td class="rem">${x.rem >= 0 ? fmt(x.rem) : `<span class="ov">Vượt ${fmt(-x.rem)}</span>`}</td>`;
@@ -938,7 +931,7 @@
     <section class="lead"><div><div class="eyebrow">Tracking Allocation · Current Week ${esc(wk)}</div><h1>${esc(scopeLabel())}</h1>
       <p>${wStart ? `Tuần ${fd(wStart)} → ${fd(wEnd)} · đã qua ${goneDays}/${span} ngày làm việc T2–T7 đến D-1 (tiến độ tuần ${pct(gone)}). ` : ''}</p></div>${chips}</section>
     <div class="wkbar card">
-      <div class="wkbar-h"><b>Tiến độ ${esc(wk)}</b><span class="legend"><span><i class="sq" style="background:var(--si)"></i>Sale In ${pct(T.ps)}</span><span><i class="sq" style="background:var(--so);opacity:.55"></i>Pending ${pct(T.al ? T.pd / T.al : 0)}</span><span><i style="background:var(--ink)"></i>Tiến độ ${pct(gone)}</span></span><span class="note" hidden>Allocation ${fmt(T.al)} ${U()} · Sale In ${pct(T.ps)} · Pending ${pct(T.al ? T.pd / T.al : 0)} · tiến độ tuần ${pct(gone)}</span></div>
+      <div class="wkbar-h"><b>Tiến độ ${esc(wk)}</b><span class="legend"><span><i class="sq" style="background:var(--si)"></i>Sale In ${pct(T.ps)}</span><span><i class="sq" style="background:var(--so);opacity:.55"></i>Online Order ${pct(T.al ? T.pd / T.al : 0)}</span><span><i style="background:var(--ink)"></i>Tiến độ ${pct(gone)}</span></span><span class="note" hidden>Allocation ${fmt(T.al)} ${U()} · Sale In ${pct(T.ps)} · Online Order ${pct(T.al ? T.pd / T.al : 0)} · tiến độ tuần ${pct(gone)}</span></div>
       <div class="wkbar-t">
         <i class="wb-si" style="width:${Math.min(100, (T.ps || 0) * 100)}%"></i><i class="wb-pd" style="width:${Math.max(0, Math.min(100 - Math.min(100, (T.ps || 0) * 100), (T.al ? T.pd / T.al : 0) * 100))}%"></i>
         <span class="wb-mk${gone > 0.85 ? ' r' : gone < 0.15 ? ' l' : ''}" style="left:${gone * 100}%"><em>Tiến độ ${pct(gone)}</em></span>
@@ -948,13 +941,13 @@
     <div class="grid">
       <div class="card c3 kpi"><div class="kpi-l">Allocation ${esc(wk)}</div><div class="kpi-v">${fmt(T.al)}<small>${U()}</small></div><div class="kpi-f">${wStart ? 'Upload ' + (AD[wk] || []).filter(Boolean).map(fd).join(' · ') : ''}</div></div>
       <div class="card c3 kpi"><div class="kpi-l">Sale In ${esc(wk)}</div><div class="kpi-v">${fmt(T.si)}<small>${U()}</small></div><div class="kpi-f"><span class="${T.ps < gone ? 'lo' : 'hi'}">${pct(T.ps)}</span> allocation · tiến độ ${pct(gone)}</div></div>
-      <div class="card c3 kpi" role="button" tabindex="0" data-go="pending" style="cursor:pointer"><div class="kpi-l">SO Pending ${esc(wk)}</div><div class="kpi-v">${fmt(T.pd)}<small>${U()}</small></div><div class="kpi-f">Xem theo SKU →</div></div>
-      <div class="card c3 kpi"><div class="kpi-l">Còn lại ${esc(wk)}</div><div class="kpi-v" style="color:${T.rem < 0 ? 'var(--good)' : 'inherit'}">${fmt(T.rem)}<small>${U()}</small></div><div class="kpi-f">Đã dùng <b>${pct(T.use)}</b> (Sale In + Pending)</div><div class="bar"><i style="width:${Math.min(100, (T.use || 0) * 100)}%;background:${T.use > 1 ? 'var(--good)' : 'var(--si)'}"></i></div></div>
-      <div class="card c12"><h2>Theo khu vực / NPP / SKU · ${esc(wk)}</h2><p class="sub">Đơn vị ${U()}</p><div class="tw"><table class="sticky1 trk"><thead><tr><th>Khu vực / NPP</th><th>SKU</th><th>Allocation ${esc(wk)}</th><th>Sale In ${esc(wk)}</th><th>% Sale In</th><th>SO Pending</th><th>% đã dùng</th><th>Còn lại</th></tr></thead><tbody>${body}</tbody></table></div>
-        <p class="note" style="margin:8px 0 0">${hasSbd ? `Dis Sale by Date tính đến ${fd(addDay(D, -1))} (D-1).` : 'Chưa có file Dis Sale by Date.'}${deliv.length ? ` Cộng ${fmt(sumBy(deliv.filter(o => inWk(orderDateKey(o[5])) && shown.includes(o[3])), o => conv(o[4], o[3])))} ${U()} từ ${new Set(deliv.map(o => o[1])).size} đơn Delivery chưa Synced. Pending = Order Approve & Schedule, loại Backorder.` : ' Pending = Order Approve & Schedule, loại Backorder.'}</p></div>
+      <div class="card c3 kpi" role="button" tabindex="0" data-go="pending" style="cursor:pointer"><div class="kpi-l">Online Order chưa invoice</div><div class="kpi-v">${fmt(T.pd)}<small>${U()}</small></div><div class="kpi-f">Xem theo SKU →</div></div>
+      <div class="card c3 kpi"><div class="kpi-l">Còn lại ${esc(wk)}</div><div class="kpi-v" style="color:${T.rem < 0 ? 'var(--good)' : 'inherit'}">${fmt(T.rem)}<small>${U()}</small></div><div class="kpi-f">Đã dùng <b>${pct(T.use)}</b> (Sale In + Online Order)</div><div class="bar"><i style="width:${Math.min(100, (T.use || 0) * 100)}%;background:${T.use > 1 ? 'var(--good)' : 'var(--si)'}"></i></div></div>
+      <div class="card c12"><h2>Theo khu vực / NPP / SKU · ${esc(wk)}</h2><p class="sub">Đơn vị ${U()}</p><div class="tw"><table class="sticky1 trk"><thead><tr><th>Khu vực / NPP</th><th>SKU</th><th>Allocation ${esc(wk)}</th><th>Sale In ${esc(wk)}</th><th>% Sale In</th><th>Online Order</th><th>% đã dùng</th><th>Còn lại</th></tr></thead><tbody>${body}</tbody></table></div>
+        <p class="note" style="margin:8px 0 0">${hasSbd ? `Sale In = Dis Sale by Date (hoá đơn đến ${fd(sbdMax)}, tính theo tuần ngày order).` : 'Chưa có file Dis Sale by Date.'} Online Order = đơn chưa có trong hoá đơn (Invoice Date trống hoặc sau ${fd(sbdMax) || 'ngày hoá đơn mới nhất'}), mọi trạng thái: ${fmt(T.pd)} ${U()} từ ${new Set(P.map(o => o[1])).size} đơn. Còn lại = Allocation − Sale In − Online Order.</p></div>
     </div>
     ${conclusion([
-      `Current Week <b>${esc(wk)}</b>: Sale In đạt <b>${pct(T.ps)}</b> allocation so với tiến độ tuần ${pct(gone)}; tính cả Pending đã dùng <b>${pct(T.use)}</b>, ${T.rem >= 0 ? `còn <b>${fmt(T.rem)} ${U()}</b>` : `vượt allocation <b>${fmt(-T.rem)} ${U()}</b>`}.`,
+      `Current Week <b>${esc(wk)}</b>: Sale In đạt <b>${pct(T.ps)}</b> allocation so với tiến độ tuần ${pct(gone)}; tính cả Online Order đã dùng <b>${pct(T.use)}</b>, ${T.rem >= 0 ? `còn <b>${fmt(T.rem)} ${U()}</b>` : `vượt allocation <b>${fmt(-T.rem)} ${U()}</b>`}.`,
       slow.length ? `Chậm hơn tiến độ: ${slow.slice(0, 4).map(([c, y]) => `<b>${esc(c)}</b> (${pct(y.ps)})`).join(', ')}.` : 'Tất cả NPP đều đúng tiến độ tuần.',
       over.length ? `Vượt allocation: ${over.map(([c, y]) => `<b>${esc(c)}</b> (${fmt(-y.rem)} ${U()})`).join(', ')}.` : ''
     ])}`;
