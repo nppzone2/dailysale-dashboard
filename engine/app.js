@@ -569,14 +569,22 @@
     GROUPS.filter(g => groups[g] && (groups[g].t || groups[g].si || groups[g].so)).forEach(g => {
       const o = groups[g]; const gOpen = ui.open.has(g);
       body += rowHtml(`<span class="caret">▸</span> ${esc(g)}`, o, 'grp click' + (gOpen ? ' open' : ''), `data-g="${esc(g)}"`);
-      if (gOpen) { const sk = aggregate(o.rows, r => r.sc); const bo = ['Heineken', 'Tiger', 'Bia Viet', 'Larue', 'Bivina', 'Strongbow', 'Edelweiss']; const bi = sc => (bo.indexOf(brandOf(sc)) + 1) || 99; Object.values(sk).filter(s => s.t || s.si || s.so).sort((a, b) => bi(a.k) - bi(b.k) || b.t - a.t).forEach(s => { body += rowHtml(s.k, s, 'sku'); }); }
+      if (gOpen) { const sk = aggregate(o.rows, r => r.sc); const bo = ['Heineken', 'Tiger', 'Bia Viet', 'Larue', 'Bivina', 'Strongbow', 'Edelweiss']; const bi = sc => (bo.indexOf(brandOf(sc)) + 1) || 99; const multiN = new Set(o.rows.map(r => r.c)).size > 1;
+        Object.values(sk).filter(s => s.t || s.si || s.so).sort((a, b) => bi(a.k) - bi(b.k) || b.t - a.t).forEach(s => {
+          if (!multiN) { body += rowHtml(s.k, s, 'sku'); return; }
+          const fk = 'bg:s:' + g + ':' + s.k, op = isOpen(fk, false);
+          body += rowHtml(s.k, s, 'sku click' + (op ? ' open' : ''), `data-fold="${esc(fk)}"`);
+          if (op) Object.values(aggregate(s.rows, r => r.c)).filter(n => n.t || n.si || n.so).sort((a, b) => nppCmp(a.k, b.k)).forEach(n => { body += rowHtml(n.k, n, 'nsku'); });
+        }); }
     });
     body += rowHtml('Tổng', { t: T, si: SI, so: SO }, 'tot');
     function rowHtml(label, o, cls, attr = '') {
       const a1 = o.t ? o.si / o.t : NaN, a2 = o.t ? o.so / o.t : NaN; const r1 = o.t - o.si, r2 = o.t - o.so;
       const bar = (a, c) => `<span class="mini"><i style="width:${Math.min(100, (a || 0) * 100)}%;background:${c}"></i></span>`;
       const remCell = r => r > 0 ? `<span class="rem">${fmt(r)}</span>` : `<span class="neg">Vượt ${fmt(-r)}</span>`;
-      return `<tr class="${cls}" ${attr}>${cls === 'sku' ? `<td>${esc(item(label).b || '—')}</td><td class="skuc">${esc(label)}</td>` : `<td colspan="2">${label}</td>`}<td>${fmt(o.t)}</td><td>${fmt(o.si)}</td><td>${pctT(a1, M.tgSi)}${bar(a1, cSi)}</td><td>${remCell(r1)}</td><td>${fmt(o.so)}</td><td>${pctT(a2, M.tgSo)}${bar(a2, cSo)}</td><td>${remCell(r2)}</td></tr>`;
+      const lead = cls.startsWith('nsku') ? `<td>${esc(areaOf(label))}</td><td class="skuc"><b class="nppn">${esc(label)}</b></td>`
+        : cls.startsWith('sku') ? `<td>${esc(item(label).b || '—')}</td><td class="skuc">${attr.includes('data-fold') ? '<span class="caret">▸</span> ' : ''}${esc(label)}</td>` : `<td colspan="2">${label}</td>`;
+      return `<tr class="${cls}" ${attr}>${lead}<td>${fmt(o.t)}</td><td>${fmt(o.si)}</td><td>${pctT(a1, M.tgSi)}${bar(a1, cSi)}</td><td>${remCell(r1)}</td><td>${fmt(o.so)}</td><td>${pctT(a2, M.tgSo)}${bar(a2, cSo)}</td><td>${remCell(r2)}</td></tr>`;
     }
     const labels = Array.from({ length: M.D }, (_, i) => String(i + 1));
     const daily = Array(M.D).fill(null); M.siDays.forEach(d => { daily[+d.slice(6) - 1] = sumBy(STATE.cur.si[d].filter(r => inScope(r[0]) && inBrand(r[1])), r => conv(r[2], r[1])); });
@@ -607,7 +615,8 @@
       rb += `<tr class="tot"><td>Tổng</td><td></td>${cells(sumO(Object.values(byN)))}</tr>`;
       lastBoard = { M, byN, groupsA, sumO, hasStock, SD };
       board = `<div class="card c12"><div class="card-h"><div><h2>Tiến độ theo Khu vực / NPP</h2><p class="sub">Bấm mũi tên hoặc tên NPP để xem chi tiết · time gone ${pct(M.tgSi)} · đơn vị ${U()}${hasStock ? ` · Tồn hiện tại = Tồn ${fD(M.stockDate)} + Sale In − Sale Out (ước tính); Ngày tồn theo Sale Out bình quân ngày, phù hợp ${nf1.format(SD.low)}–${nf1.format(SD.high)} ngày` : ''}</p></div><button class="btn" id="xl-board">Tải Excel</button></div>
-      <div class="tw"><table class="rank ag frz2"><thead><tr><th>Khu vực</th><th>NPP</th><th class="gs">Target</th><th class="gs">Sale In</th><th>% đạt SI</th><th>Còn lại SI</th><th>Trạng thái SI</th><th class="gs">Sale Out</th><th>% đạt SO</th><th>Còn lại SO</th><th>Trạng thái SO</th>${hasStock ? `<th class="gs" title="Tồn đầu ngày theo file Stock">Tồn ${fD(M.stockDate)}</th><th title="Tồn đầu tháng + Sale In MTD − Sale Out MTD">Tồn hiện tại</th><th title="Tồn hiện tại ÷ Sale Out bình quân ngày (30 ngày trước ${fD(M.stockDate)})">Ngày tồn</th><th>Đánh giá tồn</th>` : ''}</tr></thead><tbody>${rb}</tbody></table></div></div>`;
+      <div class="tw"><table class="rank ag frz2 cmp"><thead><tr><th rowspan="2">Khu vực</th><th rowspan="2">NPP</th><th rowspan="2" class="gs">Target</th><th colspan="4" class="gh gs">Sale In</th><th colspan="4" class="gh gs">Sale Out</th>${hasStock ? '<th colspan="4" class="gh gs">Tồn kho</th>' : ''}</tr>
+        <tr class="h2"><th class="gs">Thực đạt</th><th>% đạt</th><th>Còn lại</th><th>TT</th><th class="gs">Thực đạt</th><th>% đạt</th><th>Còn lại</th><th>TT</th>${hasStock ? `<th class="gs" title="Tồn đầu ngày theo file Stock">${fD(M.stockDate)}</th><th title="Tồn đầu tháng + Sale In MTD − Sale Out MTD">Hiện tại</th><th title="Tồn hiện tại ÷ Sale Out bình quân ngày (30 ngày trước ${fD(M.stockDate)})">Ngày</th><th>Đánh giá</th>` : ''}</tr></thead><tbody>${rb}</tbody></table></div></div>`;
     }
     let cover = '';
     if (M.lastSo) {
@@ -642,7 +651,7 @@
         <div class="remrow"><span class="dot" style="background:var(--so)"></span><span>Sale Out</span><b class="num">${fmt(remSo)}</b><small>${U()}</small></div></div>
 
       ${pendingCard()}
-      <div class="card c12"><div class="card-h"><div><h2>Còn lại theo BrandGroup</h2><p class="sub">Target − thực đạt lũy kế · bấm vào BrandGroup để xem từng SKU · đơn vị ${U()}</p></div></div>
+      <div class="card c12"><div class="card-h"><div><h2>Còn lại theo BrandGroup</h2><p class="sub">Target − thực đạt lũy kế · bấm BrandGroup để xem từng SKU, bấm SKU để xem theo NPP · đơn vị ${U()}</p></div></div>
         ${hlNote()}<div class="tw"><table class="sticky1 tgt"><thead><tr><th>BrandFamily</th><th>SKU</th><th>Target</th><th>Sale In</th><th>% SI</th><th>Còn lại SI</th><th>Sale Out</th><th>% SO</th><th>Còn lại SO</th></tr></thead><tbody>${body}</tbody></table></div></div>
 
       ${board}
