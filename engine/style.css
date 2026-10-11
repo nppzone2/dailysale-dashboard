@@ -451,3 +451,7 @@ tr.nsku .nppn{color:var(--brand)}
 .minif{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
 .minif .fld{display:flex;flex-direction:column;gap:3px}.minif label{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600}
 .minif select{min-width:130px;font-size:13px;padding:6px 8px}
+/* Còn lại theo BrandGroup: tiêu đề và số liệu canh giữa cột */
+.bgt th:nth-child(n+3),.bgt td:nth-child(n+3){text-align:center}
+.bgt tr.grp td:nth-child(n+2),.bgt tr.tot td:nth-child(n+2){text-align:center}
+.bgt td .mini{margin-left:6px}
