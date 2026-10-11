@@ -392,7 +392,7 @@
   const XC = { band: '0A4A2A', brand: '0B6B39', soft: 'E3F1E8', sub: 'F3F5F4', line: 'D9DED9', ink: '14201A', muted: '6B7A70', good: '137A3F', goodBg: 'DDF2E5', bad: 'C8102E', badBg: 'FBE3E5', warn: '9A6700', warnBg: 'FFF3D6', org: 'C2560C', orgBg: 'FDE9D7', white: 'FFFFFF', bandInk2: 'B9D3C2' };
   const xst = (o = {}) => ({ font: { name: 'Arial', sz: 10, color: { rgb: o.color || XC.ink }, bold: !!o.bold }, fill: o.fill ? { patternType: 'solid', fgColor: { rgb: o.fill } } : undefined,
     alignment: { horizontal: o.h || 'right', vertical: 'center', wrapText: !!o.wrap }, border: o.border === false ? undefined : { top: { style: 'thin', color: { rgb: XC.line } }, bottom: { style: 'thin', color: { rgb: XC.line } }, left: o.bl ? { style: 'medium', color: { rgb: XC.line } } : undefined }, numFmt: o.nf });
-  const kindBase = kind => kind === 'area' ? { fill: XC.band, color: XC.white, bold: true } : kind === 'tot' ? { fill: XC.sub, bold: true } : kind === 'grand' ? { fill: XC.soft, bold: true } : {};
+  const kindBase = kind => kind === 'area' ? { fill: XC.band, color: XC.white, bold: true } : kind === 'tot' || kind === 'grp' ? { fill: XC.sub, bold: true } : kind === 'grand' ? { fill: XC.soft, bold: true } : {};
   // spec: { file, sheet, title, sub, note, H, body: [{ v, kind, s(k, base) }], concl: [], widths, leftCols, sepCols }
   function styledXlsx(spec, btn) {
     const N = spec.H.length; const rows = []; const merges = [];
@@ -401,6 +401,10 @@
     put([spec.sub], [xst({ color: XC.bandInk2, fill: XC.band, h: 'left', border: false })], 20, true);
     if (spec.note) put([spec.note], [xst({ color: XC.muted, h: 'left', border: false })], 18, true);
     put([], [], 8);
+    const sm = []; // gộp ô theo khoảng cột: [row, c1, c2]
+    if (spec.H0) { const cells = Array(N).fill(null), sty = Array(N).fill(null);
+      spec.H0.forEach(h => { cells[h.from] = h.label; for (let k = h.from; k <= h.to; k++) sty[k] = xst({ bold: true, color: XC.white, fill: XC.band, h: 'center', bl: true }); if (h.to > h.from) sm.push([rows.length, h.from, h.to]); });
+      for (let k = 0; k < N; k++) if (!sty[k]) sty[k] = xst({ border: false }); put(cells, sty, 22); }
     const hr = rows.length; const sep = new Set(spec.sepCols || []);
     put(spec.H, spec.H.map((_, k) => xst({ bold: true, color: XC.muted, fill: XC.soft, h: k < (spec.leftCols || 2) ? 'left' : 'center', wrap: true, bl: sep.has(k) })), 32);
     spec.body.forEach(r => { const base = kindBase(r.kind); put(r.v, r.v.map((_, k) => xst({ ...base, h: k < (spec.leftCols || 2) ? 'left' : 'right', bl: sep.has(k), ...(r.s ? r.s(k, base) || {} : {}) })), r.kind === 'area' || r.kind === 'grand' ? 22 : 18); });
@@ -410,11 +414,12 @@
     const ws = XLSX.utils.aoa_to_sheet(aoa);
     rows.forEach((r, ri) => { for (let k = 0; k < N; k++) { const sty = r.styles[k] || r.styles[0]; if (!sty) continue; const ref = XLSX.utils.encode_cell({ r: ri, c: k });
       if (!ws[ref]) ws[ref] = { t: 's', v: '' }; ws[ref].s = sty; if (sty.numFmt && ws[ref].t === 'n') ws[ref].z = sty.numFmt; } });
-    ws['!merges'] = merges.map(r => ({ s: { r, c: 0 }, e: { r, c: N - 1 } }));
+    ws['!merges'] = [...merges.map(r => ({ s: { r, c: 0 }, e: { r, c: N - 1 } })), ...sm.map(([r, a, b]) => ({ s: { r, c: a }, e: { r, c: b } }))];
     ws['!cols'] = (spec.widths || []).map(w => ({ wch: w }));
     ws['!rows'] = rows.map(r => r.height ? { hpt: r.height } : {});
     ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: hr, c: 0 }, e: { r: hr, c: N - 1 } }) };
-    saveXlsx(spec.file, [[spec.sheet, ws]], btn);
+    if (spec.returnWs) return ws;
+    saveXlsx(spec.file, [[spec.sheet, ws], ...(spec.extra || [])], btn);
   }
   const stTxt = (a, tg) => { if (!isFinite(a)) return ['—', 'info']; const r = tg > 0 ? a / tg : 1; return r >= 1 ? ['Đạt', 'good'] : r >= 0.9 ? ['Sát', 'warn'] : ['Chậm', 'bad']; };
   const lvStyle = (lv, onDark) => onDark ? { color: lv === 'good' ? '9FE3BC' : lv === 'warn' ? 'FFD27A' : lv === 'bad' ? 'FFB3B8' : lv === 'org' ? 'FFB27A' : XC.white, h: 'center', bold: true }
@@ -1116,13 +1121,44 @@
   const scopeTag = () => ui.scope === 'all' ? 'HCMZ2' : ui.scope.replace('A:', '').replace(/\s+/g, '');
   function exportTarget(ev) {
     const m = ui.tMonth; const rows = targetRows(m).filter(r => r.tc);
+    if (!rows.length) { toastBtn(ev.currentTarget, 'Không có target trong phạm vi này'); return; }
+    // Sheet dữ liệu chi tiết (dạng cột) để lọc / pivot
     const long = [['Tháng', 'Khu vực', 'Mã NPP', 'ShortCode', 'BrandFamily', 'BrandGroup', 'Target (Case)', 'Target (HL)']];
-    rows.sort((a, b) => nppCmp(a.c, b.c) || GROUPS.indexOf(grp(a.sc)) - GROUPS.indexOf(grp(b.sc)) || a.sc.localeCompare(b.sc)).forEach(r => long.push([fM(m), (STATE.npps[r.c] || {}).area || '', r.c, r.sc, item(r.sc).b || '', grp(r.sc), Math.round(r.tc), Math.round(r.th * 100) / 100]));
-    const npps = [...new Set(rows.map(r => r.c))];
-    const piv = [['BrandGroup', ...npps.flatMap(c => [c + ' (Case)', c + ' (HL)']), 'Tổng (Case)', 'Tổng (HL)']];
-    GROUPS.forEach(g => { const rr = rows.filter(r => grp(r.sc) === g); if (!rr.length) return;
-      piv.push([g, ...npps.flatMap(c => { const x = rr.filter(r => r.c === c); return [Math.round(sumBy(x, r => r.tc)), Math.round(sumBy(x, r => r.th) * 10) / 10]; }), Math.round(sumBy(rr, r => r.tc)), Math.round(sumBy(rr, r => r.th) * 10) / 10]); });
-    saveXlsx(`Target_${m}_${scopeTag()}.xlsx`, [['Target chi tiết', long, [10, 10, 9, 10, 12, 13, 12]], ['Theo BrandGroup', piv, [16]]], ev.currentTarget);
+    [...rows].sort((a, b) => nppCmp(a.c, b.c) || GROUPS.indexOf(grp(a.sc)) - GROUPS.indexOf(grp(b.sc)) || a.sc.localeCompare(b.sc)).forEach(r => long.push([fM(m), areaOf(r.c), r.c, r.sc, item(r.sc).b || '', grp(r.sc), Math.round(r.tc), Math.round(r.th * 100) / 100]));
+    // Sheet chính: đúng bố cục bảng trên web (BrandGroup / SKU × Khu vực / NPP)
+    const hl = ui.unit === 'hl'; const tv = r => hl ? r.th : r.tc; const nf = hl ? '#,##0.0' : '#,##0'; const rnd = v => hl ? Math.round(v * 10) / 10 : Math.round(v);
+    const npps = [...new Set(rows.map(r => r.c))].sort(nppCmp); const multi = npps.length > 1; const AG = byArea(npps);
+    const total = sumBy(rows, tv);
+    const bo = ['Heineken', 'Tiger', 'Bia Viet', 'Larue', 'Bivina', 'Strongbow', 'Edelweiss']; const bi = sc => (bo.indexOf(brandOf(sc)) + 1) || 99;
+    const val = (f) => sumBy(rows.filter(f), tv);
+    const body = [];
+    const pctS = { nf: '0.0%', h: 'center' };
+    GROUPS.forEach(g => { const rg = rows.filter(r => grp(r.sc) === g); if (!rg.length) return;
+      const skus = [...new Set(rg.map(r => r.sc))].sort((a, b) => bi(a) - bi(b) || val(r => r.sc === b) - val(r => r.sc === a));
+      const gv = sumBy(rg, tv);
+      if (multi) {
+        body.push({ v: [g, '', ...npps.map(c => rnd(sumBy(rg.filter(r => r.c === c), tv))), rnd(gv), total ? gv / total : null], kind: 'grp', s: k => k >= 2 + npps.length + 1 ? pctS : k >= 2 ? { nf } : null });
+        skus.forEach(sc => { const rs = rg.filter(r => r.sc === sc); const t = sumBy(rs, tv);
+          body.push({ v: [item(sc).b || '—', sc, ...npps.map(c => { const v = sumBy(rs.filter(r => r.c === c), tv); return v ? rnd(v) : null; }), rnd(t), total ? t / total : null], kind: 'sub',
+            s: k => k === 1 ? { bold: true } : k >= 2 + npps.length + 1 ? pctS : k === 2 + npps.length ? { nf, bold: true } : k >= 2 ? { nf } : { color: XC.muted } }); });
+      } else {
+        body.push({ v: [g, '', Math.round(sumBy(rg, r => r.tc)), Math.round(sumBy(rg, r => r.th) * 10) / 10, total ? gv / total : null], kind: 'grp', s: k => k === 4 ? pctS : k === 3 ? { nf: '#,##0.0' } : k === 2 ? { nf: '#,##0' } : null });
+        skus.forEach(sc => { const rs = rg.filter(r => r.sc === sc); const c1 = sumBy(rs, r => r.tc), h1 = sumBy(rs, r => r.th);
+          body.push({ v: [item(sc).b || '—', sc, Math.round(c1), Math.round(h1 * 10) / 10, total ? tv({ tc: c1, th: h1 }) / total : null], kind: 'sub', s: k => k === 1 ? { bold: true } : k === 4 ? pctS : k === 3 ? { nf: '#,##0.0' } : k === 2 ? { nf: '#,##0' } : { color: XC.muted } }); });
+      } });
+    if (multi) body.push({ v: ['Tổng', '', ...npps.map(c => rnd(sumBy(rows.filter(r => r.c === c), tv))), rnd(total), 1], kind: 'grand', s: k => k >= 2 + npps.length + 1 ? pctS : k >= 2 ? { nf } : null });
+    else body.push({ v: ['Tổng', '', Math.round(sumBy(rows, r => r.tc)), Math.round(sumBy(rows, r => r.th) * 10) / 10, 1], kind: 'grand', s: k => k === 4 ? pctS : k === 3 ? { nf: '#,##0.0' } : k === 2 ? { nf: '#,##0' } : null });
+    const H = multi ? ['BrandFamily', 'SKU', ...npps, 'Tổng', 'Tỷ trọng'] : ['BrandFamily', 'SKU', 'Target (Case)', 'Target (HL)', 'Tỷ trọng'];
+    let k0 = 2; const H0 = multi ? AG.map(([a, cs]) => { const h = { label: a, from: k0, to: k0 + cs.length - 1 }; k0 += cs.length; return h; }) : null;
+    const gs = GROUPS.filter(g => rows.some(r => grp(r.sc) === g && g !== 'Khác')).map(g => { const v = val(r => grp(r.sc) === g); return `${g}: ${fmt(v)} ${U()} (${pct(v / total)})`; });
+    styledXlsx({ file: `Target_${m}_${scopeTag()}.xlsx`, sheet: 'Target ' + fM(m).replace('/', '-'),
+      title: `Distributor Sales Performance · Target ${fM(m)}`,
+      sub: `RTC - Future Fit · HCM Zone 2 · ${scopeLabel()} · đơn vị ${multi ? U() : 'Case / HL'}`,
+      note: multi ? 'Target theo BrandGroup / SKU, cột theo Khu vực / NPP.' : 'Target theo BrandGroup / SKU.',
+      H, H0, body, leftCols: 2, sepCols: multi ? [2, ...AG.slice(1).map((_, i) => H0[i + 1].from), 2 + npps.length] : [2],
+      widths: multi ? [13, 9, ...npps.map(() => 10), 12, 9] : [13, 9, 13, 12, 9],
+      concl: [`Target ${fM(m)}: ${fmt(total)} ${U()}.`, gs.join(' · ')].filter(Boolean),
+      extra: [['Dữ liệu chi tiết', long, [10, 10, 9, 10, 12, 13, 12, 11]]] }, ev.currentTarget);
   }
   /* Order Detail: chi tiết Sale Out theo ngày giao (file SaleOut by DeliveryDate), theo phạm vi tài khoản và bộ lọc */
   let SOD = null;
