@@ -477,3 +477,12 @@ tr.nsku .nppn{color:var(--brand)}
 .card-h:has(#xl-board){flex-wrap:wrap}
 .card-h:has(#xl-board) > div:first-child{flex:1 1 380px}
 .card-h:has(#xl-board) > .minif{flex:none}
+/* Allocation theo NPP: dạng ma trận gọn */
+.alw td.gt,.alw th.gt{background:color-mix(in srgb,var(--brand-soft) 60%,var(--surface));font-weight:700;color:var(--brand)}
+.alw tr.area td.gt{background:color-mix(in srgb,#fff 14%,var(--band))!important;color:var(--band-ink)}
+.alw td.tt,.alw th.tt{border-left:2px solid var(--line)}
+.alw td.z{color:var(--muted)}
+.alw .gs{border-left:2px solid var(--line)}
+.alw tr.npp td{font-weight:500}
+.seg.alv{align-self:flex-start}.seg.alv button{white-space:nowrap}
+.card-h:has(.alv){flex-wrap:wrap}.card-h:has(.alv) > div:first-child{flex:1 1 360px}.card-h:has(.alv) > .seg{flex:none}
