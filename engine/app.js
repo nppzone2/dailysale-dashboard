@@ -116,11 +116,11 @@
   const dim = m => new Date(+m.slice(0, 4), +m.slice(4, 6), 0).getDate();
   const fTs = t => { if (!t) return '—'; const d = new Date(new Date(t).getTime() + 7 * 3600e3); if (isNaN(d)) return '—'; const p = n => String(n).padStart(2, '0'); return `${p(d.getUTCHours())}:${p(d.getUTCMinutes())} ${p(d.getUTCDate())}/${p(d.getUTCMonth() + 1)}`; };
   const status = (ach, tg) => {
-    if (!isFinite(ach)) return '<span class="pill info">Chưa có target</span>';
+    if (!isFinite(ach)) return '<span class="pill info" title="Chưa có target">—</span>';
     const r = tg > 0 ? ach / tg : 1;
-    if (r >= 1) return '<span class="pill good">Đúng tiến độ</span>';
-    if (r >= 0.9) return '<span class="pill warn">Sát tiến độ</span>';
-    return '<span class="pill bad">Chậm tiến độ</span>';
+    if (r >= 1) return '<span class="pill good" title="Đúng tiến độ: % đạt ≥ time gone">Đạt</span>';
+    if (r >= 0.9) return '<span class="pill warn" title="Sát tiến độ: ≥ 90% time gone">Sát</span>';
+    return '<span class="pill bad" title="Chậm tiến độ: dưới 90% time gone">Chậm</span>';
   };
   // Thứ tự cố định: Area HCM 11 → HCM 3 → HCM 4 → HCM 5; NPP HM12 → P444 → P461 → P467 → P449 → P468 → P450 → P69 (mã mới xếp sau)
   const AREA_ORDER = ['HCM11', 'HCM3', 'HCM4', 'HCM5'];
@@ -414,7 +414,7 @@
     ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: hr, c: 0 }, e: { r: hr, c: N - 1 } }) };
     saveXlsx(spec.file, [[spec.sheet, ws]], btn);
   }
-  const stTxt = (a, tg) => { if (!isFinite(a)) return ['Chưa có target', 'info']; const r = tg > 0 ? a / tg : 1; return r >= 1 ? ['Đúng tiến độ', 'good'] : r >= 0.9 ? ['Sát tiến độ', 'warn'] : ['Chậm tiến độ', 'bad']; };
+  const stTxt = (a, tg) => { if (!isFinite(a)) return ['—', 'info']; const r = tg > 0 ? a / tg : 1; return r >= 1 ? ['Đạt', 'good'] : r >= 0.9 ? ['Sát', 'warn'] : ['Chậm', 'bad']; };
   const lvStyle = (lv, onDark) => onDark ? { color: lv === 'good' ? '9FE3BC' : lv === 'warn' ? 'FFD27A' : lv === 'bad' ? 'FFB3B8' : lv === 'org' ? 'FFB27A' : XC.white, h: 'center', bold: true }
     : { color: lv === 'good' ? XC.good : lv === 'warn' ? XC.warn : lv === 'bad' ? XC.bad : lv === 'org' ? XC.org : XC.muted, fill: lv === 'good' ? XC.goodBg : lv === 'warn' ? XC.warnBg : lv === 'bad' ? XC.badBg : lv === 'org' ? XC.orgBg : undefined, h: 'center', bold: true };
   let lastBoard = null;
@@ -425,7 +425,7 @@
     const line = (a, n, o, kind) => {
       const aSi = o.t ? o.si / o.t : NaN, aSo = o.t ? o.so / o.t : NaN; const sSi = stTxt(aSi, M.tgSi), sSo = stTxt(aSo, M.tgSo);
       const now = o.st0 + o.si - o.so; const d = o.dso ? Math.max(0, now) / o.dso : NaN;
-      const sSt = !isFinite(d) ? ['—', 'info'] : d < SD.low ? ['Tồn thấp', 'org'] : d > SD.high ? ['Tồn cao', 'bad'] : ['Phù hợp', 'good'];
+      const sSt = !isFinite(d) ? ['—', 'info'] : d < SD.low ? ['Thấp', 'org'] : d > SD.high ? ['Cao', 'bad'] : ['Chuẩn', 'good'];
       const v = [a, n, rnd(o.t), rnd(o.si), isFinite(aSi) ? aSi : null, rnd(Math.max(0, o.t - o.si)), sSi[0], rnd(o.so), isFinite(aSo) ? aSo : null, rnd(Math.max(0, o.t - o.so)), sSo[0],
         ...(hasStock ? [rnd(o.st0), rnd(now), isFinite(d) ? Math.round(d * 10) / 10 : null, sSt[0]] : [])];
       const dark = kind === 'area';
@@ -450,9 +450,9 @@
     styledXlsx({ file: `Tien_do_Khu_vuc_NPP_${M.m}_${M.lastSi}_${scopeTag()}.xlsx`, sheet: 'Tiến độ KV-NPP',
       title: `Distributor Sales Performance · Tiến độ theo Khu vực / NPP ${fM(M.m)}`,
       sub: `RTC - Future Fit · HCM Zone 2 · ${scopeLabel()} · cập nhật đến ${fD(M.lastSi)} · time gone ${pct(M.tgSi)} · đơn vị ${U()}`,
-      note: 'Trạng thái: Đúng tiến độ khi % đạt ≥ time gone, Sát tiến độ khi ≥ 90% time gone.' + (hasStock ? ` Tồn hiện tại = Tồn ${fD(M.stockDate)} + Sale In − Sale Out (ước tính); Ngày tồn theo Sale Out bình quân ngày; phù hợp ${nf1.format(SD.low)}–${nf1.format(SD.high)} ngày.` : ''),
+      note: 'Trạng thái: Đạt khi % đạt ≥ time gone, Sát khi ≥ 90% time gone, còn lại là Chậm.' + (hasStock ? ` Tồn hiện tại = Tồn ${fD(M.stockDate)} + Sale In − Sale Out (ước tính); Ngày tồn theo Sale Out bình quân ngày; phù hợp ${nf1.format(SD.low)}–${nf1.format(SD.high)} ngày.` : ''),
       H, body, leftCols: 2, sepCols: hasStock ? [2, 3, 7, 11] : [2, 3, 7],
-      widths: [10, 13, 12, 12, 9, 12, 14, 12, 9, 12, 14, ...(hasStock ? [11, 12, 9, 12] : [])],
+      widths: [10, 13, 12, 12, 9, 12, 11, 12, 9, 12, 11, ...(hasStock ? [11, 12, 9, 11] : [])],
       concl: [`Sale In đạt ${pct(T.t ? T.si / T.t : NaN)} target so với time gone ${pct(M.tgSi)}; Sale Out đạt ${pct(T.t ? T.so / T.t : NaN)}.`,
         hasStock && T.dso ? `Tồn kho ước tính hiện tại đủ bán ${nf1.format(Math.max(0, T.st0 + T.si - T.so) / T.dso)} ngày.` : ''].filter(Boolean) }, ev.currentTarget);
   }
@@ -589,7 +589,7 @@
       const hasStock = !!M.stockDate && L.some(r => r.st0 || r.dso);
       const SD = ENC.stockDays || { low: 3, high: 3.5 };
       const stockCells = o => { const now = o.st0 + o.si - o.so; const d = o.dso ? Math.max(0, now) / o.dso : NaN;
-        const pill = !isFinite(d) ? '<span class="note">—</span>' : d < SD.low ? '<span class="pill orange">Tồn thấp</span>' : d > SD.high ? '<span class="pill bad">Tồn cao</span>' : '<span class="pill good">Phù hợp</span>';
+        const pill = !isFinite(d) ? '<span class="note">—</span>' : d < SD.low ? '<span class="pill orange" title="Tồn thấp">Thấp</span>' : d > SD.high ? '<span class="pill bad" title="Tồn cao">Cao</span>' : '<span class="pill good" title="Tồn phù hợp">Chuẩn</span>';
         return `<td class="gs">${fmt(o.st0)}</td><td><b>${fmt(now)}</b></td><td>${isFinite(d) ? nf1.format(d) : '—'}</td><td>${pill}</td>`; };
       const cells = o => `<td class="gs">${fmt(o.t)}</td><td class="gs">${fmt(o.si)}</td><td>${o.t ? pctT(o.si / o.t, M.tgSi) : '—'}</td><td class="rem">${fmt(Math.max(0, o.t - o.si))}</td><td>${status(o.t ? o.si / o.t : NaN, M.tgSi)}</td><td class="gs">${fmt(o.so)}</td><td>${o.t ? pctT(o.so / o.t, M.tgSo) : '—'}</td><td class="rem">${fmt(Math.max(0, o.t - o.so))}</td><td>${status(o.t ? o.so / o.t : NaN, M.tgSo)}</td>${hasStock ? stockCells(o) : ''}`;
       const sumO = os => ({ t: sumBy(os, o => o.t), si: sumBy(os, o => o.si), so: sumBy(os, o => o.so), st0: sumBy(os, o => o.st0), dso: sumBy(os, o => o.dso) });
