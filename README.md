@@ -10,7 +10,7 @@ Dashboard theo dõi Target, Sale In, Sale Out và Allocation của các NPP vùn
 
 | Khi nào | File cần tải |
 |---|---|
-| Hằng ngày | `SO_Invoice`, `SaleOut_by_DeliveryDate`, `Dis_Sale_by_Date`, `Online_Order`. Tracking Allocation (theo logic Allocation tool): Sale In = Dis Sale by Date (theo tuần ngày order) + Online Order chưa có trong hoá đơn (Invoice Date trống hoặc sau ngày hoá đơn mới nhất), mọi trạng thái |
+| Hằng ngày | `SO_Invoice`, `SaleOut_by_DeliveryDate`, `Dis_Sale_by_Date`, `Online_Order`. Tracking Allocation (theo ngày order thuộc tuần): Sale In = Dis Sale by Date có Invoice Date đến D-1 + Online Order Delivery; Pending = Online Order Approve / Schedule |
 | Hằng tuần | `Allocation_Current_Month`: sheet **Allocation** có cột `Batch 1`, `Batch 2`… và sheet **Upload Date** ghi ngày chia từng batch |
 | Đầu tháng | `Target_Current_Month` |
 | Đầu tháng (tồn kho) | File **Stock** tồn đầu ngày 01 (cột `Alpha_Name`, `ShortCode`, `Sum of Stock`, `Sum of Daily Sales Out`). Dashboard tính Tồn hiện tại = Tồn đầu tháng + Sale In MTD − Sale Out MTD và số ngày tồn; ngưỡng đánh giá sửa ở `stock_days` trong `engine/config.json` |
