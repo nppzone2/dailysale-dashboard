@@ -757,49 +757,57 @@
       ${bySku.map(s => `<tr class="sku"><td>${esc(item(s.sc).b || '—')}</td><td class="skuc">${esc(s.sc)}</td>${weeks.map(w => `<td>${fmt(s.w[w])}</td>`).join('')}<td>${fmt(s.al)}</td><td>${fmt(s.si)}</td><td>${usedBar(s.si, s.al)}</td>${remTd(s.al, s.si)}</tr>`).join('')}
       ${bySku.length > 1 ? `<tr class="tot"><td colspan="2">Tổng</td>${weeks.map(w => `<td>${fmt(sumBy(bySku, s => s.w[w]))}</td>`).join('')}<td>${fmt(totAl)}</td><td>${fmt(totSi)}</td><td>${usedBar(totSi, totAl)}</td>${remTd(totAl, totSi)}</tr>` : ''}
     </tbody></table></div></div>`;
-    // 3) Theo Khu vực / NPP: mỗi NPP 1 dòng, SKU thành cột gom theo Group; chọn xem Tổng tuần / từng Batch
+    // 3) Theo Khu vực: số chia Current Week theo từng batch, mỗi SKU một dòng (số còn lại xem ở tab Tracking Allocation)
     let byNpp = '';
-    if (npps.length >= 1) {
-      const wkSkus = skus.filter(sc => A.some(r => r[0] === wk && r[2] === sc));
-      const GC = GROUPS.map(g => [g, wkSkus.filter(sc => grp(sc) === g)]).filter(([, l]) => l.length);
-      const val = (cs, scList, vi) => sumBy(A.filter(r => r[0] === wk && cs.includes(r[1]) && scList.includes(r[2])), r => conv(vi == null ? r[3] : (Array.isArray(r[4]) ? (r[4][vi] || 0) : 0), r[2]));
-      const multiG = GC.length > 1;
-      // mỗi ô: Tổng tuần (đậm) + dòng nhỏ Batch 1 | Batch 2
-      const cell = (cs, list, cls) => { const t = val(cs, list); if (!t && cls === '') return '<td class="z">–</td>';
-        const bs = bIdx.length > 1 ? `<span class="bb">${bIdx.map(i => fmt(val(cs, list, i))).join('<i>|</i>')}</span>` : '';
-        return `<td class="sc ${cls}"><b>${fmt(t)}</b>${bs}</td>`; };
-      const cellsOf = cs => GC.map(([g, l]) => l.map(sc => cell(cs, [sc], '')).join('') + (multiG || l.length > 1 ? cell(cs, l, 'gt') : '')).join('') + cell(cs, wkSkus, 'tt');
-      const AG = byArea(npps.filter(c => A.some(r => r[0] === wk && r[1] === c)));
+    if (npps.length > 1) {
+      const AG = byArea(npps);
+      const inSc = (sc, x) => sc == null || (Array.isArray(sc) ? sc.includes(x) : x === sc);
+      const bv = (cs, sc, i) => sumBy(A.filter(r => r[0] === wk && cs.includes(r[1]) && inSc(sc, r[2])), r => conv(Array.isArray(r[4]) ? (r[4][i] || 0) : 0, r[2]));
+      const wv = (cs, sc) => aSum(r => r[0] === wk && cs.includes(r[1]) && inSc(sc, r[2]));
+      const byGrp = ss => GROUPS.map(g => [g, ss.filter(sc => grp(sc) === g)]).filter(([, l]) => l.length);
+      const cells = (cs, sc) => bIdx.map(i => `<td>${fmt(bv(cs, sc, i))}</td>`).join('') + `<td><b>${fmt(wv(cs, sc))}</b></td>`;
+      // Gọn dòng: mỗi SKU 1 dòng, tên NPP nằm ở dòng SKU đầu tiên, Group là một cột (không có dòng tổng Group / NPP riêng)
       let tb = '';
+      const skusOf = list => skus.filter(sc => A.some(r => r[0] === wk && list.includes(r[1]) && r[2] === sc && r[3]));
+      const gShort = g => g.replace('Group ', '');
       AG.forEach(([a, cs]) => { const k = 'al:' + a, op = isOpen(k, true);
-        tb += `<tr class="grp area click${op ? ' open' : ''}" data-fold="${esc(k)}"><td><span class="caret">▸</span> ${esc(a)}</td><td>${cs.length} NPP</td>${cellsOf(cs)}</tr>`;
-        if (op) cs.forEach(c => { tb += `<tr class="npp"><td></td><td><b class="nppn">${esc(c)}</b></td>${cellsOf([c])}</tr>`; }); });
-      const allC = AG.flatMap(([, cs]) => cs);
-      tb += `<tr class="tot"><td>Tổng</td><td></td>${cellsOf(allC)}</tr>`;
-      const h1 = GC.map(([g, l]) => `<th class="gh gs" colspan="${l.length + (multiG || l.length > 1 ? 1 : 0)}">${esc(g)}</th>`).join('');
-      const h2 = GC.map(([g, l]) => l.map((sc, i) => `<th${i === 0 ? ' class="gs"' : ''}>${esc(sc)}</th>`).join('') + (multiG || l.length > 1 ? `<th class="gt">Tổng ${esc(g.replace('Group ', ''))}</th>` : '')).join('');
-      const table = `<table class="ag frz2 cmp alw"><thead><tr><th rowspan="2">Khu vực</th><th rowspan="2">NPP</th>${h1}<th rowspan="2" class="gs tt">Tổng ${esc(wk)}</th></tr><tr class="h2">${h2}</tr></thead><tbody>${tb}</tbody></table>`;
-      const bLegend = bIdx.length > 1 ? `<div class="bleg"><b>Tổng tuần</b><span>${bIdx.map(i => `${esc(BC[i])} · ${(AD[wk] || [])[i] ? fd(AD[wk][i]) : '—'} <em class="${(AD[wk] || [])[i] && AD[wk][i] <= today ? 'up' : 'wait'}">${(AD[wk] || [])[i] && AD[wk][i] <= today ? 'Đã Upload' : 'Chờ Upload'}</em>`).join('<i>|</i>')}</span></div>` : '';
-      // Xuất Excel: mỗi NPP 1 dòng, có đủ Batch 1 / Batch 2 / Tổng cho từng SKU
+        tb += `<tr class="grp area click${op ? ' open' : ''}" data-fold="${esc(k)}"><td><span class="caret">▸</span> ${esc(a)}</td><td></td><td>${cs.length} NPP</td>${cells(cs, null)}</tr>`;
+        if (!op) return;
+        cs.forEach(c => { const ss = skusOf([c]); if (!ss.length) return;
+          const nk = 'al:n:' + c, nOp = isOpen(nk, true) || ss.length < 2;
+          const nm = `${ss.length > 1 ? `<span class="caret fold${nOp ? ' on' : ''}" data-fold="${esc(nk)}" role="button" aria-label="Mở/thu gọn ${esc(c)}">▸</span> ` : ''}<span class="click-npp" data-npp="${esc(c)}">${esc(c)}</span>`;
+          if (!nOp) { tb += `<tr class="sku first"><td>${nm}</td><td></td><td class="note">${ss.length} SKU</td>${cells([c], null)}</tr>`; return; }
+          let n = 0; byGrp(ss).forEach(([g, l]) => l.forEach((sc, gi) => {
+            tb += `<tr class="sku${n === 0 ? ' first' : ''}${gi === 0 && n > 0 ? ' gfirst' : ''}"><td>${n === 0 ? nm : ''}</td><td class="gcol">${gi === 0 ? esc(gShort(g)) : ''}</td><td class="skuc">${esc(sc)}</td>${cells([c], sc)}</tr>`; n++; })); }); });
+      const GT = byGrp(skus.filter(sc => A.some(r => r[0] === wk && r[2] === sc)));
+      tb += `<tr class="tot"><td>Tổng</td><td></td><td></td>${cells(npps, null)}</tr>`;
+      if (GT.length > 1) GT.forEach(([g, l]) => { tb += `<tr class="gsub gtot"><td></td><td class="gcol">${esc(gShort(g))}</td><td class="note">${l.length} SKU</td>${cells(npps, l)}</tr>`; });
+      const table = `<table class="sticky1 trk batch alc3"><thead><tr><th>Khu vực / NPP</th><th>Group</th><th>SKU</th>${bIdx.map(bHead).join('')}<th>Tổng ${esc(wk)}</th></tr></thead><tbody>${tb}</tbody></table>`;
+      // Xuất Excel có định dạng như web: đủ mọi Khu vực / NPP / Group / SKU
       allocExport = ev => {
+        const skusOf = list => skus.filter(sc => A.some(r => r[0] === wk && list.includes(r[1]) && r[2] === sc));
         const nf = ui.unit === 'hl' ? '#,##0.0' : '#,##0'; const rnd = v => ui.unit === 'hl' ? Math.round(v * 10) / 10 : Math.round(v);
-        const vv = (cs, l, vi) => sumBy(A.filter(r => r[0] === wk && cs.includes(r[1]) && l.includes(r[2])), r => conv(vi == null ? r[3] : (Array.isArray(r[4]) ? (r[4][vi] || 0) : 0), r[2]));
-        const cols = [...bIdx.map(i => [i, BC[i]]), [null, 'Tổng']];
-        const H = ['Khu vực', 'NPP', ...GC.flatMap(([g, l]) => [...l, ...(multiG || l.length > 1 ? ['Tổng ' + g.replace('Group ', '')] : [])].flatMap(x => cols.map(([, n]) => `${x} · ${n}`))), ...cols.map(([, n]) => `Tổng · ${n}`)];
-        const row = cs => [...GC.flatMap(([g, l]) => [...l.map(sc => [sc]), ...(multiG || l.length > 1 ? [l] : [])].flatMap(list => cols.map(([vi]) => rnd(vv(cs, list, vi))))), ...cols.map(([vi]) => rnd(vv(cs, wkSkus, vi)))];
-        const body = [];
-        AG.forEach(([a, cs]) => { body.push({ v: [a, `${cs.length} NPP`, ...row(cs)], kind: 'area', s: k => k >= 2 ? { nf } : null });
-          cs.forEach(c => body.push({ v: ['', c, ...row([c])], kind: 'npp', s: k => k === 1 ? { color: XC.brand, bold: true } : k >= 2 ? { nf } : null })); });
-        body.push({ v: ['Tổng', '', ...row(allC)], kind: 'grand', s: k => k >= 2 ? { nf } : null });
+        const vals = (cs, sc) => [...bIdx.map(i => rnd(bv(cs, sc, i))), rnd(wv(cs, sc))];
+        const nB = bIdx.length; const body = [];
+        const line = (a, n, lab, cs, sc, kind) => body.push({ v: [a, n, lab, ...vals(cs, sc)], kind, s: (k) => k === 1 && kind === 'npp' ? { color: XC.brand, bold: true } : k < 3 ? (kind === 'gsub' ? { color: XC.muted } : null) : { nf, bold: k === 3 + nB } });
+        AG.forEach(([a, cs]) => { const GA = byGrp(skusOf(cs));
+          line(a, `${cs.length} NPP`, GA.length === 1 ? GA[0][0] : 'Tổng', cs, null, 'area');
+          if (GA.length > 1) GA.forEach(([g, l]) => line('', '', `${g} · ${l.length} SKU`, cs, l, 'gsub'));
+          cs.forEach(c => { const ss = skusOf([c]); if (!ss.length) return; const G = byGrp(ss);
+            line('', c, `${G.length === 1 ? G[0][0] + ' · ' : ''}${ss.length} SKU`, [c], null, 'npp');
+            G.forEach(([g, l]) => { if (G.length > 1) line('', '', `${g} · ${l.length} SKU`, [c], l, 'gsub'); l.forEach(sc => line('', '', '   ' + sc, [c], sc, 'sub')); }); }); });
+        const GT = byGrp(skus.filter(sc => A.some(r => r[0] === wk && r[2] === sc)));
+        line('Tổng', '', 'Tổng', npps, null, 'grand'); GT.forEach(([g, l]) => line('', '', `${g} · ${l.length} SKU`, npps, l, 'gsub'));
+        const bName = i => `${BC[i]} · ${(AD[wk] || [])[i] ? fd(AD[wk][i]) : 'chưa có ngày'}${(AD[wk] || [])[i] && AD[wk][i] <= today ? ' (Đã Upload)' : ' (Chờ Upload)'}`;
         styledXlsx({ file: `Allocation_${wk}_${scopeTag()}.xlsx`, sheet: 'Allocation ' + wk,
           title: `Distributor Sales Performance · Allocation theo Khu vực / NPP · ${wk}`,
           sub: `RTC - Future Fit · HCM Zone 2 · ${scopeLabel()} · ${rangeTxt || 'Current Week ' + wk} · đơn vị ${U()}`,
-          note: 'Mỗi SKU gồm số chia từng batch và tổng tuần. Số còn lại sau Sale In và Pending xem ở tab Tracking Allocation.',
-          H, body, leftCols: 2, sepCols: H.map((h, k) => k >= 2 && (k - 2) % cols.length === 0 ? k : -1).filter(k => k > 0),
-          widths: [10, 10, ...H.slice(2).map(() => 11)],
+          note: 'Số chia Current Week theo từng batch. Số còn lại sau Sale In và Pending xem ở tab Tracking Allocation.',
+          H: ['Khu vực', 'NPP', 'Group / SKU', ...bIdx.map(bName), `Tổng ${wk}`], body, leftCols: 3, sepCols: [3, 3 + nB],
+          widths: [10, 10, 22, ...bIdx.map(() => 20), 13],
           concl: [`Tổng allocation ${wk}: ${fmt(wkTot)} ${U()}${bIdx.length ? ' (' + bIdx.map(i => `${BC[i]} ${fmt(bTot(i))}`).join(', ') + ')' : ''}.`] }, ev.currentTarget);
       };
-      byNpp = `<div class="card c12"><div class="card-h"><div><h2>Theo Khu vực / NPP · ${esc(wk)}</h2><p class="sub">Đơn vị ${U()} · mỗi ô: số đậm là tổng tuần, dòng nhỏ là từng batch · bấm mũi tên để thu gọn khu vực · số còn lại xem ở tab <button class="linkback" data-go="tracking" style="display:inline;margin:0">Tracking Allocation</button></p></div>${bLegend}<button class="btn xl-r" id="xl-alloc">Tải Excel</button></div><div class="tw">${table}</div></div>`;
+      byNpp = `<div class="card c12"><div class="card-h"><div><h2>Theo Khu vực / NPP · ${esc(wk)}</h2><p class="sub">Đơn vị ${U()} · số chia Current Week theo từng batch · bấm mũi tên để mở khu vực, NPP · số còn lại xem ở tab <button class="linkback" data-go="tracking" style="display:inline;margin:0">Tracking Allocation</button></p></div><button class="btn xl-r" id="xl-alloc">Tải Excel</button></div><div class="tw">${table}</div></div>`;
     }
     const over = bySku.filter(s => s.si > s.al);
     const main = bySku[0];

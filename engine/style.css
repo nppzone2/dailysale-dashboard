@@ -498,3 +498,11 @@ tr.nsku .nppn{color:var(--brand)}
 .bleg em{font-style:normal;font-weight:600;font-size:10.5px;padding:1px 6px;border-radius:999px;margin-left:2px}
 .bleg em.up{background:var(--good-bg);color:var(--good)}.bleg em.wait{background:#FDE9D7;color:#C2560C}
 .card-h:has(.bleg){flex-wrap:wrap}.card-h:has(.bleg) > div:first-child{flex:1 1 360px}.card-h:has(.bleg) > .bleg{flex:none}
+/* Allocation theo NPP: gọn dòng, cột Group */
+.alc3 th:nth-child(1){width:15%}.alc3 th:nth-child(2){width:7%}.alc3 th:nth-child(3){width:9%}
+.alc3 td:nth-child(2),.alc3 th:nth-child(2),.alc3 td:nth-child(3),.alc3 th:nth-child(3){text-align:left}
+.alc3 td.gcol{font-weight:700;color:var(--brand);font-size:12px}
+.alc3 tr.gfirst td:nth-child(n+2){border-top:1px dashed var(--line)}
+.alc3 td,.alc3 th{padding-top:4px;padding-bottom:4px}
+.alc3 tr.area td{padding-top:7px!important;padding-bottom:7px!important;border-top-width:4px!important}
+.alc3 tr.sku td{font-size:13px}
