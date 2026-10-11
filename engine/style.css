@@ -464,3 +464,16 @@ tr.nsku .nppn{color:var(--brand)}
 .card.has-img > h2{padding-right:120px}
 @media (max-width:640px){.img-dl{padding-inline:10px}.img-dl svg{display:none}.card.has-img > h2{padding-right:90px}}
 .card-h > div.hbtns{flex:none!important;min-width:auto}
+/* ô lọc chọn nhiều */
+.ms{position:relative}
+.ms-b{display:inline-flex;align-items:center;justify-content:space-between;gap:8px;min-width:130px;max-width:190px;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:6px 10px;font:inherit;font-size:13px;color:var(--ink);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ms-b.on{border-color:var(--brand);background:var(--brand-soft);color:var(--brand);font-weight:600}
+.ms-b span{color:var(--muted);font-size:11px}
+.ms-p{position:absolute;right:0;top:calc(100% + 4px);z-index:20;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.14);padding:6px;min-width:170px;max-height:300px;overflow:auto}
+.ms-o{display:flex!important;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;font-size:13px!important;text-transform:none!important;letter-spacing:0!important;color:var(--ink)!important;font-weight:500!important;cursor:pointer;white-space:nowrap}
+.ms-o:hover{background:var(--surface-2)}
+.ms-o.all{border-bottom:1px solid var(--line);border-radius:6px 6px 0 0;margin-bottom:2px}
+.ms-o input{accent-color:var(--brand);width:15px;height:15px;margin:0}
+.card-h:has(#xl-board){flex-wrap:wrap}
+.card-h:has(#xl-board) > div:first-child{flex:1 1 380px}
+.card-h:has(#xl-board) > .minif{flex:none}

@@ -610,7 +610,16 @@
     let board = '';
     const npps = [...new Set(L.map(r => r.c))];
     if (npps.length >= 1) {
-      const byN = aggregate(L, r => r.c);
+      // Bộ lọc riêng của bảng (chọn nhiều): Khu vực, NPP, Group — để trống là tất cả
+      ['bdA', 'bdN', 'bdG'].forEach(k => { if (!(ui[k] instanceof Set)) ui[k] = new Set(); });
+      const allN = [...new Set(L.filter(r => r.t || r.si || r.so).map(r => r.c))].sort(nppCmp);
+      const optA = [...new Set(allN.map(areaOf))].sort(areaCmp); [...ui.bdA].forEach(a => { if (!optA.includes(a)) ui.bdA.delete(a); });
+      const optN = allN.filter(c => !ui.bdA.size || ui.bdA.has(areaOf(c))); [...ui.bdN].forEach(c => { if (!optN.includes(c)) ui.bdN.delete(c); });
+      const optG = GROUPS.filter(g => L.some(r => grp(r.sc) === g && (r.t || r.si || r.so))); [...ui.bdG].forEach(g => { if (!optG.includes(g)) ui.bdG.delete(g); });
+      const keepN = c => (!ui.bdA.size || ui.bdA.has(areaOf(c))) && (!ui.bdN.size || ui.bdN.has(c));
+      const Lb = L.filter(r => keepN(r.c) && (!ui.bdG.size || ui.bdG.has(grp(r.sc))));
+      const byN = aggregate(Lb, r => r.c);
+      const bdFilter = `<div class="minif">${msHtml('bdA', 'Khu vực', optA.map(a => [a, a]))}${msHtml('bdN', 'NPP', optN.map(c => [c, c]))}${msHtml('bdG', 'Group', optG.map(g => [g, g]))}</div>`;
       const hasStock = !!M.stockDate && L.some(r => r.st0 || r.dso);
       const SD = ENC.stockDays || { low: 3, high: 3.5 };
       const stockCells = o => { const now = o.st0 + o.si - o.so; const d = o.dso ? Math.max(0, now) / o.dso : NaN;
@@ -627,9 +636,9 @@
           rb += `<tr class="npp click${nOpen ? ' open' : ''}${i === 0 ? ' first' : ''}" data-fold="${esc(nk)}"><td></td><td><span class="caret">▸</span> <span class="click-npp" data-npp="${esc(c)}">${esc(c)}</span></td>${cells(o)}</tr>`;
           if (nOpen) { const g = aggregate(o.rows, r => grp(r.sc)); GROUPS.filter(k => g[k] && (g[k].t || g[k].si || g[k].so)).forEach(k => { rb += `<tr class="sku"><td></td><td class="skuc">${esc(k)}</td>${cells(g[k])}</tr>`; }); }
         }); });
-      rb += `<tr class="tot"><td>Tổng</td><td></td>${cells(sumO(Object.values(byN)))}</tr>`;
+      rb += `<tr class="tot"><td title="${ui.bdA.size || ui.bdN.size || ui.bdG.size ? 'Tổng theo bộ lọc' : 'Tổng'}">Tổng${ui.bdA.size || ui.bdN.size || ui.bdG.size ? '*' : ''}</td><td></td>${cells(sumO(Object.values(byN)))}</tr>`;
       lastBoard = { M, byN, groupsA, sumO, hasStock, SD };
-      board = `<div class="card c12"><div class="card-h"><div><h2>Tiến độ theo Khu vực / NPP</h2><p class="sub">Bấm mũi tên hoặc tên NPP để xem chi tiết · time gone ${pct(M.tgSi)} · đơn vị ${U()}${hasStock ? ` · Tồn hiện tại = Tồn ${fD(M.stockDate)} + Sale In − Sale Out (ước tính); Ngày tồn theo Sale Out bình quân ngày, phù hợp ${nf1.format(SD.low)}–${nf1.format(SD.high)} ngày` : ''}</p></div><button class="btn" id="xl-board">Tải Excel</button></div>
+      board = `<div class="card c12"><div class="card-h"><div><h2>Tiến độ theo Khu vực / NPP</h2><p class="sub">${ui.bdA.size || ui.bdN.size || ui.bdG.size ? '<b>* Đang lọc:</b> ' + esc([...ui.bdA, ...ui.bdN, ...ui.bdG].join(', ')) + ' · ' : ''}Bấm mũi tên hoặc tên NPP để xem chi tiết · time gone ${pct(M.tgSi)} · đơn vị ${U()}${hasStock ? ` · Tồn hiện tại = Tồn ${fD(M.stockDate)} + Sale In − Sale Out (ước tính); Ngày tồn theo Sale Out bình quân ngày, phù hợp ${nf1.format(SD.low)}–${nf1.format(SD.high)} ngày` : ''}</p></div>${bdFilter}<button class="btn" id="xl-board">Tải Excel</button></div>
       <div class="tw"><table class="rank ag frz2 cmp"><thead><tr><th rowspan="2">Khu vực</th><th rowspan="2">NPP</th><th rowspan="2" class="gs">Target</th><th colspan="4" class="gh gs">Sale In</th><th colspan="4" class="gh gs">Sale Out</th>${hasStock ? '<th colspan="4" class="gh gs">Tồn kho</th>' : ''}</tr>
         <tr class="h2"><th class="gs">Thực đạt</th><th>% đạt</th><th>Còn lại</th><th>TT</th><th class="gs">Thực đạt</th><th>% đạt</th><th>Còn lại</th><th>TT</th>${hasStock ? `<th class="gs" title="Tồn đầu ngày theo file Stock">${fD(M.stockDate)}</th><th title="Tồn đầu tháng + Sale In MTD − Sale Out MTD">Hiện tại</th><th title="Tồn hiện tại ÷ Sale Out bình quân ngày (30 ngày trước ${fD(M.stockDate)})">Ngày</th><th>Đánh giá</th>` : ''}</tr></thead><tbody>${rb}</tbody></table></div></div>`;
     }
@@ -1064,6 +1073,7 @@
   function bindView() {
     const v = $('#view');
     addImgButtons(v);
+    bindMs(v);
     v.querySelectorAll('tr[data-g]').forEach(tr => tr.onclick = () => { const g = tr.dataset.g; ui.open.has(g) ? ui.open.delete(g) : ui.open.add(g); render(); });
     v.querySelectorAll('[data-fold]').forEach(el => el.onclick = e => { e.stopPropagation(); const k = el.dataset.fold; ui.flip.has(k) ? ui.flip.delete(k) : ui.flip.add(k); render(); });
     // Bấm tên NPP: mở/thu gọn chi tiết của NPP đó (không lọc, để bảng giữ nguyên)
@@ -1090,6 +1100,22 @@
   }
 
   /* ---------- Excel export ---------- */
+  /* ---------- Ô lọc chọn nhiều (checkbox) ---------- */
+  function msHtml(key, label, opts) {
+    const sel = ui[key] instanceof Set ? ui[key] : new Set(); const open = ui.msOpen === key;
+    const txt = !sel.size ? 'Tất cả' : sel.size <= 2 ? [...sel].join(', ') : `${sel.size} đã chọn`;
+    return `<div class="fld ms${open ? ' open' : ''}" data-ms="${key}"><label>${esc(label)}</label><button type="button" class="ms-b${sel.size ? ' on' : ''}" aria-haspopup="true" aria-expanded="${open}">${esc(txt)}<span aria-hidden="true">▾</span></button>
+      <div class="ms-p"${open ? '' : ' hidden'}><label class="ms-o all"><input type="checkbox" data-msall${!sel.size ? ' checked' : ''}> Tất cả</label>${opts.map(([v, t]) => `<label class="ms-o"><input type="checkbox" value="${esc(v)}"${sel.has(v) ? ' checked' : ''}> ${esc(t)}</label>`).join('')}</div></div>`;
+  }
+  function bindMs(v) {
+    v.querySelectorAll('.ms').forEach(box => { const key = box.dataset.ms;
+      box.querySelector('.ms-b').onclick = e => { e.stopPropagation(); ui.msOpen = ui.msOpen === key ? null : key; render(); };
+      box.querySelector('.ms-p').onclick = e => e.stopPropagation();
+      box.querySelectorAll('input[type=checkbox]').forEach(cb => cb.onchange = () => { const S = ui[key];
+        if (cb.hasAttribute('data-msall')) S.clear(); else { cb.checked ? S.add(cb.value) : S.delete(cb.value); }
+        if (key === 'bdA') ui.bdN && ui.bdN.clear(); render(); }); });
+  }
+  document.addEventListener('click', () => { if (ui.msOpen) { ui.msOpen = null; render(); } });
   /* ---------- Tải ảnh PNG của một khung (tự vẽ lại nền, viền, chữ lên canvas, không cần thư viện ngoài) ---------- */
   function saveBlob(filename, blob, btn) {
     const u = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = u; a.download = filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 4000); toastBtn(btn, 'Đã tải');
