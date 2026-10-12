@@ -618,7 +618,7 @@
   }
 
   /* ---------- TAB 1: Target ---------- */
-  function targetMonths() { const s = new Set(Object.keys(STATE.months || {})); if ((STATE.cur.target || []).length) s.add(STATE.cur.month); return [...s].sort().reverse(); }
+  function targetMonths() { const s = new Set(Object.keys(STATE.months || {}).filter(m => !STATE.months[m].ly)); if ((STATE.cur.target || []).length) s.add(STATE.cur.month); return [...s].sort().reverse(); }
   function targetRows(m) {
     if (m === STATE.cur.month && (STATE.cur.target || []).length) return STATE.cur.target.filter(r => inScope(r[0]) && inBrand(r[1])).map(([c, sc, t]) => ({ c, sc, tc: t, th: t * (item(sc).hl || 0) }));
     return ((STATE.months[m] || {}).rows || []).filter(r => inScope(r[0]) && inBrand(r[1])).map(r => ({ c: r[0], sc: r[1], tc: r[2], th: r[3] }));
@@ -1013,10 +1013,12 @@
   function viewTracking() {
     const cur = STATE.cur || {}; const A = (cur.alloc || []).filter(r => inScope(r[1]) && inBrand(r[2]));
     if (!A.length) return '<div class="card empty">Chưa có dữ liệu Allocation cho phạm vi này.</div>';
-    const weeks = [...new Set(A.map(r => r[0]))].sort(wkSort); const wk = currentWeek(weeks); const nw = weeks[weeks.indexOf(wk) + 1];
+    const weeks = [...new Set(A.map(r => r[0]))].sort(wkSort); const wk = currentWeek(weeks);
     const AD = cur.allocDates || {}; const fd = d => d ? d.slice(6, 8) + '/' + d.slice(4, 6) : '';
-    const wStart = (AD[wk] || []).find(Boolean) || null; const nStart = nw ? ((AD[nw] || []).find(Boolean) || null) : null;
-    const wEnd = wStart ? (nStart ? addDay(nStart, -1) : addDay(wStart, 6)) : null; const inWk = d => d && wStart && d >= wStart && d <= wEnd;
+    // Tuần bắt đầu từ thứ 2: lấy thứ 2 của tuần chứa ngày upload đầu tiên, kết thúc Chủ nhật. Phần còn lại của tuần trước không chuyển sang tuần sau.
+    const monday = d => addDay(d, -((new Date(Date.UTC(+d.slice(0, 4), +d.slice(4, 6) - 1, +d.slice(6, 8))).getUTCDay() + 6) % 7));
+    const firstUp = (AD[wk] || []).find(Boolean) || null; const wStart = firstUp ? monday(firstUp) : null;
+    const wEnd = wStart ? addDay(wStart, 6) : null; const inWk = d => d && wStart && d >= wStart && d <= wEnd;
     // Nguyên tắc tracking (chỉ dùng Dis Sale by Date + Online Order, tất cả theo ngày order thuộc tuần đang theo dõi):
     //  Sale In = Dis Sale by Date có Invoice Date đến D-1 + Online Order trạng thái Delivery (chưa nằm trong Dis Sale đến D-1)
     //  Pending = Online Order trạng thái Order Approve / Schedule

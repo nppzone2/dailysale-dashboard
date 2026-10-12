@@ -3,6 +3,7 @@ const KINDS = {
   items:   { label: 'Item Master',              need: ['ShortCode', 'BrandGroup', 'hl'] },
   hist:    { label: 'Target Total (lịch sử)',   need: ['Target (Case)', 'calendar_month', 'Distributor_Name'] },
   target:  { label: 'Target Current Month',     need: ['Ref', 'Alpha_Name', 'Unit'] },
+  sales:   { label: 'Sale In/Out theo tháng (Case, dạng dài)', need: ['Customer_Name', 'TypeName', 'Calendar_Month', 'ValueFormat'] },
   si:      { label: 'SO Invoice (Sale In)',     need: ['InvoiceNumber', 'UOM_Invoice', 'Date_ID'] },
   so:      { label: 'SaleOut by Seller',        need: ['Seller_Name', 'Outlet_ID', 'UOM'] },
   alloc:   { label: 'Allocation Current Month', need: ['WEEK', 'Alpha_Name', 'Allocation'] },
@@ -14,7 +15,7 @@ const KINDS = {
   ref:     { label: 'Tham chiếu xe (Ontop HL, HL của 1 xe)', need: ['NPP', ['HL của 1 xe', 'HL trên 1 xe', 'HL/xe', 'HL/Xe']] },
   sbd:     { label: 'Dis Sale by Date (Sale In theo ngày order)', need: [['Order Date', 'OrderDate'], ['Calendar_Day_Name', 'ConfirmDate', 'Invoice Date', 'InvoiceDate'], 'ShortCode', 'Unit'] }
 };
-const KIND_ORDER = ['items', 'hist', 'si', 'sbd', 'so', 'sodd', 'orders', 'alloc', 'allocdates', 'target', 'stock', 'aso', 'ref'];
+const KIND_ORDER = ['items', 'hist', 'sales', 'si', 'sbd', 'so', 'sodd', 'orders', 'alloc', 'allocdates', 'target', 'stock', 'aso', 'ref'];
 
 function cleanStr(v) { return v == null ? '' : String(v).trim(); }
 function num(v) { const n = typeof v === 'number' ? v : parseFloat(String(v ?? '').replace(/,/g, '')); return isFinite(n) ? n : 0; }
@@ -84,6 +85,28 @@ function applyParsed(state, p, opts = {}) {
     });
     Object.keys(by).forEach(m => { state.months[m] = { rows: by[m], at: now }; });
     msg.note = 'Tháng ' + Object.keys(by).map(fmtMonth).join(', ');
+  }
+
+  if (p.kind === 'sales') {
+    // Dữ liệu năm trước (Sale In/Out theo case, mỗi dòng 1 NPP x SKU x tháng x loại). Lưu với cờ ly để không lẫn vào Target.
+    const by = {}; const hlOf = sc => { const it = state.items[sc]; return it && it.hl ? it.hl : 0; };
+    p.rows.forEach(r => {
+      const t = cleanStr(g(r, 'TypeName')).toLowerCase().replace(/\s+/g, '');
+      const isSi = t === 'salein', isSo = t === 'saleout';
+      if (!isSi && !isSo) return; // bỏ dòng %Out vs In
+      const m = cleanStr(g(r, 'Calendar_Month')).slice(0, 6); const sc = cleanStr(g(r, 'Search_Text'));
+      if (!/^\d{6}$/.test(m) || !sc) return;
+      const c = touchNpp(state, g(r, 'Customer_Name'), '');
+      const mm = by[m] || (by[m] = {}); const k = c + '|' + sc;
+      const row = mm[k] || (mm[k] = [c, sc, 0, 0, 0, 0, 0, 0]);
+      const v = num(g(r, 'ValueFormat')); const hl = v * hlOf(sc);
+      if (isSi) { row[4] += v; row[5] += hl; } else { row[6] += v; row[7] += hl; }
+    });
+    Object.keys(by).forEach(m => {
+      const rows = Object.values(by[m]).map(r => [r[0], r[1], 0, 0, +r[4].toFixed(3), +r[5].toFixed(4), +r[6].toFixed(3), +r[7].toFixed(4)]);
+      state.months[m] = { rows, at: now, ly: true };
+    });
+    msg.note = 'Năm trước: ' + Object.keys(by).map(fmtMonth).join(', ') + (Object.keys(by).length ? '' : ' (không có dòng SaleIn/SaleOut)');
   }
 
   if (p.kind === 'si') {

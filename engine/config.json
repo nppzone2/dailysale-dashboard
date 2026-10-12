@@ -29,8 +29,7 @@
       "Quan An",
       "Event Venue",
       "Hotel & Resort",
-      "Food Caterer",
-      "Company / Office"
+      "Food Caterer"
     ],
     "Off": [
       "Grocery Store",
@@ -38,7 +37,8 @@
       "Beverage Retail Store",
       "Independent Minimart",
       "Supermarket",
-      "Wholesaler"
+      "Wholesaler",
+      "Company / Office"
     ]
   }
 }
