@@ -301,11 +301,13 @@ function applyParsed(state, p, opts = {}) {
     // Danh sách outlet Active ASO, cập nhật 1 lần đầu tháng (tháng lấy từ "Calendar_Month is YYYYMM" trong phần filter)
     const m = String(p.pre || '').match(/Calendar_Month\s*is\s*(\d{6})/i);
     const month = m ? m[1] : state.cur.month;
-    const known = new Set(Object.keys(state.npps)); let skip = 0; const seen = new Set(); const list = []; const names = {};
+    const known = new Set(Object.keys(state.npps)); let skip = 0; const seen = new Set(); const list = []; const names = {}; const addrs = {};
+    const addrCol = ['Outlet_Address', 'OutletAddress', 'Address', 'Địa chỉ'].find(h => has(h));
     p.rows.forEach(r => { const c = nppCode(g(r, 'Distributor_Name')); const o = cleanStr(g(r, 'OutletID')).replace(/\.0+$/, ''); if (!c || !o) return;
       if (known.size && !known.has(c)) { skip++; return; } if (seen.has(c + '|' + o)) return; seen.add(c + '|' + o);
-      list.push([c, o, cleanStr(g(r, 'Outlet_Type')) || 'Khác']); if (has('OutletName')) names[o] = cleanStr(g(r, 'OutletName')); });
-    state.cur.aso = { month, list }; state.cur.asoNames = names;
+      list.push([c, o, cleanStr(g(r, 'Outlet_Type')) || 'Khác']); if (has('OutletName')) names[o] = cleanStr(g(r, 'OutletName'));
+      if (addrCol) { const a = cleanStr(g(r, addrCol)); if (a) addrs[o] = a; } });
+    state.cur.aso = { month, list }; state.cur.asoNames = names; state.cur.asoAddr = addrs;
     msg.note = `Tháng ${fmtMonth(month)} · ${list.length} outlet` + (skip ? ` · bỏ qua ${skip} dòng NPP ngoài HCM Zone 2` : '') + (month !== state.cur.month ? ` · khác tháng hiện hành ${fmtMonth(state.cur.month)}` : '');
   }
 

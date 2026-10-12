@@ -39,7 +39,7 @@
   async function tryLogin(u, pw) {
     if (!Object.keys(ENC.blobs).length) return 'Dashboard chưa có dữ liệu.';
     const D = await unlock(u, pw); if (!D) return ENC.maint && String(u || '').trim().toLowerCase() !== 'admin' ? 'Hệ thống đang bảo trì, hiện chỉ tài khoản Admin đăng nhập được.' : 'Sai tên đăng nhập hoặc mật khẩu.';
-    STATE = D.state; PUBLISHED = STATE; SOD = null; ASON = null; ui.area = 'all'; ui.npp = 'all'; ui.tMonth = ''; ui.open.clear(); enter(D.role); return true;
+    STATE = D.state; PUBLISHED = STATE; SOD = null; ASON = null; ASOA = null; ui.area = 'all'; ui.npp = 'all'; ui.tMonth = ''; ui.open.clear(); enter(D.role); return true;
   }
   function loginView(msg) {
     const M = ENC.maint;
@@ -308,15 +308,16 @@
     if (hasOD && !(await loadOD(btn))) { toastBtn(btn, 'Chưa tải được dữ liệu'); return; }
     const O = overviewModel(); const { M } = O; const hl = ui.unit === 'hl'; const nf = hl ? '#,##0.0' : '#,##0'; const rnd = v => hl ? Math.round(v * 10) / 10 : Math.round(v);
     const vol = {}; (STATE.cur.ov || []).forEach(([c, o, g, b, qc, qh]) => { if (inScope(c) && (ui.brand === 'all' || b === ui.brand) && (ui.bgf === 'all' || g === ui.bgf)) { const k = c + '|' + o; vol[k] = (vol[k] || 0) + (hl ? qh : qc); } });
-    const SO = (SOD || {}).outlets || {}; const NM = ASON || {}; const seg = STATE.cur.ovSeg || {};
+    const SO = (SOD || {}).outlets || {}; const NM = ASON || {}; const AD = ASOA || {}; const seg = STATE.cur.ovSeg || {};
+    const addrOf = o => AD[o] || (SO[o] || [])[1] || '';
     const chName = { Sdis: 'Sdis', Off: 'Off-premise', On: 'On-premise' }; const dirOf = ch => ch === 'Sdis' ? 'Indirect' : 'Direct';
     // chi tiết outlet
     const inAso = new Set(O.asoL.map(r => r[0] + '|' + r[1]));
     const det = [['Khu vực', 'Mã NPP', 'OutletID', 'Tên outlet', 'Địa chỉ', 'Outlet_Type', 'Kênh', 'Direct / Indirect', 'Trạng thái', `Sản lượng MTD (${U()})`]];
     const recs = [];
-    O.asoL.forEach(([c, o, t]) => { const v = vol[c + '|' + o] || 0; const ch = chOf(t); recs.push([areaOf(c), c, o, NM[o] || (SO[o] || [])[0] || '', (SO[o] || [])[1] || '', t, chName[ch], dirOf(ch), v > 0 ? 'Đã mua' : 'Chưa mua', rnd(v)]); });
+    O.asoL.forEach(([c, o, t]) => { const v = vol[c + '|' + o] || 0; const ch = chOf(t); recs.push([areaOf(c), c, o, NM[o] || (SO[o] || [])[0] || '', addrOf(o), t, chName[ch], dirOf(ch), v > 0 ? 'Đã mua' : 'Chưa mua', rnd(v)]); });
     Object.entries(vol).forEach(([k, v]) => { if (v <= 0 || inAso.has(k)) return; const [c, o] = k.split('|'); const t = seg[o] || ''; const ch = chOf(t);
-      recs.push([areaOf(c), c, o, (SO[o] || [])[0] || '', (SO[o] || [])[1] || '', t, chName[ch], dirOf(ch), 'Có mua · ngoài ASO', rnd(v)]); });
+      recs.push([areaOf(c), c, o, NM[o] || (SO[o] || [])[0] || '', addrOf(o), t, chName[ch], dirOf(ch), 'Có mua · ngoài ASO', rnd(v)]); });
     const stRank = { 'Chưa mua': 0, 'Đã mua': 1, 'Có mua · ngoài ASO': 2 };
     recs.sort((a, b) => nppCmp(a[1], b[1]) || ['Sdis', 'Off-premise', 'On-premise'].indexOf(a[6]) - ['Sdis', 'Off-premise', 'On-premise'].indexOf(b[6]) || stRank[a[8]] - stRank[b[8]] || b[9] - a[9]);
     det.push(...recs);
@@ -1386,12 +1387,12 @@
       extra: [['Dữ liệu chi tiết', long, [10, 10, 9, 10, 12, 13, 12, 11]]] }, ev.currentTarget);
   }
   /* Order Detail: chi tiết Sale Out theo ngày giao (file SaleOut by DeliveryDate), theo phạm vi tài khoản và bộ lọc */
-  let SOD = null, ASON = null;
+  let SOD = null, ASON = null, ASOA = null;
   // file mã hoá riêng: chi tiết đơn Sale Out + tên outlet Active ASO, chỉ tải khi cần
   async function loadOD(btn) {
     if (SOD) return true; const t = btn.innerHTML; btn.textContent = 'Đang tải…'; btn.disabled = true;
     try { const r = await fetch('od/' + CRED.k + '.json', { cache: 'no-store' }); if (!r.ok) throw 0; const d = await openBlob(await r.json(), CRED.pass);
-      if (d && d.lines) { SOD = d; ASON = {}; } else { SOD = d.sod || { lines: [], outlets: {} }; ASON = d.asoNames || {}; } return true; }
+      if (d && d.lines) { SOD = d; ASON = {}; ASOA = {}; } else { SOD = d.sod || { lines: [], outlets: {} }; ASON = d.asoNames || {}; ASOA = d.asoAddr || {}; } return true; }
     catch (e) { return false; } finally { btn.innerHTML = t; btn.disabled = false; }
   }
   async function exportOrderDetail(ev) {
