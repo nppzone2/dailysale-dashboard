@@ -147,6 +147,7 @@ function slice(st, keep) {
   if (s.ref) s.ref.rows = (s.ref.rows || []).filter(r => keep(r[0]));
   if (c.stock) c.stock.rows = (c.stock.rows || []).filter(r => keep(r[0]));
   if (c.aso) c.aso.list = (c.aso.list || []).filter(r => keep(r[0]));
+  if (c.asoNames) { const ao = new Set((c.aso ? c.aso.list : []).map(r => r[1])); c.asoNames = Object.fromEntries(Object.entries(c.asoNames).filter(([o]) => ao.has(o))); }
   if (c.ov) { c.ov = c.ov.filter(r => keep(r[0])); const ou = new Set(c.ov.map(r => r[1])); c.ovSeg = Object.fromEntries(Object.entries(c.ovSeg || {}).filter(([o]) => ou.has(o))); }
   if (c.sod) { c.sod.lines = (c.sod.lines || []).filter(l => keep(l[0])); const ou = new Set(c.sod.lines.map(l => l[2])); c.sod.outlets = Object.fromEntries(Object.entries(c.sod.outlets || {}).filter(([o]) => ou.has(o))); }
   const ships = new Set(c.lines.map(l => l[4])); c.ship = Object.fromEntries(Object.entries(c.ship || {}).filter(([id]) => ships.has(id)));
@@ -162,9 +163,10 @@ if (MAINT) console.log('Chế độ bảo trì: BẬT (chỉ Admin đăng nhập
 if (!hasData) console.log('Chưa có dữ liệu: trang sẽ báo "Dashboard chưa có dữ liệu" khi đăng nhập.');
 // Chi tiết đơn Sale Out (cur.sod) tách thành file mã hoá riêng docs/od/<tài khoản>.json, chỉ tải khi bấm "Tải Order Detail"
 const odFiles = {};
-const sealAcct = (key, payload, pw) => { const st = payload.state; const sod = st.cur && st.cur.sod;
-  const lean = { ...st, cur: { ...st.cur } }; delete lean.cur.sod;
-  blobs[key] = seal({ ...payload, state: lean }, pw); if (sod && (sod.lines || []).length) odFiles[key] = seal(sod, pw); };
+const sealAcct = (key, payload, pw) => { const st = payload.state; const sod = st.cur && st.cur.sod; const an = st.cur && st.cur.asoNames;
+  const lean = { ...st, cur: { ...st.cur } }; delete lean.cur.sod; delete lean.cur.asoNames;
+  blobs[key] = seal({ ...payload, state: lean }, pw);
+  if ((sod && (sod.lines || []).length) || (an && Object.keys(an).length)) odFiles[key] = seal({ sod: sod || { lines: [], outlets: {} }, asoNames: an || {} }, pw); };
 if (hasData) sealAcct('admin', { role: { type: 'admin', id: 'ADMIN', label: 'Admin · toàn vùng' }, state }, ADMIN);
 const areas = !hasData ? [] : [...new Set(Object.values(state.npps).map(n => n.area).filter(Boolean))];
 const warn = [];

@@ -39,7 +39,7 @@
   async function tryLogin(u, pw) {
     if (!Object.keys(ENC.blobs).length) return 'Dashboard chưa có dữ liệu.';
     const D = await unlock(u, pw); if (!D) return ENC.maint && String(u || '').trim().toLowerCase() !== 'admin' ? 'Hệ thống đang bảo trì, hiện chỉ tài khoản Admin đăng nhập được.' : 'Sai tên đăng nhập hoặc mật khẩu.';
-    STATE = D.state; PUBLISHED = STATE; SOD = null; ui.area = 'all'; ui.npp = 'all'; ui.tMonth = ''; ui.open.clear(); enter(D.role); return true;
+    STATE = D.state; PUBLISHED = STATE; SOD = null; ASON = null; ui.area = 'all'; ui.npp = 'all'; ui.tMonth = ''; ui.open.clear(); enter(D.role); return true;
   }
   function loginView(msg) {
     const M = ENC.maint;
@@ -303,6 +303,47 @@
       return { act: act.length, buy: buy.length, cov: act.length ? buy.length / act.length : NaN, v: vAso + sumBy(extra, ([, v]) => v), vAso, extraN: extra.length }; };
     return { M, per, aso, asoL, asoStat, LMk, LYk, hasLY: !!STATE.months[LYk], hasLM: !!STATE.months[LMk], hasOv: (STATE.cur.ov || []).length > 0 };
   }
+  async function exportOutlets(ev) {
+    const btn = ev.currentTarget; const hasOD = CRED && (ENC.od || []).includes(CRED.k);
+    if (hasOD && !(await loadOD(btn))) { toastBtn(btn, 'Chưa tải được dữ liệu'); return; }
+    const O = overviewModel(); const { M } = O; const hl = ui.unit === 'hl'; const nf = hl ? '#,##0.0' : '#,##0'; const rnd = v => hl ? Math.round(v * 10) / 10 : Math.round(v);
+    const vol = {}; (STATE.cur.ov || []).forEach(([c, o, g, b, qc, qh]) => { if (inScope(c) && (ui.brand === 'all' || b === ui.brand) && (ui.bgf === 'all' || g === ui.bgf)) { const k = c + '|' + o; vol[k] = (vol[k] || 0) + (hl ? qh : qc); } });
+    const SO = (SOD || {}).outlets || {}; const NM = ASON || {}; const seg = STATE.cur.ovSeg || {};
+    const chName = { Sdis: 'Sdis', Off: 'Off-premise', On: 'On-premise' }; const dirOf = ch => ch === 'Sdis' ? 'Indirect' : 'Direct';
+    // chi tiết outlet
+    const inAso = new Set(O.asoL.map(r => r[0] + '|' + r[1]));
+    const det = [['Khu vực', 'Mã NPP', 'OutletID', 'Tên outlet', 'Địa chỉ', 'Outlet_Type', 'Kênh', 'Direct / Indirect', 'Trạng thái', `Sản lượng MTD (${U()})`]];
+    const recs = [];
+    O.asoL.forEach(([c, o, t]) => { const v = vol[c + '|' + o] || 0; const ch = chOf(t); recs.push([areaOf(c), c, o, NM[o] || (SO[o] || [])[0] || '', (SO[o] || [])[1] || '', t, chName[ch], dirOf(ch), v > 0 ? 'Đã mua' : 'Chưa mua', rnd(v)]); });
+    Object.entries(vol).forEach(([k, v]) => { if (v <= 0 || inAso.has(k)) return; const [c, o] = k.split('|'); const t = seg[o] || ''; const ch = chOf(t);
+      recs.push([areaOf(c), c, o, (SO[o] || [])[0] || '', (SO[o] || [])[1] || '', t, chName[ch], dirOf(ch), 'Có mua · ngoài ASO', rnd(v)]); });
+    const stRank = { 'Chưa mua': 0, 'Đã mua': 1, 'Có mua · ngoài ASO': 2 };
+    recs.sort((a, b) => nppCmp(a[1], b[1]) || ['Sdis', 'Off-premise', 'On-premise'].indexOf(a[6]) - ['Sdis', 'Off-premise', 'On-premise'].indexOf(b[6]) || stRank[a[8]] - stRank[b[8]] || b[9] - a[9]);
+    det.push(...recs);
+    // tổng hợp NPP (sheet chính, có định dạng)
+    const npps = [...new Set([...O.asoL.map(r => r[0]), ...Object.keys(vol).map(k => k.split('|')[0])])].sort(nppCmp);
+    const st = f => O.asoStat(f);
+    const rowV = f => { const a = st(c => f(c)); const cs = CHS.map(([k]) => st((c, ch) => f(c) && ch === k));
+      return [a.act, a.buy, a.act - a.buy, isFinite(a.cov) ? a.cov : null, rnd(a.v), ...cs.flatMap(x => [x.act, x.buy, x.act - x.buy, isFinite(x.cov) ? x.cov : null])]; };
+    const body = []; const covK = new Set([5, 10, 14, 18]);
+    const sty = (kind) => (k) => k === 1 && kind === 'npp' ? { color: XC.brand, bold: true } : k < 2 ? null : covK.has(k) ? { nf: '0.0%', h: 'center', bold: true } : k === 6 ? { nf } : { nf: '#,##0' };
+    byArea(npps).forEach(([a, cs]) => { body.push({ v: [a, `${cs.length} NPP`, ...rowV(c => cs.includes(c))], kind: 'area', s: sty('area') });
+      cs.forEach(c => body.push({ v: ['', c, ...rowV(x => x === c)], kind: 'npp', s: sty('npp') })); });
+    body.push({ v: ['Tổng', '', ...rowV(() => true)], kind: 'grand', s: sty('grand') });
+    const H = ['Khu vực', 'NPP', 'Active ASO', 'Đã mua', 'Chưa mua', '% Coverage', `Sản lượng (${U()})`, ...CHS.flatMap(([, n]) => [`${n} · Active`, `${n} · Đã mua`, `${n} · Chưa mua`, `${n} · %`])];
+    // theo kênh (NPP × kênh)
+    const byCh = [['Khu vực', 'Mã NPP', 'Kênh', 'Direct / Indirect', 'Active ASO', 'Đã mua', 'Chưa mua', '% Coverage', `Sản lượng (${U()})`, '% Sản lượng NPP']];
+    npps.forEach(c => { const tot = st(x => x === c).v; CHS.forEach(([k, n]) => { const x = st((cc, ch) => cc === c && ch === k); if (!x.act && !x.v) return;
+      byCh.push([areaOf(c), c, n, dirOf(k), x.act, x.buy, x.act - x.buy, isFinite(x.cov) ? Math.round(x.cov * 1000) / 10 + '%' : '', rnd(x.v), tot ? Math.round(x.v / tot * 1000) / 10 + '%' : '']); }); });
+    const A0 = st(() => true);
+    styledXlsx({ file: `ASO_Outlet_${M.m}_${scopeTag()}.xlsx`, sheet: 'Tổng hợp NPP',
+      title: `Distributor Sales Performance · ASO Coverage ${fM(M.m)}`,
+      sub: `RTC - Future Fit · HCM Zone 2 · ${scopeLabel()} · danh sách Active ASO ${O.aso ? fM(O.aso.month) : '—'} · sản lượng theo ngày đặt hàng đến ${fD(M.lastSo)}`,
+      note: 'Đã mua = outlet Active ASO có sản lượng trong tháng (theo ngày đặt hàng). Sdis = Indirect; Off-premise, On-premise = Direct. Sheet "Chi tiết Outlet" có danh sách từng outlet.',
+      H, body, leftCols: 2, sepCols: [2, 7, 11, 15], widths: [10, 10, 11, 10, 10, 11, 13, ...CHS.flatMap(() => [10, 10, 10, 9])],
+      concl: [`Coverage ${pct(A0.cov)}: ${nf0.format(A0.buy)} / ${nf0.format(A0.act)} outlet Active ASO đã mua, còn ${nf0.format(A0.act - A0.buy)} outlet chưa mua${A0.extraN ? `; thêm ${A0.extraN} outlet có mua nằm ngoài danh sách ASO` : ''}.`],
+      extra: [['Theo kênh', byCh, [10, 9, 13, 14, 11, 10, 10, 11, 14, 14]], ['Chi tiết Outlet', det, [10, 9, 11, 32, 40, 24, 13, 14, 18, 16]]] }, btn);
+  }
   function viewOverview() {
     const O = overviewModel(); const { M, per, asoStat, LMk, LYk, hasLY, hasLM } = O;
     if (!M.m) return '<div class="card empty">Chưa có dữ liệu tháng hiện hành.</div>';
@@ -344,7 +385,7 @@
         <div class="tw"><table class="ovc"><thead><tr><th>Chỉ tiêu</th><th class="gs">MTD ${fM(M.m)}</th><th>Cùng kỳ ${lmN}</th><th>Growth vs ${lmN}</th><th>Cả tháng ${lmN}</th>${hasLY ? `<th class="gs">Cùng kỳ ${lyN}</th><th>Growth vs ${lyN}</th>` : ''}<th class="gs">Target</th><th>% đạt</th></tr></thead><tbody>
         ${[['Sale In', T.si, T.lmSi, T.gSiLM, T.lm.si, T.lySi, T.gSiLY, M.tgSi], ['Sale Out', T.so, T.lmSo, T.gSoLM, T.lm.so, T.lySo, T.gSoLY, M.tgSo]].map(([n, v, lm, g, lmF, ly, gy, tg]) => `<tr><td><b>${n}</b></td><td class="gs"><b>${fmt(v)}</b></td><td>${hasLM ? fmt(lm) : '—'}</td><td>${gr(g)}</td><td class="note">${hasLM ? fmt(lmF) : '—'}</td>${hasLY ? `<td class="gs">${fmt(ly)}</td><td>${gr(gy)}</td>` : ''}<td class="gs">${fmt(T.t)}</td><td>${pctT(T.t ? v / T.t : NaN, tg)}</td></tr>`).join('')}
         </tbody></table></div></div>
-      <div class="card c12"><div class="card-h"><div><h2>ASO Coverage theo kênh</h2><p class="sub">${O.aso ? `Danh sách Active ASO ${fM(O.aso.month)}${asoMonthOk ? '' : ' (khác tháng hiện hành)'}` : 'Chưa có file Active ASO'} · sản lượng outlet tính theo ngày đặt hàng trong ${fM(M.m)} · Sdis = gián tiếp, Off / On = trực tiếp · đơn vị ${U()}</p></div></div>
+      <div class="card c12"><div class="card-h"><div><h2>ASO Coverage theo kênh</h2><p class="sub">${O.aso ? `Danh sách Active ASO ${fM(O.aso.month)}${asoMonthOk ? '' : ' (khác tháng hiện hành)'}` : 'Chưa có file Active ASO'} · sản lượng outlet tính theo ngày đặt hàng trong ${fM(M.m)} · Sdis = gián tiếp, Off / On = trực tiếp · đơn vị ${U()}</p></div>${O.aso ? '<button class="btn xl-r" id="xl-outlet">Tải danh sách Outlet</button>' : ''}</div>
         ${O.aso ? `<div class="chcards">${chS.map(x => `<div class="chc ch-${x.k}"><div class="chc-h"><b>${esc(x.n)}</b><span>${esc(x.d)}</span></div><div class="chc-v">${isFinite(x.cov) ? pct(x.cov) : '—'}<small>coverage</small></div><div class="chc-f">${nf0.format(x.buy)} / ${nf0.format(x.act)} outlet · ${vTot ? pct(x.v / vTot) : '—'} sản lượng</div><div class="bar"><i style="width:${Math.min(100, (x.cov || 0) * 100)}%"></i></div></div>`).join('')}</div>
         <div class="tw">${chTable}</div>` : '<p class="note">Upload file Active ASO của tháng (cột OutletID, Outlet_Type, Distributor_Name) để xem độ phủ.</p>'}</div>
       <div class="card c12"><div class="card-h"><div><h2>Theo Khu vực / NPP</h2><p class="sub">Growth so với cùng kỳ · Coverage = outlet Active ASO có mua / tổng Active ASO · % SL là tỷ trọng sản lượng outlet theo kênh · đơn vị ${U()}</p></div></div>
@@ -1170,6 +1211,7 @@
     const xpd = $('#xl-pending'); if (xpd) xpd.onclick = exportPending;
     const xld = $('#xl-landing'); if (xld) xld.onclick = exportLanding;
     const xb = $('#xl-board'); if (xb) xb.onclick = exportBoard;
+    const xo2 = $('#xl-outlet'); if (xo2) xo2.onclick = exportOutlets;
     const xa = $('#xl-alloc'); if (xa) xa.onclick = ev => allocExport && allocExport(ev);
     const xt2 = $('#xl-track'); if (xt2) xt2.onclick = ev => trackExport && trackExport(ev);
     const bgg = $('#bg-g'); if (bgg) bgg.onchange = () => { ui.bgG = bgg.value; ui.bgS = ''; render(); };
@@ -1342,13 +1384,17 @@
       extra: [['Dữ liệu chi tiết', long, [10, 10, 9, 10, 12, 13, 12, 11]]] }, ev.currentTarget);
   }
   /* Order Detail: chi tiết Sale Out theo ngày giao (file SaleOut by DeliveryDate), theo phạm vi tài khoản và bộ lọc */
-  let SOD = null;
+  let SOD = null, ASON = null;
+  // file mã hoá riêng: chi tiết đơn Sale Out + tên outlet Active ASO, chỉ tải khi cần
+  async function loadOD(btn) {
+    if (SOD) return true; const t = btn.innerHTML; btn.textContent = 'Đang tải…'; btn.disabled = true;
+    try { const r = await fetch('od/' + CRED.k + '.json', { cache: 'no-store' }); if (!r.ok) throw 0; const d = await openBlob(await r.json(), CRED.pass);
+      if (d && d.lines) { SOD = d; ASON = {}; } else { SOD = d.sod || { lines: [], outlets: {} }; ASON = d.asoNames || {}; } return true; }
+    catch (e) { return false; } finally { btn.innerHTML = t; btn.disabled = false; }
+  }
   async function exportOrderDetail(ev) {
     const btn = ev.currentTarget;
-    if (!SOD) { const t = btn.textContent; btn.textContent = 'Đang tải…'; btn.disabled = true;
-      try { const r = await fetch('od/' + CRED.k + '.json', { cache: 'no-store' }); if (!r.ok) throw 0; SOD = await openBlob(await r.json(), CRED.pass); }
-      catch (e) { btn.textContent = t; btn.disabled = false; toastBtn(btn, 'Chưa tải được dữ liệu'); return; }
-      btn.textContent = t; btn.disabled = false; }
+    if (!(await loadOD(btn))) { toastBtn(btn, 'Chưa tải được dữ liệu'); return; }
     ev = { currentTarget: btn };
     const sod = SOD || {}; const O = sod.outlets || {}; const fd8 = d => d ? d.slice(6, 8) + '/' + d.slice(4, 6) + '/' + d.slice(0, 4) : '';
     const rows = [['Ngày giao', 'Khu vực', 'Mã NPP', 'Outlet_ID', 'Outlet_Name', 'Outlet_Address', 'Outlet_Segment', 'OrderFrom', 'Source DocNo', 'DIS DocNo', 'Sales_Type', 'Ngày đặt', 'BrandFamily', 'BrandGroup', 'ShortCode', 'Số lượng (Case)', 'Sản lượng (HL)']];
