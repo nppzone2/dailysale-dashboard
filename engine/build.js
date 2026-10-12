@@ -111,6 +111,18 @@ const ALERT = REPORT.rejects.length > 0 || REPORT.warns.some(w => w.level === 'e
 if (files.length) state.lastReport = REPORT;
 if (state.cur.month !== curM) console.log(`Tháng hiện hành: ${curM || '—'} → ${state.cur.month}`);
 delete state.auth;
+// Sản lượng outlet theo NGÀY ĐẶT HÀNG trong tháng (cho ASO Coverage), tính lại mỗi lần dựng từ chi tiết đơn Sale Out:
+// [NPP, Outlet, BrandGroup, BrandFamily, Case, HL]; ovSeg = phân loại outlet chỉ cho outlet ngoài danh sách Active ASO
+delete state.cur.ov; delete state.cur.ovSeg;
+if (state.cur.sod && (state.cur.sod.lines || []).length) {
+  const M = state.cur.month, ov = {}; const O = state.cur.sod.outlets || {}; const it = sc => state.items[sc] || {};
+  state.cur.sod.lines.forEach(l => { const od = l[7] || l[1]; if (od.slice(0, 6) !== M) return; const sc = l[8];
+    const k = l[0] + '|' + l[2] + '|' + (it(sc).bg || 'Khác') + '|' + (it(sc).b || 'Khác'); const o = ov[k] || (ov[k] = [0, 0]); o[0] += l[9]; o[1] += l[9] * (it(sc).hl || 0); });
+  state.cur.ov = Object.entries(ov).map(([k, q]) => [...k.split('|'), Math.round(q[0] * 1000) / 1000, Math.round(q[1] * 1000) / 1000]);
+  const inAso = new Set(((state.cur.aso || {}).list || []).map(r => r[0] + '|' + r[1]));
+  state.cur.ovSeg = Object.fromEntries([...new Set(state.cur.ov.filter(r => !inAso.has(r[0] + '|' + r[1])).map(r => r[1]))].map(o => [o, (O[o] || [])[2] || '']));
+}
+const OV_TMP = { ov: state.cur.ov, ovSeg: state.cur.ovSeg }; delete state.cur.ov; delete state.cur.ovSeg; // không lưu vào kho
 if (files.length) {
   fs.mkdirSync(path.dirname(VAULT), { recursive: true });
   fs.writeFileSync(VAULT, JSON.stringify(seal(state, ADMIN)));
@@ -134,10 +146,13 @@ function slice(st, keep) {
   c.sbd = (c.sbd || []).filter(r => keep(r[0]));
   if (s.ref) s.ref.rows = (s.ref.rows || []).filter(r => keep(r[0]));
   if (c.stock) c.stock.rows = (c.stock.rows || []).filter(r => keep(r[0]));
+  if (c.aso) c.aso.list = (c.aso.list || []).filter(r => keep(r[0]));
+  if (c.ov) { c.ov = c.ov.filter(r => keep(r[0])); const ou = new Set(c.ov.map(r => r[1])); c.ovSeg = Object.fromEntries(Object.entries(c.ovSeg || {}).filter(([o]) => ou.has(o))); }
   if (c.sod) { c.sod.lines = (c.sod.lines || []).filter(l => keep(l[0])); const ou = new Set(c.sod.lines.map(l => l[2])); c.sod.outlets = Object.fromEntries(Object.entries(c.sod.outlets || {}).filter(([o]) => ou.has(o))); }
   const ships = new Set(c.lines.map(l => l[4])); c.ship = Object.fromEntries(Object.entries(c.ship || {}).filter(([id]) => ships.has(id)));
   return s;
 }
+if (OV_TMP.ov) { state.cur.ov = OV_TMP.ov; state.cur.ovSeg = OV_TMP.ovSeg; }
 const blobs = {};
 const hasData = Object.keys(state.npps).length > 0;
 // Chế độ bảo trì (engine/maintenance.json): chỉ tạo gói Admin, NPP/ASM thấy trang thông báo bảo trì
@@ -169,7 +184,7 @@ if (warn.length) console.log('Cảnh báo: chưa tạo tài khoản cho ' + warn
 /* ---------- ghi trang ---------- */
 const vn = new Date(Date.now() + 7 * 3600e3), p2 = n => String(n).padStart(2, '0');
 const built = `${p2(vn.getUTCHours())}:${p2(vn.getUTCMinutes())} ${p2(vn.getUTCDate())}/${p2(vn.getUTCMonth() + 1)}/${vn.getUTCFullYear()}`;
-const ENC = { iter: ITER, built, blobs, od: Object.keys(odFiles), maint: MAINT, stockDays: CFG.stock_days || { low: 3, high: 3.5 } };
+const ENC = { iter: ITER, built, blobs, od: Object.keys(odFiles), maint: MAINT, stockDays: CFG.stock_days || { low: 3, high: 3.5 }, chMap: CFG.channel_map || null };
 const rd = f => fs.readFileSync(path.join(__dirname, f), 'utf8');
 const safe = s => s.replace(/<\/(script)/gi, '<\\/$1');
 const page = `<!doctype html><html lang="vi"><head><meta charset="utf-8">

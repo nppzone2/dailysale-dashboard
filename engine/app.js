@@ -3,11 +3,11 @@
   const $ = (s, el = document) => el.querySelector(s);
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const GROUPS = ['Group AA', 'Group BB', 'Khác'];
-    const TABS = [['target', 'Target tháng'], ['landing', 'Tổng quan'], ['progress', 'Sale In-Out MTD'], ['alloc', 'Allocation'], ['tracking', 'Tracking Allocation'], ['history', 'YTD as of M-1']];
+    const TABS = [['target', 'Target tháng'], ['overview', 'Tổng quan'], ['landing', 'Landing'], ['progress', 'Sale In-Out MTD'], ['alloc', 'Allocation'], ['tracking', 'Tracking Allocation'], ['history', 'YTD as of M-1']];
 
   let STATE = null; const ENC = window.ENC || { blobs: {} };
   let PUBLISHED = STATE; let previewing = false;
-  const ui = { trSku: 'all', tab: 'landing', scope: 'all', area: 'all', npp: 'all', brand: 'all', bgf: 'all', unit: 'case', tMonth: '', open: new Set(), allocSku: 'all' };
+  const ui = { trSku: 'all', tab: 'overview', scope: 'all', area: 'all', npp: 'all', brand: 'all', bgf: 'all', unit: 'case', tMonth: '', open: new Set(), allocSku: 'all' };
   try { const s = JSON.parse(localStorage.getItem('npp-ui') || '{}'); if (s.tab) ui.tab = s.tab; if (s.unit) ui.unit = s.unit; if (s.brand) ui.brand = s.brand; } catch (e) {}
   const saveUi = () => { try { localStorage.setItem('npp-ui', JSON.stringify({ tab: ui.tab, unit: ui.unit, scope: ui.scope, brand: ui.brand })); } catch (e) {} };
 
@@ -269,12 +269,93 @@
     return `<div class="repbox ${bad ? 'bad' : ''}"><div class="repbox-in"><div><b>${bad ? 'Cảnh báo dữ liệu nguồn' : 'Lưu ý dữ liệu'}</b> · lần tải ${esc(fTs(R.at))}<ul>${items.map(x => `<li class="${x.lv}">${x.t}</li>`).join('')}</ul></div><button class="linkbtn" id="rep-x">Đã xem</button></div></div>`;
   }
   function render() { missingHl.clear(); const v = $('#view'); chartId = 0; CHARTS = [];
-    if (ui.tab === 'ref' && ROLE.type !== 'admin') ui.tab = 'landing';
-    v.innerHTML = ({ landing: viewLanding, ref: viewRef, target: viewTarget, progress: viewProgress, alloc: viewAlloc, tracking: viewTracking, pending: viewPending, history: viewHistory }[ui.tab] || viewProgress)();
+    if (ui.tab === 'ref' && ROLE.type !== 'admin') ui.tab = 'overview';
+    v.innerHTML = ({ overview: viewOverview, landing: viewLanding, ref: viewRef, target: viewTarget, progress: viewProgress, alloc: viewAlloc, tracking: viewTracking, pending: viewPending, history: viewHistory }[ui.tab] || viewProgress)();
     bindView(); drawCharts(); }
 
   const conclusion = pts => `<section class="concl"><svg class="star" width="18" height="18" viewBox="0 0 30 30" aria-hidden="true"><path d="M15 2l3.9 8.4 9.1 1-6.8 6.2 1.9 9-8.1-4.6-8.1 4.6 1.9-9L2 11.4l9.1-1z" fill="currentColor"/></svg><div><div class="eyebrow">Kết luận nhanh</div><ul>${pts.filter(Boolean).map(p => `<li>${p}</li>`).join('')}</ul></div></section>`;
   const hlNote = () => missingHl.size && ui.unit === 'hl' ? `<div class="warnbox">Chưa có hệ số HL trong Item Master cho: <b>${[...missingHl].sort().join(', ')}</b>. Các mã này tính 0 HL; xem theo Case để thấy đủ sản lượng.</div>` : '';
+
+  /* ---------- TAB: Tổng quan · Sale In / Sale Out / Growth + ASO Coverage + kênh Sdis / Off / On ---------- */
+  const CH_DEF = { Sdis: ['Sub Distributor'], On: ['Quan Nhau Mainstream', 'Quan Nhau Top', 'Quan Nhau Economy', 'Quan Nhau', 'Restaurant', 'Premium Restaurant', 'Karaoke', 'Premium Karaoke', 'Bar', 'Beer Café', 'Group Social', 'Young Social', 'Sport & Recreation', 'Quan An', 'Event Venue', 'Hotel & Resort', 'Food Caterer', 'Company / Office'], Off: [] };
+  const chOf = (() => { let map = null; return t => { if (!map) { map = {}; const M0 = ENC.chMap || CH_DEF; Object.entries(M0).forEach(([ch, l]) => (l || []).forEach(x => { map[String(x).toLowerCase()] = ch; })); }
+    return map[String(t || '').toLowerCase()] || 'Off'; }; })();
+  const CHS = [['Sdis', 'Sdis', 'Indirect · gián tiếp'], ['Off', 'Off-premise', 'Direct · trực tiếp'], ['On', 'On-premise', 'Direct · trực tiếp']];
+  const prevM = m => { const y = +m.slice(0, 4), mo = +m.slice(4, 6); return mo === 1 ? (y - 1) + '12' : y + String(mo - 1).padStart(2, '0'); };
+  const gr = v => !isFinite(v) ? '<span class="note">—</span>' : `<span class="gw ${v >= 0 ? 'up' : 'down'}">${v >= 0 ? '▲' : '▼'} ${pct(Math.abs(v))}</span>`;
+  function overviewModel() {
+    const M = curModel(); const L = M.list; const m = M.m;
+    const hl = ui.unit === 'hl';
+    const histV = (mk, f) => { const rs = ((STATE.months[mk] || {}).rows || []).filter(r => inScope(r[0]) && inBrand(r[1]) && f(r)); return { si: sumBy(rs, r => hl ? r[5] : r[4]), so: sumBy(rs, r => hl ? r[7] : r[6]), has: !!STATE.months[mk] }; };
+    const LMk = prevM(m), LYk = (+m.slice(0, 4) - 1) + m.slice(4, 6);
+    const share = (mk, d) => d / dim(mk); // cùng kỳ = cả tháng × tỷ lệ số ngày đã qua
+    const per = f => { const rs = L.filter(r => f(r)); const si = sumBy(rs, r => conv(r.si, r.sc)), so = sumBy(rs, r => conv(r.so, r.sc)), t = sumBy(rs, r => conv(r.t, r.sc));
+      const lm = histV(LMk, r => f({ c: r[0], sc: r[1] })), ly = histV(LYk, r => f({ c: r[0], sc: r[1] }));
+      const lmSi = lm.si * share(LMk, M.dSi), lmSo = lm.so * share(LMk, M.dSo), lySi = ly.si * share(LYk, M.dSi), lySo = ly.so * share(LYk, M.dSo);
+      return { t, si, so, lm, ly, gSiLM: lm.has && lmSi ? si / lmSi - 1 : NaN, gSoLM: lm.has && lmSo ? so / lmSo - 1 : NaN, gSiLY: ly.has && lySi ? si / lySi - 1 : NaN, gSoLY: ly.has && lySo ? so / lySo - 1 : NaN, lmSi, lmSo, lySi, lySo }; };
+    // ASO
+    const aso = STATE.cur.aso || null; const asoL = aso ? aso.list.filter(r => inScope(r[0])) : [];
+    const vol = {}; (STATE.cur.ov || []).forEach(([c, o, g, b, qc, qh]) => { if (inScope(c) && (ui.brand === 'all' || b === ui.brand) && (ui.bgf === 'all' || g === ui.bgf)) { const k = c + '|' + o; vol[k] = (vol[k] || 0) + (hl ? qh : qc); } });
+    const seg = STATE.cur.ovSeg || {}; const inAso = new Set(asoL.map(r => r[0] + '|' + r[1]));
+    const asoStat = f => { const act = asoL.filter(r => f(r[0], chOf(r[2]))); const buy = act.filter(r => (vol[r[0] + '|' + r[1]] || 0) > 0);
+      const vAso = sumBy(act, r => vol[r[0] + '|' + r[1]] || 0);
+      const extra = Object.entries(vol).filter(([k, v]) => v > 0 && !inAso.has(k)).filter(([k]) => { const [c, o] = k.split('|'); return f(c, chOf(seg[o])); });
+      return { act: act.length, buy: buy.length, cov: act.length ? buy.length / act.length : NaN, v: vAso + sumBy(extra, ([, v]) => v), vAso, extraN: extra.length }; };
+    return { M, per, aso, asoL, asoStat, LMk, LYk, hasLY: !!STATE.months[LYk], hasLM: !!STATE.months[LMk], hasOv: (STATE.cur.ov || []).length > 0 };
+  }
+  function viewOverview() {
+    const O = overviewModel(); const { M, per, asoStat, LMk, LYk, hasLY, hasLM } = O;
+    if (!M.m) return '<div class="card empty">Chưa có dữ liệu tháng hiện hành.</div>';
+    const T = per(() => true); const A0 = asoStat(() => true);
+    const chS = CHS.map(([k, n, d]) => ({ k, n, d, ...asoStat((c, ch) => ch === k) }));
+    const dir = asoStat((c, ch) => ch !== 'Sdis'), ind = chS[0];
+    const vTot = sumBy(chS, x => x.v);
+    const lmN = fM(LMk), lyN = fM(LYk);
+    const cmpTxt = `cùng kỳ = cả tháng × ${M.dSi}/${dim(M.m)} ngày`;
+    const kpi = (lbl, v, o) => `<div class="card c3 kpi"><div class="kpi-l">${lbl}</div><div class="kpi-v">${v}<small>${U()}</small></div>${o}</div>`;
+    const rowG = (lbl, a, g1, g2) => `<div class="gline"><span>${lbl}</span>${g1}<span class="note">vs ${lmN}</span>${hasLY ? g2 + `<span class="note">vs ${lyN}</span>` : ''}</div>`;
+    // bảng kênh
+    const chRows = [...chS.map(x => ({ ...x, cls: 'sku' })), { k: 'dir', n: 'Direct (Off + On)', d: 'trực tiếp', ...dir, cls: 'grp' }, { k: 'all', n: 'Tổng', d: '', ...A0, cls: 'tot' }];
+    const chTable = `<table class="ovc"><thead><tr><th>Kênh</th><th>Phân loại</th><th class="gs">Active ASO</th><th>Có mua</th><th>% Coverage</th><th class="gs">Sản lượng</th><th>% Sản lượng</th><th>SL / outlet mua</th></tr></thead><tbody>
+      ${chRows.map(x => `<tr class="${x.cls}"><td><b>${esc(x.n)}</b></td><td class="note">${esc(x.d)}</td><td class="gs">${nf0.format(x.act)}</td><td>${nf0.format(x.buy)}${x.extraN ? `<span class="note"> +${x.extraN}</span>` : ''}</td><td>${isFinite(x.cov) ? `<span class="covb"><i style="width:${Math.min(100, x.cov * 100)}%"></i></span>${pct(x.cov)}` : '—'}</td><td class="gs">${fmt(x.v)}</td><td>${vTot ? pct(x.v / vTot) : '—'}</td><td>${x.buy ? (ui.unit === 'hl' ? nf1.format(x.vAso / x.buy) : nf1.format(x.vAso / x.buy)) : '—'}</td></tr>`).join('')}</tbody></table>`;
+    // bảng theo Khu vực / NPP
+    const npps = [...new Set([...M.list.filter(r => r.t || r.si || r.so).map(r => r.c), ...O.asoL.map(r => r[0])])].sort(nppCmp);
+    const cells = (f, nf) => { const p = per(r => f(r.c)); const a = asoStat(c => f(c)), d = asoStat((c, ch) => f(c) && ch !== 'Sdis'), i = asoStat((c, ch) => f(c) && ch === 'Sdis'); const vv = d.v + i.v;
+      return `<td class="gs">${fmt(p.si)}</td><td>${gr(p.gSiLM)}</td>${hasLY ? `<td>${gr(p.gSiLY)}</td>` : ''}<td class="gs">${fmt(p.so)}</td><td>${gr(p.gSoLM)}</td>${hasLY ? `<td>${gr(p.gSoLY)}</td>` : ''}<td class="gs">${nf0.format(a.act)}</td><td>${nf0.format(a.buy)}</td><td>${isFinite(a.cov) ? pct(a.cov) : '—'}</td><td class="gs">${nf0.format(d.buy)}</td><td>${vv ? pct(d.v / vv) : '—'}</td><td class="gs">${nf0.format(i.buy)}</td><td>${vv ? pct(i.v / vv) : '—'}</td>`; };
+    let tb = '';
+    byArea(npps).forEach(([a, cs]) => { const k = 'ov:a:' + a, op = isOpen(k, true);
+      tb += `<tr class="grp area click${op ? ' open' : ''}" data-fold="${esc(k)}"><td><span class="caret">▸</span> ${esc(a)}</td><td>${cs.length} NPP</td>${cells(c => cs.includes(c))}</tr>`;
+      if (op) cs.forEach((c, i) => { tb += `<tr class="npp${i === 0 ? ' first' : ''}"><td></td><td><b class="nppn">${esc(c)}</b></td>${cells(x => x === c)}</tr>`; }); });
+    tb += `<tr class="tot"><td>Tổng</td><td></td>${cells(() => true)}</tr>`;
+    const nG = hasLY ? 3 : 2;
+    const npTable = `<table class="ag frz2 cmp ovn"><thead><tr><th rowspan="2">Khu vực</th><th rowspan="2">NPP</th><th colspan="${nG}" class="gh gs">Sale In</th><th colspan="${nG}" class="gh gs">Sale Out</th><th colspan="3" class="gh gs">ASO Coverage</th><th colspan="2" class="gh gs">Direct</th><th colspan="2" class="gh gs">Indirect (Sdis)</th></tr>
+      <tr class="h2"><th class="gs">MTD</th><th>vs ${lmN}</th>${hasLY ? `<th>vs ${lyN}</th>` : ''}<th class="gs">MTD</th><th>vs ${lmN}</th>${hasLY ? `<th>vs ${lyN}</th>` : ''}<th class="gs">Active</th><th>Có mua</th><th>%</th><th class="gs">Outlet</th><th>% SL</th><th class="gs">Outlet</th><th>% SL</th></tr></thead><tbody>${tb}</tbody></table>`;
+    const asoMonthOk = O.aso && O.aso.month === M.m;
+    const lowCov = npps.map(c => [c, asoStat(x => x === c)]).filter(([, a]) => isFinite(a.cov)).sort((a, b) => a[1].cov - b[1].cov);
+    return `
+    <section class="lead"><div><div class="eyebrow">Tổng quan · ${fM(M.m)} · Sale In đến ${fD(M.lastSi)} · Sale Out đến ${fD(M.lastSo)}</div><h1>${esc(scopeLabel())}</h1>
+      <p>Sale In, Sale Out so với cùng kỳ tháng trước${hasLY ? ' và năm trước' : ''}; độ phủ outlet Active ASO và cơ cấu kênh Sdis / Off / On.</p></div></section>
+    <div class="grid">
+      ${kpi('Sale In MTD', fmt(T.si), `<div class="kpi-f"><b>${pct(T.t ? T.si / T.t : NaN)}</b> target · time gone ${pct(M.tgSi)}</div>${rowG('Growth', T.si, gr(T.gSiLM), gr(T.gSiLY))}`)}
+      ${kpi('Sale Out MTD', fmt(T.so), `<div class="kpi-f"><b>${pct(T.t ? T.so / T.t : NaN)}</b> target · time gone ${pct(M.tgSo)}</div>${rowG('Growth', T.so, gr(T.gSoLM), gr(T.gSoLY))}`)}
+      <div class="card c3 kpi hero"><div class="kpi-l">ASO Coverage</div><div class="kpi-v">${isFinite(A0.cov) ? pct(A0.cov) : '—'}</div><div class="kpi-f">${nf0.format(A0.buy)} / ${nf0.format(A0.act)} outlet Active ASO có mua${A0.extraN ? ` · +${A0.extraN} ngoài danh sách` : ''}</div><div class="bar"><i style="width:${Math.min(100, (A0.cov || 0) * 100)}%;background:#9FE3BC"></i></div></div>
+      <div class="card c3 kpi"><div class="kpi-l">Direct / Indirect</div><div class="kpi-v">${vTot ? pct(dir.v / vTot) : '—'}<small>Direct</small></div><div class="kpi-f">Direct ${nf0.format(dir.buy)} outlet · Indirect (Sdis) ${nf0.format(ind.buy)} outlet, ${vTot ? pct(ind.v / vTot) : '—'} SL</div><div class="mixbar"><i class="d" style="width:${vTot ? dir.v / vTot * 100 : 0}%"></i><i class="s" style="width:${vTot ? ind.v / vTot * 100 : 0}%"></i></div></div>
+      <div class="card c12"><div class="card-h"><div><h2>Sale In · Sale Out so với cùng kỳ</h2><p class="sub">Đơn vị ${U()} · ${cmpTxt}${hasLY ? '' : ` · chưa có dữ liệu ${lyN}, upload file Target_Total_${LYk} để so với năm trước`}</p></div></div>
+        <div class="tw"><table class="ovc"><thead><tr><th>Chỉ tiêu</th><th class="gs">MTD ${fM(M.m)}</th><th>Cùng kỳ ${lmN}</th><th>Growth vs ${lmN}</th><th>Cả tháng ${lmN}</th>${hasLY ? `<th class="gs">Cùng kỳ ${lyN}</th><th>Growth vs ${lyN}</th>` : ''}<th class="gs">Target</th><th>% đạt</th></tr></thead><tbody>
+        ${[['Sale In', T.si, T.lmSi, T.gSiLM, T.lm.si, T.lySi, T.gSiLY, M.tgSi], ['Sale Out', T.so, T.lmSo, T.gSoLM, T.lm.so, T.lySo, T.gSoLY, M.tgSo]].map(([n, v, lm, g, lmF, ly, gy, tg]) => `<tr><td><b>${n}</b></td><td class="gs"><b>${fmt(v)}</b></td><td>${hasLM ? fmt(lm) : '—'}</td><td>${gr(g)}</td><td class="note">${hasLM ? fmt(lmF) : '—'}</td>${hasLY ? `<td class="gs">${fmt(ly)}</td><td>${gr(gy)}</td>` : ''}<td class="gs">${fmt(T.t)}</td><td>${pctT(T.t ? v / T.t : NaN, tg)}</td></tr>`).join('')}
+        </tbody></table></div></div>
+      <div class="card c12"><div class="card-h"><div><h2>ASO Coverage theo kênh</h2><p class="sub">${O.aso ? `Danh sách Active ASO ${fM(O.aso.month)}${asoMonthOk ? '' : ' (khác tháng hiện hành)'}` : 'Chưa có file Active ASO'} · sản lượng outlet tính theo ngày đặt hàng trong ${fM(M.m)} · Sdis = gián tiếp, Off / On = trực tiếp · đơn vị ${U()}</p></div></div>
+        ${O.aso ? `<div class="chcards">${chS.map(x => `<div class="chc ch-${x.k}"><div class="chc-h"><b>${esc(x.n)}</b><span>${esc(x.d)}</span></div><div class="chc-v">${isFinite(x.cov) ? pct(x.cov) : '—'}<small>coverage</small></div><div class="chc-f">${nf0.format(x.buy)} / ${nf0.format(x.act)} outlet · ${vTot ? pct(x.v / vTot) : '—'} sản lượng</div><div class="bar"><i style="width:${Math.min(100, (x.cov || 0) * 100)}%"></i></div></div>`).join('')}</div>
+        <div class="tw">${chTable}</div>` : '<p class="note">Upload file Active ASO của tháng (cột OutletID, Outlet_Type, Distributor_Name) để xem độ phủ.</p>'}</div>
+      <div class="card c12"><div class="card-h"><div><h2>Theo Khu vực / NPP</h2><p class="sub">Growth so với cùng kỳ · Coverage = outlet Active ASO có mua / tổng Active ASO · % SL là tỷ trọng sản lượng outlet theo kênh · đơn vị ${U()}</p></div></div>
+        <div class="tw">${npTable}</div></div>
+    </div>
+    ${conclusion([
+      `Sale In MTD <b>${fmt(T.si)} ${U()}</b>, ${isFinite(T.gSiLM) ? `${T.gSiLM >= 0 ? 'tăng' : 'giảm'} <b>${pct(Math.abs(T.gSiLM))}</b> so với cùng kỳ ${lmN}` : 'chưa có số tháng trước'}; Sale Out <b>${fmt(T.so)} ${U()}</b>, ${isFinite(T.gSoLM) ? `${T.gSoLM >= 0 ? 'tăng' : 'giảm'} <b>${pct(Math.abs(T.gSoLM))}</b>` : '—'}.`,
+      O.aso ? `ASO Coverage <b>${pct(A0.cov)}</b> (${nf0.format(A0.buy)}/${nf0.format(A0.act)} outlet). Direct chiếm <b>${vTot ? pct(dir.v / vTot) : '—'}</b> sản lượng, Sdis <b>${vTot ? pct(ind.v / vTot) : '—'}</b>.` : '',
+      O.aso && lowCov.length > 1 ? `Coverage thấp nhất: <b>${esc(lowCov[0][0])}</b> (${pct(lowCov[0][1].cov)}), cao nhất: <b>${esc(lowCov[lowCov.length - 1][0])}</b> (${pct(lowCov[lowCov.length - 1][1].cov)}).` : ''
+    ])}`;
+  }
 
   /* ---------- TAB: Tổng quan (landing) · Còn lại Target − Sale In − Pending, quy đổi số xe ---------- */
   const LG = ['Group AA', 'Group BB', 'Tổng'];

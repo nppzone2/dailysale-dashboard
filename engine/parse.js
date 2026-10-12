@@ -9,11 +9,12 @@ const KINDS = {
   allocdates: { label: 'Allocation · Upload Date', need: ['WEEK', 'WEEK No'] },
   orders:  { label: 'Online Order (SO chờ giao)', need: ['Order Number', 'Status', 'ShortCode', 'Sum of Case'] },
   sodd:    { label: 'SaleOut by DeliveryDate', need: ['Seller_Name', 'Outlet_ID', 'FullDelivDateTime', 'Quantity'] },
+  aso:     { label: 'Active ASO (danh sách outlet đầu tháng)', need: ['OutletID', 'Outlet_Type', 'Distributor_Name', 'StartDate'] },
   stock:   { label: 'Tồn kho đầu tháng (Stock)', need: ['Alpha_Name', 'ShortCode', ['Sum of Stock', 'Stock']] },
   ref:     { label: 'Tham chiếu xe (Ontop HL, HL của 1 xe)', need: ['NPP', ['HL của 1 xe', 'HL trên 1 xe', 'HL/xe', 'HL/Xe']] },
   sbd:     { label: 'Dis Sale by Date (Sale In theo ngày order)', need: [['Order Date', 'OrderDate'], ['Calendar_Day_Name', 'ConfirmDate', 'Invoice Date', 'InvoiceDate'], 'ShortCode', 'Unit'] }
 };
-const KIND_ORDER = ['items', 'hist', 'si', 'sbd', 'so', 'sodd', 'orders', 'alloc', 'allocdates', 'target', 'stock', 'ref'];
+const KIND_ORDER = ['items', 'hist', 'si', 'sbd', 'so', 'sodd', 'orders', 'alloc', 'allocdates', 'target', 'stock', 'aso', 'ref'];
 
 function cleanStr(v) { return v == null ? '' : String(v).trim(); }
 function num(v) { const n = typeof v === 'number' ? v : parseFloat(String(v ?? '').replace(/,/g, '')); return isFinite(n) ? n : 0; }
@@ -113,7 +114,8 @@ function applyParsed(state, p, opts = {}) {
       const keepTarget = opts.month === maxM ? state.cur.target : [];
       const keepAlloc = opts.month === maxM ? state.cur.alloc : [];
       const keepStock = state.cur.stock && (state.cur.stock.date || '').slice(0, 6) === maxM ? state.cur.stock : null;
-      resetCur(state, maxM); state.cur.target = keepTarget; state.cur.alloc = keepAlloc; if (keepStock) state.cur.stock = keepStock;
+      const keepAso = state.cur.aso && state.cur.aso.month === maxM ? state.cur.aso : null;
+      resetCur(state, maxM); state.cur.target = keepTarget; state.cur.alloc = keepAlloc; if (keepStock) state.cur.stock = keepStock; if (keepAso) state.cur.aso = keepAso;
     }
     const out = {};
     Object.keys(si).filter(d => d.slice(0, 6) === state.cur.month).forEach(d => {
@@ -270,6 +272,18 @@ function applyParsed(state, p, opts = {}) {
     state.cur.sod = { outlets: Object.fromEntries(Object.entries(outlets).filter(([o]) => used.has(o))), lines: lines.map(l => l.slice(0, 10)) };
     msg.note = days.length ? `Ngày giao ${fmtDate(days[0])} → ${fmtDate(days[days.length - 1])} · ${new Set(lines.map(l => l[3])).size} đơn` : 'Không có dòng thuộc tháng hiện hành';
     if (skip) msg.note += ` · bỏ qua ${skip} dòng của NPP ngoài HCM Zone 2`;
+  }
+
+  if (p.kind === 'aso') {
+    // Danh sách outlet Active ASO, cập nhật 1 lần đầu tháng (tháng lấy từ "Calendar_Month is YYYYMM" trong phần filter)
+    const m = String(p.pre || '').match(/Calendar_Month\s*is\s*(\d{6})/i);
+    const month = m ? m[1] : state.cur.month;
+    const known = new Set(Object.keys(state.npps)); let skip = 0; const seen = new Set(); const list = [];
+    p.rows.forEach(r => { const c = nppCode(g(r, 'Distributor_Name')); const o = cleanStr(g(r, 'OutletID')).replace(/\.0+$/, ''); if (!c || !o) return;
+      if (known.size && !known.has(c)) { skip++; return; } if (seen.has(c + '|' + o)) return; seen.add(c + '|' + o);
+      list.push([c, o, cleanStr(g(r, 'Outlet_Type')) || 'Khác']); });
+    state.cur.aso = { month, list };
+    msg.note = `Tháng ${fmtMonth(month)} · ${list.length} outlet` + (skip ? ` · bỏ qua ${skip} dòng NPP ngoài HCM Zone 2` : '') + (month !== state.cur.month ? ` · khác tháng hiện hành ${fmtMonth(state.cur.month)}` : '');
   }
 
   if (p.kind === 'stock') {

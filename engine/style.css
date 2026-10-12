@@ -506,3 +506,20 @@ tr.nsku .nppn{color:var(--brand)}
 .alc3 td,.alc3 th{padding-top:4px;padding-bottom:4px}
 .alc3 tr.area td{padding-top:7px!important;padding-bottom:7px!important;border-top-width:4px!important}
 .alc3 tr.sku td{font-size:13px}
+/* Tổng quan mới */
+.gw{font-weight:700;font-size:12.5px;white-space:nowrap}.gw.up{color:var(--good)}.gw.down{color:var(--bad)}
+.gline{display:flex;gap:6px;align-items:baseline;flex-wrap:wrap;font-size:12px;margin-top:6px}.gline>span:first-child{color:var(--muted);margin-right:2px}
+.mixbar{display:flex;height:8px;border-radius:99px;overflow:hidden;background:var(--surface-2);margin-top:auto}.mixbar i{display:block;height:100%}.mixbar .d{background:var(--brand)}.mixbar .s{background:#E8B04A}
+.ovc th:first-child,.ovc td:first-child,.ovc th:nth-child(2),.ovc td:nth-child(2){text-align:left}
+.ovc .gs{border-left:2px solid var(--line)}
+.ovc tr.grp td{background:var(--surface-2);font-weight:600}
+.covb{display:inline-block;width:56px;height:6px;border-radius:99px;background:var(--surface-2);border:1px solid var(--line);vertical-align:middle;margin-right:8px;overflow:hidden}.covb i{display:block;height:100%;background:var(--brand)}
+.chcards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:6px 0 14px}
+@media (max-width:760px){.chcards{grid-template-columns:1fr}}
+.chc{border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:6px;background:var(--surface)}
+.chc-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px}.chc-h b{font-size:14px}.chc-h span{font-size:11.5px;color:var(--muted)}
+.chc-v{font-size:26px;font-weight:700;font-variant-numeric:tabular-nums}.chc-v small{font-size:12px;color:var(--muted);font-weight:500;margin-left:6px}
+.chc-f{font-size:12.5px;color:var(--ink-2)}
+.chc .bar{margin-top:2px}.chc .bar i{background:var(--brand)}
+.chc.ch-Sdis{border-top:3px solid #E8B04A}.chc.ch-Sdis .bar i{background:#E8B04A}.chc.ch-Off{border-top:3px solid var(--brand)}.chc.ch-On{border-top:3px solid var(--so)}.chc.ch-On .bar i{background:var(--so)}
+.ovn tr.area .gw.up{color:#9FE3BC}.ovn tr.area .gw.down{color:#FFB3B8}

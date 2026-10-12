@@ -14,8 +14,10 @@ Dashboard theo dõi Target, Sale In, Sale Out và Allocation của các NPP vùn
 | Hằng tuần | `Allocation_Current_Month`: sheet **Allocation** có cột `Batch 1`, `Batch 2`… và sheet **Upload Date** ghi ngày chia từng batch |
 | Đầu tháng | `Target_Current_Month` |
 | Đầu tháng (tồn kho) | File **Stock** tồn đầu ngày 01 (cột `Alpha_Name`, `ShortCode`, `Sum of Stock`, `Sum of Daily Sales Out`). Dashboard tính Tồn hiện tại = Tồn đầu tháng + Sale In MTD − Sale Out MTD và số ngày tồn; ngưỡng đánh giá sửa ở `stock_days` trong `engine/config.json` |
+| Đầu tháng (outlet) | `Active_ASO_YYYYMM`: danh sách outlet Active ASO (cột `OutletID`, `Outlet_Type`, `Distributor_Name`). Tab **Tổng quan** tính ASO Coverage = outlet có mua (theo ngày đặt hàng trong file SaleOut by DeliveryDate) / tổng Active ASO, và chia kênh Sdis (gián tiếp) / Off / On (trực tiếp) theo `Outlet_Type`; bảng phân kênh sửa ở `channel_map` trong `engine/config.json` |
 | Khi đổi mã SKU | `Item_Master` |
 | Khi đổi định mức xe hoặc Ontop | `Tham_chieu_xe` (tải từ tab **Tham chiếu xe** của tài khoản Admin): mỗi NPP một dòng: Khu vực, NPP, OnTop HL Group AA, OnTop HL Group BB, HL của 1 xe |
+| So với năm trước | Upload `Target_Total_2025MM` của các tháng năm trước để tab Tổng quan tính Growth vs năm trước |
 | Chốt tháng | `Target_Total_YYYYMM` của tháng vừa kết thúc **cùng lúc với** `Target_Current_Month` của tháng mới |
 
 Dashboard nhận loại file theo **tiêu đề cột**, không theo tên file. Đổi tên file vẫn chạy được.

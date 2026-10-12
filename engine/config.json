@@ -6,5 +6,39 @@
   "stock_days": {
     "low": 3,
     "high": 3.5
+  },
+  "_ghi_chu_kenh": "channel_map: phân kênh theo Outlet_Type. Sdis = gián tiếp (Indirect); Off, On = trực tiếp (Direct). Outlet_Type không có trong danh sách được xếp vào Off.",
+  "channel_map": {
+    "Sdis": [
+      "Sub Distributor"
+    ],
+    "On": [
+      "Quan Nhau Mainstream",
+      "Quan Nhau Top",
+      "Quan Nhau Economy",
+      "Quan Nhau",
+      "Restaurant",
+      "Premium Restaurant",
+      "Karaoke",
+      "Premium Karaoke",
+      "Bar",
+      "Beer Café",
+      "Group Social",
+      "Young Social",
+      "Sport & Recreation",
+      "Quan An",
+      "Event Venue",
+      "Hotel & Resort",
+      "Food Caterer",
+      "Company / Office"
+    ],
+    "Off": [
+      "Grocery Store",
+      "Grocery Store - Home Delivery",
+      "Beverage Retail Store",
+      "Independent Minimart",
+      "Supermarket",
+      "Wholesaler"
+    ]
   }
 }
