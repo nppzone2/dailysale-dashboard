@@ -523,3 +523,16 @@ tr.nsku .nppn{color:var(--brand)}
 .chc .bar{margin-top:2px}.chc .bar i{background:var(--brand)}
 .chc.ch-Sdis{border-top:3px solid #E8B04A}.chc.ch-Sdis .bar i{background:#E8B04A}.chc.ch-Off{border-top:3px solid var(--brand)}.chc.ch-On{border-top:3px solid var(--so)}.chc.ch-On .bar i{background:var(--so)}
 .ovn tr.area .gw.up{color:#9FE3BC}.ovn tr.area .gw.down{color:#FFB3B8}
+
+/* Căn lại dòng tăng trưởng và khối Direct / Indirect: mỗi dòng một hàng, căn thẳng cột, không tách dòng */
+.gline{display:flex;flex-direction:column;gap:4px;font-size:12px;margin-top:8px}
+.gr{display:grid;grid-template-columns:52px 76px auto;column-gap:8px;align-items:baseline;white-space:nowrap}
+.gr .gl{color:var(--muted);font-weight:600}
+.gr .gv{text-align:left}
+.kf-split{display:flex;flex-direction:column;gap:5px;font-size:12.5px;margin-top:2px}
+.kf-split>div{display:flex;gap:10px;align-items:baseline;white-space:nowrap}
+.kf-split span{color:var(--muted)}
+.kf-split b{font-weight:600;margin-left:auto}
+.kf-split em{font-style:normal;font-weight:700;min-width:58px;text-align:right}
+.chc-f{display:flex;flex-direction:column;gap:2px}
+.chc-f>div{white-space:nowrap}
