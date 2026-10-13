@@ -116,6 +116,12 @@
   const fD = d => d ? d.slice(6, 8) + '/' + d.slice(4, 6) : '—';
   const nextMonth = m => { const y = +m.slice(0, 4), mo = +m.slice(4, 6); return mo === 12 ? (y + 1) + '01' : y + String(mo + 1).padStart(2, '0'); };
   const dim = m => new Date(+m.slice(0, 4), +m.slice(4, 6), 0).getDate();
+  // Ngày tính KPI (time gone, cùng kỳ): bỏ các ngày trong config kpi_exclude (ngày cụ thể và thứ trong tuần)
+  const KX = ENC.kpiExclude || {}; const xDates = new Set(KX.dates || []); const xWd = new Set((KX.weekdays || []).map(Number));
+  const isKpiDay = k => !xDates.has(k) && !xWd.has(new Date(+k.slice(0, 4), +k.slice(4, 6) - 1, +k.slice(6, 8)).getDay());
+  const dayKeys = m => Array.from({ length: dim(m) }, (_, i) => m + String(i + 1).padStart(2, '0'));
+  const kDays = m => dayKeys(m).filter(isKpiDay).length;                       // số ngày KPI cả tháng
+  const kElapsed = (m, lastK) => dayKeys(m).filter(k => k <= lastK && isKpiDay(k)).length; // số ngày KPI đã qua đến lastK
   const fTs = t => { if (!t) return '—'; const d = new Date(new Date(t).getTime() + 7 * 3600e3); if (isNaN(d)) return '—'; const p = n => String(n).padStart(2, '0'); return `${p(d.getUTCHours())}:${p(d.getUTCMinutes())} ${p(d.getUTCDate())}/${p(d.getUTCMonth() + 1)}`; };
   const status = (ach, tg) => {
     if (!isFinite(ach)) return '<span class="pill info" title="Chưa có target">—</span>';
@@ -144,6 +150,7 @@
     const lastSi = siDays[siDays.length - 1] || ''; const lastSo = soDays[soDays.length - 1] || '';
     const D = m ? dim(m) : 30;
     const dSi = lastSi ? +lastSi.slice(6) : 0; const dSo = lastSo ? +lastSo.slice(6) : 0;
+    const kD = m ? kDays(m) : 30, kSi = m && lastSi ? kElapsed(m, lastSi) : 0, kSo = m && lastSo ? kElapsed(m, lastSo) : 0;
     const rows = {};
     const R = (c, sc) => rows[c + '|' + sc] || (rows[c + '|' + sc] = { c, sc, t: 0, si: 0, so: 0, st0: 0, dso: 0 });
     (cur.target || []).forEach(([c, sc, v]) => { if (inScope(c) && inBrand(sc)) R(c, sc).t += v; });
@@ -156,7 +163,7 @@
     ((cur.stock || {}).rows || []).forEach(([c, sc, st, dso]) => { if (inScope(c) && inBrand(sc)) { const o = R(c, sc); o.st0 += st; o.dso += dso; } });
     const list = Object.values(rows);
     list.forEach(r => { if ((r.t || r.si || r.so) && item(r.sc).hl == null) missingHl.add(r.sc); });
-    return { stockDate: (cur.stock || {}).date || '', m, D, siDays, soDays, lastSi, lastSo, dSi, dSo, tgSi: dSi / D, tgSo: dSo / D, list, delivQ, delivN: delivNo.size };
+    return { stockDate: (cur.stock || {}).date || '', m, D, siDays, soDays, lastSi, lastSo, dSi, dSo, kD, kSi, kSo, tgSi: kD ? kSi / kD : 0, tgSo: kD ? kSo / kD : 0, list, delivQ, delivN: delivNo.size };
   }
   const sumBy = (list, f) => list.reduce((s, r) => s + f(r), 0);
   function aggregate(list, keyF) {
@@ -288,10 +295,10 @@
     const hl = ui.unit === 'hl';
     const histV = (mk, f) => { const rs = ((STATE.months[mk] || {}).rows || []).filter(r => inScope(r[0]) && inBrand(r[1]) && f(r)); return { si: sumBy(rs, r => hl ? r[5] : r[4]), so: sumBy(rs, r => hl ? r[7] : r[6]), has: !!STATE.months[mk] }; };
     const LMk = prevM(m), LYk = (+m.slice(0, 4) - 1) + m.slice(4, 6);
-    const share = (mk, d) => d / dim(mk); // cùng kỳ = cả tháng × tỷ lệ số ngày đã qua
+    const share = (mk, d) => kDays(mk) ? d / kDays(mk) : 0; // cùng kỳ = cả tháng × tỷ lệ số ngày KPI đã qua
     const per = f => { const rs = L.filter(r => f(r)); const si = sumBy(rs, r => conv(r.si, r.sc)), so = sumBy(rs, r => conv(r.so, r.sc)), t = sumBy(rs, r => conv(r.t, r.sc));
       const lm = histV(LMk, r => f({ c: r[0], sc: r[1] })), ly = histV(LYk, r => f({ c: r[0], sc: r[1] }));
-      const lmSi = lm.si * share(LMk, M.dSi), lmSo = lm.so * share(LMk, M.dSo), lySi = ly.si * share(LYk, M.dSi), lySo = ly.so * share(LYk, M.dSo);
+      const lmSi = lm.si * share(LMk, M.kSi), lmSo = lm.so * share(LMk, M.kSo), lySi = ly.si * share(LYk, M.kSi), lySo = ly.so * share(LYk, M.kSo);
       return { t, si, so, lm, ly, gSiLM: lm.has && lmSi ? si / lmSi - 1 : NaN, gSoLM: lm.has && lmSo ? so / lmSo - 1 : NaN, gSiLY: ly.has && lySi ? si / lySi - 1 : NaN, gSoLY: ly.has && lySo ? so / lySo - 1 : NaN, lmSi, lmSo, lySi, lySo }; };
     // ASO
     const aso = STATE.cur.aso || null; const asoL = aso ? aso.list.filter(r => inScope(r[0])) : [];
@@ -353,7 +360,7 @@
     const dir = asoStat((c, ch) => ch !== 'Sdis'), ind = chS[0];
     const vTot = sumBy(chS, x => x.v);
     const lmN = fM(LMk), lyN = fM(LYk);
-    const cmpTxt = `cùng kỳ = cả tháng × ${M.dSi}/${dim(M.m)} ngày`;
+    const cmpTxt = `cùng kỳ = cả tháng × ${M.kSi}/${M.kD} ngày KPI`;
     const kpi = (lbl, v, o) => `<div class="card c3 kpi"><div class="kpi-l">${lbl}</div><div class="kpi-v">${v}<small>${U()}</small></div>${o}</div>`;
     const rowG = (lbl, a, g1, g2) => `<div class="gline"><div class="gr"><span class="gl">${lbl}</span><span class="gv">${g1}</span><span class="note">vs ${lmN}</span></div>${hasLY ? `<div class="gr"><span class="gl"></span><span class="gv">${g2}</span><span class="note">vs ${lyN}</span></div>` : ''}</div>`;
     // bảng kênh
@@ -728,7 +735,7 @@
     const daily = Array(M.D).fill(null); M.siDays.forEach(d => { daily[+d.slice(6) - 1] = sumBy(STATE.cur.si[d].filter(r => inScope(r[0]) && inBrand(r[1])), r => conv(r[2], r[1])); });
     let acc = 0; const cum = daily.map((v, i) => i < M.dSi ? (acc += v || 0) : null);
     const soCum = Array(M.D).fill(null); M.soDays.forEach(d => { soCum[+d.slice(6) - 1] = sumBy(STATE.cur.so[d].rows.filter(r => inScope(r[0]) && inBrand(r[1])), r => conv(r[2], r[1])); });
-    const pace = labels.map((_, i) => T * (i + 1) / M.D);
+    const pace = labels.map((_, i) => T * kElapsed(M.m, M.m + String(i + 1).padStart(2, '0')) / (M.kD || 1));
     const soLine = soCum.some(v => v != null);
     let board = '';
     const npps = [...new Set(L.map(r => r.c))];
@@ -1417,7 +1424,7 @@
     saveXlsx(`SO_Invoice_${cur.month}_${days[days.length - 1] || ''}_${scopeTag()}.xlsx`, [['SO Invoice', rows, [11, 9, 9, 12, 15, 11, 36, 11, 11, 10, 14, 13]]], ev.currentTarget);
   }
   function exportProgress(ev) {
-    const M = curModel(); const left = M.D - M.dSi;
+    const M = curModel(); const left = M.kD - M.kSi;
     const rows = [['Tháng', 'Đến ngày', 'Mã NPP', 'ShortCode', 'BrandFamily', 'BrandGroup', 'Target (Case)', 'Sale In (Case)', '% SI', 'Còn lại SI (Case)', 'Sale Out (Case)', '% SO', 'Còn lại SO (Case)', 'hl/case', 'Target (HL)', 'Sale In (HL)', 'Sale Out (HL)']];
     M.list.filter(r => r.t || r.si || r.so).sort((a, b) => nppCmp(a.c, b.c) || GROUPS.indexOf(grp(a.sc)) - GROUPS.indexOf(grp(b.sc)) || a.sc.localeCompare(b.sc)).forEach(r => { const hl = item(r.sc).hl || 0; const rem = Math.max(0, r.t - r.si);
       rows.push([fM(M.m), fD(M.lastSi), r.c, r.sc, item(r.sc).b || '', grp(r.sc), r.t, r.si, r.t ? Math.round(r.si / r.t * 1000) / 10 : null, rem, r.so, r.t ? Math.round(r.so / r.t * 1000) / 10 : null, Math.max(0, r.t - r.so), hl, Math.round(r.t * hl * 100) / 100, Math.round(r.si * hl * 100) / 100, Math.round(r.so * hl * 100) / 100]); });

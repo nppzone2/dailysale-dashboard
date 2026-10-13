@@ -8,6 +8,10 @@
     "high": 3.5
   },
   "_ghi_chu_kenh": "channel_map: phân kênh theo Outlet_Type. Sdis = gián tiếp (Indirect); Off, On = trực tiếp (Direct). Outlet_Type không có trong danh sách được xếp vào Off.",
+  "kpi_exclude": {
+    "dates": [],
+    "weekdays": []
+  },
   "channel_map": {
     "Sdis": [
       "Sub Distributor"
@@ -40,5 +44,6 @@
       "Wholesaler",
       "Company / Office"
     ]
-  }
+  },
+  "_ghi_chu_loai_tru": "kpi_exclude: ngày KHÔNG tính vào time gone / KPI. dates: danh sách ngày cụ thể (YYYYMMDD, ví dụ lễ, nghỉ). weekdays: thứ trong tuần (0 = Chủ nhật, 1 = Thứ 2 … 6 = Thứ 7). Để trống nếu tính đủ mọi ngày."
 }
