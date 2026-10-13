@@ -29,6 +29,40 @@ Dashboard nhận loại file theo **tiêu đề cột**, không theo tên file. 
 
 Sau khi xử lý, workflow **xoá file Excel gốc** khỏi `input/`. Toàn bộ dữ liệu được giữ trong kho mã hoá `input/vault/state.enc`, khoá dẫn xuất từ `ADMIN_PASSWORD`.
 
+## Khai báo ngày miễn trừ (loại khỏi time gone và cùng kỳ)
+
+Dùng khi có ngày lễ, nghỉ hoặc ngày không phát sinh bán hàng cần loại khỏi cách tính KPI. Các ngày này sẽ không được tính vào **time gone**, **cùng kỳ** so với tháng trước và năm trước, cũng như đường pace trên biểu đồ.
+
+**Bước 1: mở file cấu hình.** Vào `engine/config.json`, tìm mục `kpi_exclude`:
+
+```json
+"kpi_exclude": {
+  "dates": [],
+  "weekdays": []
+}
+```
+
+**Bước 2: điền ngày.**
+- `dates`: danh sách ngày cụ thể, định dạng `YYYYMMDD`, viết trong dấu ngoặc kép và cách nhau bằng dấu phẩy.
+- `weekdays`: thứ trong tuần cần miễn trừ, với `0` = Chủ nhật, `1` = Thứ 2, `2` = Thứ 3, `3` = Thứ 4, `4` = Thứ 5, `5` = Thứ 6, `6` = Thứ 7.
+
+Ví dụ: nghỉ lễ 2/9 và 20/11, đồng thời miễn trừ Chủ nhật:
+
+```json
+"kpi_exclude": {
+  "dates": ["20260902", "20261120"],
+  "weekdays": [0]
+}
+```
+
+**Bước 3: lưu và đưa lên.** Commit file lên nhánh `main` (hoặc sửa trực tiếp trên GitHub). Workflow **Cập nhật dashboard** sẽ dựng lại trang, và các con số KPI sẽ tính theo cấu hình mới.
+
+**Lưu ý:**
+- Cấu hình áp dụng cho mọi tháng, nên ngày khai báo cho tháng này cũng sẽ được dùng khi xem các tháng khác. Chỉ khai báo ngày thuộc đúng tháng cần tính, hoặc giữ lại toàn bộ danh sách nếu muốn áp dụng cho nhiều tháng.
+- Khi đổi thứ trong tuần (ví dụ bỏ miễn trừ Chủ nhật), đặt lại `weekdays` về `[]`.
+- Thanh ngày trên biểu đồ vẫn hiển thị theo ngày lịch. Ngày miễn trừ không bị ẩn khỏi biểu đồ, chỉ không được tính vào mốc thời gian.
+- Số liệu thực đạt (Sale In, Sale Out, outlet có mua) không thay đổi, chỉ mốc thời gian thay đổi.
+
 ## Cảnh báo khi tải sai dữ liệu nguồn
 
 Mỗi lần cập nhật, dashboard tự kiểm tra file tải lên:
