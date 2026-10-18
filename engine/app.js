@@ -914,25 +914,26 @@
       // Xuất Excel có định dạng như web: đủ mọi Khu vực / NPP / Group / SKU
       allocExport = ev => {
         const skusOf = list => skus.filter(sc => A.some(r => r[0] === wk && list.includes(r[1]) && r[2] === sc));
-        const nf = ui.unit === 'hl' ? '#,##0.0' : '#,##0'; const rnd = v => ui.unit === 'hl' ? Math.round(v * 10) / 10 : Math.round(v);
-        const vals = (cs, sc) => [...bIdx.map(i => rnd(bv(cs, sc, i))), rnd(wv(cs, sc))];
+        const rnd = v => ui.unit === 'hl' ? Math.round(v * 10) / 10 : Math.round(v);
+        const nf = ui.unit === 'hl' ? '#,##0.0' : '#,##0';
         const nB = bIdx.length; const body = [];
-        const line = (a, n, lab, cs, sc, kind) => body.push({ v: [a, n, lab, ...vals(cs, sc)], kind, s: (k) => k === 1 && kind === 'npp' ? { color: XC.brand, bold: true } : k < 3 ? (kind === 'gsub' ? { color: XC.muted } : null) : { nf, bold: k === 3 + nB } });
-        AG.forEach(([a, cs]) => { const GA = byGrp(skusOf(cs));
-          line(a, `${cs.length} NPP`, GA.length === 1 ? GA[0][0] : 'Tổng', cs, null, 'area');
-          if (GA.length > 1) GA.forEach(([g, l]) => line('', '', `${g} · ${l.length} SKU`, cs, l, 'gsub'));
-          cs.forEach(c => { const ss = skusOf([c]); if (!ss.length) return; const G = byGrp(ss);
-            line('', c, `${G.length === 1 ? G[0][0] + ' · ' : ''}${ss.length} SKU`, [c], null, 'npp');
-            G.forEach(([g, l]) => { if (G.length > 1) line('', '', `${g} · ${l.length} SKU`, [c], l, 'gsub'); l.forEach(sc => line('', '', '   ' + sc, [c], sc, 'sub')); }); }); });
-        const GT = byGrp(skus.filter(sc => A.some(r => r[0] === wk && r[2] === sc)));
-        line('Tổng', '', 'Tổng', npps, null, 'grand'); GT.forEach(([g, l]) => line('', '', `${g} · ${l.length} SKU`, npps, l, 'gsub'));
+        // Cột: Khu vực | NPP | Group | SKU | Batch… | Total Allocation; mỗi khu vực kết thúc bằng một dòng tổng
+        const row = (a, n, g, sc, cs, kind) => body.push({ v: [a, n, g, sc, ...bIdx.map(i => rnd(bv(cs, sc, i))), rnd(wv(cs, sc))], kind,
+          s: k => k < 4 ? (kind === 'sku' && k === 2 ? { color: XC.muted } : kind === 'area' || kind === 'grand' ? { bold: true } : null) : { nf, bold: k === 4 + nB || kind === 'area' || kind === 'grand' } });
+        AG.forEach(([a, cs]) => {
+          let any = false;
+          cs.forEach(c => { const ss = skusOf([c]); if (!ss.length) return;
+            byGrp(ss).forEach(([g, l]) => l.forEach(sc => { row(a, c, gShort(g), sc, [c], 'sku'); any = true; })); });
+          if (any) row(`Tổng ${a}`, `${cs.length} NPP`, '', null, cs, 'area');
+        });
+        row('Tổng', '', '', null, npps, 'grand');
         const bName = i => `${BC[i]} · ${(AD[wk] || [])[i] ? fd(AD[wk][i]) : 'chưa có ngày'}${(AD[wk] || [])[i] && AD[wk][i] <= today ? ' (Đã Upload)' : ' (Chờ Upload)'}`;
         styledXlsx({ file: `Allocation_${wk}_${scopeTag()}.xlsx`, sheet: 'Allocation ' + wk,
           title: `Distributor Sales Performance · Allocation theo Khu vực / NPP · ${wk}`,
           sub: `RTC - Future Fit · HCM Zone 2 · ${scopeLabel()} · ${rangeTxt || 'Current Week ' + wk} · đơn vị ${U()}`,
           note: 'Số chia Current Week theo từng batch. Số còn lại sau Sale In và Pending xem ở tab Tracking Allocation.',
-          H: ['Khu vực', 'NPP', 'Group / SKU', ...bIdx.map(bName), `Tổng ${wk}`], body, leftCols: 3, sepCols: [3, 3 + nB],
-          widths: [10, 10, 22, ...bIdx.map(() => 20), 13],
+          H: ['Khu vực', 'NPP', 'Group', 'SKU', ...bIdx.map(bName), `Total Allocation ${wk}`], body, leftCols: 4, sepCols: [4, 4 + nB],
+          widths: [12, 12, 12, 12, ...bIdx.map(() => 20), 16],
           concl: [`Tổng allocation ${wk}: ${fmt(wkTot)} ${U()}${bIdx.length ? ' (' + bIdx.map(i => `${BC[i]} ${fmt(bTot(i))}`).join(', ') + ')' : ''}.`] }, ev.currentTarget);
       };
       byNpp = `<div class="card c12"><div class="card-h"><div><h2>Theo Khu vực / NPP · ${esc(wk)}</h2><p class="sub">Đơn vị ${U()} · số chia Current Week theo từng batch · bấm mũi tên để mở khu vực, NPP · số còn lại xem ở tab <button class="linkback" data-go="tracking" style="display:inline;margin:0">Tracking Allocation</button></p></div><button class="btn xl-r" id="xl-alloc">Tải Excel</button></div><div class="tw">${table}</div></div>`;
