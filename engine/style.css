@@ -461,8 +461,8 @@ tr.nsku .nppn{color:var(--brand)}
 .hbtns{display:flex;gap:8px;flex:none;align-items:flex-start}
 .card.has-img{position:relative}
 .img-dl.abs{position:absolute;top:14px;right:16px;z-index:4}
-.card.has-img > h2{padding-right:120px}
-@media (max-width:640px){.img-dl{padding-inline:10px}.img-dl svg{display:none}.card.has-img > h2{padding-right:90px}}
+.card.has-img > h2{padding-right:236px}
+@media (max-width:640px){.img-dl{padding-inline:10px}.img-dl svg{display:none}.card.has-img > h2{padding-right:180px}}
 .card-h > div.hbtns{flex:none!important;min-width:auto}
 /* ô lọc chọn nhiều */
 .ms{position:relative}
@@ -536,3 +536,9 @@ tr.nsku .nppn{color:var(--brand)}
 .kf-split em{font-style:normal;font-weight:700;min-width:58px;text-align:right}
 .chc-f{display:flex;flex-direction:column;gap:2px}
 .chc-f>div{white-space:nowrap}
+
+/* Nút tải / copy ảnh đi cùng nhau; lọc cột Còn lại đặt phía trên tên cột; chọn tuần ở tab Allocation */
+.hbtns.abs{position:absolute;top:14px;right:16px;z-index:4}
+.thfw{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.thsel{width:100%;max-width:124px;font:inherit;font-size:11px;font-weight:600;text-transform:none;letter-spacing:0;padding:3px 22px 3px 8px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);cursor:pointer}
+table.trk thead th{vertical-align:bottom}

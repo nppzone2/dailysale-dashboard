@@ -7,7 +7,7 @@
 
   let STATE = null; const ENC = window.ENC || { blobs: {} };
   let PUBLISHED = STATE; let previewing = false;
-  const ui = { trSku: 'all', tab: 'overview', scope: 'all', area: 'all', npp: 'all', brand: 'all', bgf: 'all', unit: 'case', tMonth: '', open: new Set(), allocSku: 'all' };
+  const ui = { trRem: 'all', alW: '', trSku: 'all', tab: 'overview', scope: 'all', area: 'all', npp: 'all', brand: 'all', bgf: 'all', unit: 'case', tMonth: '', open: new Set(), allocSku: 'all' };
   try { const s = JSON.parse(localStorage.getItem('npp-ui') || '{}'); if (s.tab) ui.tab = s.tab; if (s.unit) ui.unit = s.unit; if (s.brand) ui.brand = s.brand; } catch (e) {}
   const saveUi = () => { try { localStorage.setItem('npp-ui', JSON.stringify({ tab: ui.tab, unit: ui.unit, scope: ui.scope, brand: ui.brand })); } catch (e) {} };
 
@@ -837,7 +837,8 @@
     const M = curModel(); const A = (STATE.cur.alloc || []).filter(r => inScope(r[1]) && inBrand(r[2]));
     if (!A.length) return '<div class="card empty">Chưa có dữ liệu Allocation cho phạm vi này.</div>';
     const weeks = [...new Set(A.map(r => r[0]))].sort((a, b) => a.localeCompare(b, 'en', { numeric: true }));
-    const wk = currentWeek(weeks), pw = weeks[weeks.indexOf(wk) - 1]; const nw = weeks[weeks.indexOf(wk) + 1];
+    const curW = currentWeek(weeks); const wk = ui.alW && weeks.includes(ui.alW) ? ui.alW : curW; const pw = weeks[weeks.indexOf(wk) - 1]; const nw = weeks[weeks.indexOf(wk) + 1];
+    const weekSel = `<div class="fld"><label for="aweek">Tuần</label><select id="aweek">${[...weeks].reverse().map(w => `<option value="${esc(w)}" ${w === wk ? 'selected' : ''}>${esc(w)}${w === curW ? ' (Current)' : ''}</option>`).join('')}</select></div>`;
     const siMap = {}; M.list.forEach(r => { siMap[r.c + '|' + r.sc] = (siMap[r.c + '|' + r.sc] || 0) + r.si; });
     const aSum = f => sumBy(A.filter(f), r => conv(r[3], r[2]));
     const skus = [...new Set(A.map(r => r[2]))].map(sc => ({ sc, al: aSum(r => r[2] === sc) })).sort((a, b) => GROUPS.indexOf(grp(a.sc)) - GROUPS.indexOf(grp(b.sc)) || b.al - a.al).map(x => x.sc);
@@ -940,7 +941,7 @@
     const main = bySku[0];
     return `
     <section class="lead"><div><div class="eyebrow">Allocation · cập nhật hàng tuần</div><h1>${esc(scopeLabel())}</h1>
-      <p>Allocation Current Week và lũy kế các tuần đã chốt (${weeks.join(', ')}), so với Sale In MTD của cùng SKU.</p></div></section>
+      <p>Allocation ${esc(wk)} và lũy kế các tuần đã chốt (${weeks.join(', ')}), so với Sale In MTD của cùng SKU.</p></div><div class="btns">${weekSel}</div></section>
     <div class="grid">${latest}${byNpp}${cum}</div>
     ${conclusion([
       `Current Week <b>${esc(wk)}</b>: tổng allocation <b>${fmt(wkTot)} ${U()}</b>${bIdx.length ? ' (' + bIdx.map(i => `${esc(BC[i])} ${fmt(bTot(i))}`).join(', ') + ')' : ''}${pwTot != null ? `, ${wkTot >= pwTot ? 'tăng' : 'giảm'} ${pct(Math.abs(pwTot ? wkTot / pwTot - 1 : 0))} so với ${esc(pw)}` : ''}.`,
@@ -1071,6 +1072,8 @@
     };
     const bar = (v, col) => `<span class="mini"><i style="width:${Math.min(100, (v || 0) * 100)}%;background:${col}"></i></span>`;
     const tdv = x => `<td>${fmt(x.al)}</td><td>${fmt(x.si)}</td><td>${!isFinite(x.ps) ? '—' : `<span class="${x.ps < gone ? 'lo' : 'hi'}">${pct(x.ps)}</span>`}</td><td>${fmt(x.pd)}</td><td>${isFinite(x.use) ? pct(x.use) : '—'}${bar(x.use, x.use > 1 ? 'var(--good)' : 'var(--si)')}</td><td class="rem">${x.rem >= 0 ? fmt(x.rem) : `<span class="ov">Vượt ${fmt(-x.rem)}</span>`}</td>`;
+    // Lọc theo cột Còn lại: chỉ áp dụng cho dòng NPP và SKU; dòng Khu vực và Tổng luôn hiển thị
+    const remOk = x => ui.trRem === 'all' || (ui.trRem === 'pos' ? x.rem > 0 : x.rem < 0);
     let body = ''; const flat = [];
     byArea(npps).forEach(([a, cs]) => { const ak = 'tr:a:' + a, open = isOpen(ak, true);
       const ax = calc(cs, shown); body += `<tr class="grp area click${open ? ' open' : ''}" data-fold="${esc(ak)}"><td><span class="caret">▸</span> ${esc(a)}</td><td>${shown.length > 1 ? cs.length + ' NPP' : esc(shown[0])}</td>${tdv(ax)}</tr>`;
@@ -1078,8 +1081,8 @@
         const ss = shown.filter(sc => A.some(r => r[1] === c && r[2] === sc && r[0] === wk));
         const nk = 'tr:n:' + c, nOpen = isOpen(nk, true) || ss.length < 2;
         const nm = `${ss.length > 1 ? `<span class="caret fold${nOpen ? ' on' : ''}" data-fold="${esc(nk)}" role="button" aria-label="Mở/thu gọn ${esc(c)}">▸</span> ` : ''}<span class="click-npp" data-npp="${esc(c)}">${esc(c)}</span>`;
-        if (!nOpen) { body += `<tr class="sku first${isFinite(y.ps) && y.ps < gone ? ' slow' : ''}"><td>${nm}</td><td class="note">${ss.length} SKU</td>${tdv(y)}</tr>`; return; }
-        ss.forEach((sc, i) => { const z = calc([c], [sc]); body += `<tr class="sku${i === 0 ? ' first' : ''}${isFinite(z.ps) && z.ps < gone ? ' slow' : ''}"><td>${i === 0 ? nm : ''}</td><td class="skuc">${esc(sc)}</td>${tdv(z)}</tr>`; });
+        if (!nOpen) { if (remOk(y)) body += `<tr class="sku first${isFinite(y.ps) && y.ps < gone ? ' slow' : ''}"><td>${nm}</td><td class="note">${ss.length} SKU</td>${tdv(y)}</tr>`; return; }
+        let first = true; ss.forEach(sc => { const z = calc([c], [sc]); if (!remOk(z)) return; body += `<tr class="sku${first ? ' first' : ''}${isFinite(z.ps) && z.ps < gone ? ' slow' : ''}"><td>${first ? nm : ''}</td><td class="skuc">${esc(sc)}</td>${tdv(z)}</tr>`; first = false; });
         }); });
     const T = calc(npps, shown); body += `<tr class="tot"><td>Tổng</td><td>${shown.length > 1 ? '' : esc(shown[0])}</td>${tdv(T)}</tr>`;
     // Xuất Excel có định dạng như web: đủ mọi Khu vực / NPP / SKU
@@ -1129,7 +1132,7 @@
       <div class="card c3 kpi"><div class="kpi-l">Sale In ${esc(wk)}</div><div class="kpi-v">${fmt(T.si)}<small>${U()}</small></div><div class="kpi-f"><span class="${T.ps < gone ? 'lo' : 'hi'}">${pct(T.ps)}</span> allocation · tiến độ ${pct(gone)}</div></div>
       <div class="card c3 kpi" role="button" tabindex="0" data-go="pending" style="cursor:pointer"><div class="kpi-l">SO Pending ${esc(wk)}</div><div class="kpi-v">${fmt(T.pd)}<small>${U()}</small></div><div class="kpi-f">Xem theo SKU →</div></div>
       <div class="card c3 kpi"><div class="kpi-l">Còn lại ${esc(wk)}</div><div class="kpi-v" style="color:${T.rem < 0 ? 'var(--good)' : 'inherit'}">${fmt(T.rem)}<small>${U()}</small></div><div class="kpi-f">Đã dùng <b>${pct(T.use)}</b> (Sale In + Pending)</div><div class="bar"><i style="width:${Math.min(100, (T.use || 0) * 100)}%;background:${T.use > 1 ? 'var(--good)' : 'var(--si)'}"></i></div></div>
-      <div class="card c12"><div class="card-h"><div><h2>Theo khu vực / NPP / SKU · ${esc(wk)}</h2><p class="sub">Đơn vị ${U()}</p></div><button class="btn xl-r" id="xl-track">Tải Excel</button></div><div class="tw"><table class="sticky1 trk"><thead><tr><th>Khu vực / NPP</th><th>SKU</th><th>Allocation ${esc(wk)}</th><th>Sale In ${esc(wk)}</th><th>% Sale In</th><th>SO Pending</th><th>% đã dùng</th><th>Còn lại</th></tr></thead><tbody>${body}</tbody></table></div>
+      <div class="card c12"><div class="card-h"><div><h2>Theo khu vực / NPP / SKU · ${esc(wk)}</h2><p class="sub">Đơn vị ${U()}</p></div><button class="btn xl-r" id="xl-track">Tải Excel</button></div><div class="tw"><table class="sticky1 trk"><thead><tr><th>Khu vực / NPP</th><th>SKU</th><th>Allocation ${esc(wk)}</th><th>Sale In ${esc(wk)}</th><th>% Sale In</th><th>SO Pending</th><th>% đã dùng</th><th class="thf"><div class="thfw"><select id="trem" class="thsel" aria-label="Lọc cột Còn lại"><option value="all" ${ui.trRem === 'all' ? 'selected' : ''}>Tất cả</option><option value="pos" ${ui.trRem === 'pos' ? 'selected' : ''}>Còn lại &gt; 0</option><option value="neg" ${ui.trRem === 'neg' ? 'selected' : ''}>Vượt (&lt; 0)</option></select><span>Còn lại</span></div></th></tr></thead><tbody>${body}</tbody></table></div>
         <p class="note" style="margin:8px 0 0">Tính theo ngày order thuộc ${esc(wk)} (${wStart ? fd(wStart) + ' → ' + fd(wEnd) : '—'}). ${hasSbd ? `Sale In = Dis Sale by Date có Invoice Date đến ${fd(sbdMax)} (D-1)` : 'Chưa có file Dis Sale by Date'}${deliv.length ? ` + ${fmt(sumBy(deliv.filter(o => shown.includes(o[3])), o => conv(o[4], o[3])))} ${U()} đơn Delivery` : ''}. Pending = Online Order trạng thái Order Approve / Schedule (${new Set(P.map(o => o[1])).size} đơn).</p></div>
     </div>
     ${conclusion([
@@ -1223,6 +1226,8 @@
       if (!f) return; const k = f.dataset.fold; ui.flip.has(k) ? ui.flip.delete(k) : ui.flip.add(k); render(); });
     v.querySelectorAll('tr[data-npp]').forEach(tr => tr.onclick = e => { e.stopPropagation(); if (ROLE.type === 'npp') return; const c = tr.dataset.npp; ui.npp = c; ui.area = (STATE.npps[c] || {}).area || ui.area; applyRole(); shell(); window.scrollTo({ top: 0, behavior: 'smooth' }); render(); });
     const tm = $('#tmonth'); if (tm) tm.onchange = () => { ui.tMonth = tm.value; render(); };
+    const aw = $('#aweek'); if (aw) aw.onchange = () => { ui.alW = aw.value; render(); };
+    const tr = $('#trem'); if (tr) tr.onchange = () => { ui.trRem = tr.value; render(); };
     v.querySelectorAll('[data-asku]').forEach(b => b.onclick = () => { ui.allocSku = b.dataset.asku; render(); });
     const xt = $('#xl-target'); if (xt) xt.onclick = exportTarget;
     const xp = $('#xl-progress'); if (xp) xp.onclick = exportProgress;
@@ -1264,7 +1269,13 @@
     const u = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = u; a.download = filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 4000); toastBtn(btn, 'Đã tải');
   }
   const isClear = c => !c || c === 'transparent' || /rgba\([^)]*,\s*0\)$/.test(c);
-  async function snapCard(card, name, btn) {
+  // Copy ảnh vào bộ nhớ tạm (dán được vào Word, PowerPoint, Zalo, Paint…)
+  async function copyBlob(blob, btn) {
+    try { if (!navigator.clipboard || typeof ClipboardItem === 'undefined') throw new Error('unsupported');
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]); toastBtn(btn, 'Đã copy ảnh'); }
+    catch (e) { toastBtn(btn, 'Trình duyệt chưa cho copy ảnh, hãy dùng Tải ảnh'); }
+  }
+  async function snapCard(card, name, btn, copy) {
     const hideSel = '.btn, .img-dl, .linkback, button.tab';
     const hidden = [...card.querySelectorAll(hideSel)]; hidden.forEach(e => { e.dataset.vis = e.style.visibility; e.style.visibility = 'hidden'; });
     // mở rộng khung cuộn ngang để chụp đủ bảng
@@ -1312,7 +1323,7 @@
       g.fillStyle = '#6B7A70'; g.font = `500 11px ${getComputedStyle(document.body).fontFamily}`; g.textBaseline = 'middle';
       if ('letterSpacing' in g) g.letterSpacing = '0px';
       g.fillText(`Distributor Sales Performance · RTC - Future Fit · ${scopeLabel()} · cập nhật ${ENC.built || ''}`, pad, H - foot / 2);
-      await new Promise(res => cv.toBlob(b => { saveBlob(name, b, btn); res(); }, 'image/png'));
+      await new Promise(res => cv.toBlob(b => { if (copy) copyBlob(b, btn); else saveBlob(name, b, btn); res(); }, 'image/png'));
     } catch (e) { toastBtn(btn, 'Chưa tạo được ảnh'); }
     finally {
       hidden.forEach(e => { e.style.visibility = e.dataset.vis || ''; }); tws.forEach(t => { t.style.overflow = t.dataset.ov || ''; });
@@ -1326,12 +1337,15 @@
       const b = document.createElement('button'); b.className = 'btn img-dl'; b.type = 'button'; b.title = 'Tải ảnh PNG của bảng này';
       b.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M21 17l-5-5-8 7"/></svg> Tải ảnh';
       const slug = title.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 50);
-      b.onclick = () => { const t = b.innerHTML; b.disabled = true; b.textContent = 'Đang tạo…'; snapCard(card, `${slug}_${STATE.cur.month || ''}_${scopeTag()}.png`, b).finally(() => { b.disabled = false; b.innerHTML = t; }); };
+      b.onclick = () => { const t = b.innerHTML; b.disabled = true; b.textContent = 'Đang tạo…'; snapCard(card, `${slug}_${STATE.cur.month || ''}_${scopeTag()}.png`, b, false).finally(() => { b.disabled = false; b.innerHTML = t; }); };
+      const c = document.createElement('button'); c.className = 'btn img-dl'; c.type = 'button'; c.title = 'Copy ảnh PNG của bảng này vào bộ nhớ tạm';
+      c.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy ảnh';
+      c.onclick = () => { const t = c.innerHTML; c.disabled = true; c.textContent = 'Đang tạo…'; snapCard(card, '', c, true).finally(() => { c.disabled = false; c.innerHTML = t; }); };
       const head = card.querySelector('.card-h');
       if (head) { const xl = head.querySelector(':scope > .btn'); let box = head.querySelector(':scope > .hbtns');
         if (!box) { box = document.createElement('div'); box.className = 'hbtns'; if (xl) { head.insertBefore(box, xl); box.appendChild(xl); } else head.appendChild(box); }
-        box.insertBefore(b, box.firstChild); }
-      else { card.classList.add('has-img'); b.classList.add('abs'); card.insertBefore(b, card.firstChild); }
+        box.insertBefore(c, box.firstChild); box.insertBefore(b, box.firstChild); }
+      else { card.classList.add('has-img'); const wrap = document.createElement('div'); wrap.className = 'hbtns abs'; wrap.append(b, c); card.insertBefore(wrap, card.firstChild); }
     });
   }
   async function saveXlsx(filename, sheets, btn) {
