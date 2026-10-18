@@ -863,14 +863,11 @@
     const wkRange = (AD[wk] || []).filter(Boolean); const rangeTxt = wkRange.length ? `Lịch Upload Portal ${wkRange.map(fd).join(' · ')}` : '';
     const nextTxt = nw && (AD[nw] || []).some(Boolean) ? `Tuần tới <b>${esc(nw)}</b>: ${BC.map((b, i) => (AD[nw] || [])[i] ? `${esc(b)} ngày ${fd(AD[nw][i])}` : '').filter(Boolean).join(' · ')}` : '';
     // Sale In trong tuần hiện tại: từ ngày Upload đầu tiên của tuần đến trước ngày Upload đầu tiên của tuần sau
-    const addD = (d, n) => { const t = new Date(Date.UTC(+d.slice(0, 4), +d.slice(4, 6) - 1, +d.slice(6, 8)) + n * 864e5); return t.toISOString().slice(0, 10).replace(/-/g, ''); };
-    const wStart = wkRange[0] || null; const nStart = nw ? ((AD[nw] || []).find(Boolean) || null) : null;
-    const wEnd = wStart ? (nStart ? addD(nStart, -1) : addD(wStart, 6)) : null;
-    const wDays = wStart ? Object.keys(cur.si || {}).filter(d => d >= wStart && d <= wEnd).sort() : [];
-    const siWk = sc => sumBy(wDays, d => sumBy(cur.si[d].filter(r => r[1] === sc && inScope(r[0]) && inBrand(r[1])), r => conv(r[2], r[1])));
+    const SIW = weekSaleIn(wk); const wStart = SIW.wStart, wEnd = SIW.wEnd;
+    const siWk = sc => sumBy(SIW.lines.filter(l => l.sc === sc), l => conv(l.q, l.sc));
     const siWkTot = sumBy(bySku, x => siWk(x.sc));
     const prog = (si, al) => { const p = al ? si / al : 0; return `<td><b>${fmt(si)}</b></td><td>${al ? pct(p) : '—'}<span class="mini"><i style="width:${Math.min(100, p * 100)}%;background:var(--si)"></i></span></td>`; };
-    const siNote = wStart && wDays.length ? `Sale In tuần ${esc(wk)}: ${fd(wDays[0])} → ${fd(wDays[wDays.length - 1])}${wDays[0] > wStart ? ` (dữ liệu Sale In từ ${fd(wDays[0])}, ngày trước đó thuộc tháng trước)` : ''}` : '';
+    const siNote = wStart ? `Sale In tuần ${esc(wk)}: ${fd(wStart)} → ${fd(wEnd)} · theo ngày đặt hàng (Dis Sale đến D-1 + Online Order Delivery)` : '';
     const latest = `<div class="card c12 wk-card"><div class="card-h"><div><div class="eyebrow">Current Week</div><h2 style="font-size:18px">${esc(wk)}<span class="note" style="font-weight:500;margin-left:8px">${esc(rangeTxt)}</span></h2></div>
         <div class="wk-total"><span class="kpi-l">Tổng allocation ${esc(wk)}</span><b>${fmt(wkTot)}</b><small>${U()}</small> ${pw ? delta(wkTot, pwTot) + `<span class="note">so với ${esc(pw)}</span>` : ''}</div></div>
       ${bIdx.length ? `<div class="tw" style="margin-top:10px"><table class="sticky1 tgt batch"><thead><tr><th>BrandFamily</th><th>SKU</th>${bIdx.map(bHead).join('')}<th>Tổng ${esc(wk)}</th><th>Sale In tuần</th><th>Tiến độ SI</th><th>So với ${esc(pw || '—')}</th></tr></thead><tbody>
@@ -1018,6 +1015,26 @@
     const cm = STATE.cur.month || ''; let y = m[3] ? +m[3] : +cm.slice(0, 4); if (!m[3] && +m[2] > +cm.slice(4, 6) + 1) y -= 1;
     return y + m[2].padStart(2, '0') + m[1].padStart(2, '0');
   }
+  // Logic Sale In của tuần, dùng chung cho tab Allocation và tab Tracking Allocation
+  function weekBounds(wk, AD) {
+    const d = (AD[wk] || []).find(Boolean) || null; if (!d) return { wStart: null, wEnd: null };
+    const dow = new Date(Date.UTC(+d.slice(0, 4), +d.slice(4, 6) - 1, +d.slice(6, 8))).getUTCDay();
+    const wStart = addDay(d, -((dow + 6) % 7)); return { wStart, wEnd: addDay(wStart, 6) }; // thứ 2 → chủ nhật
+  }
+  function weekSaleIn(wk) {
+    const cur = STATE.cur || {}; const { wStart, wEnd } = weekBounds(wk, cur.allocDates || {});
+    const inWk = d => d && wStart && d >= wStart && d <= wEnd;
+    const D = todayKey();
+    const inSbd = o => { const k = orderDateKey(o[8]); return !!(k && k < D); }; // đã xuất hoá đơn trước hôm nay -> đã nằm trong Dis Sale đến D-1
+    // Dis Sale by Date: ngày order thuộc tuần, invoice đến D-1
+    const lines = (cur.sbd || []).filter(r => r[1] < D && (r[5] ? r[5] === wk : inWk(r[2])) && inScope(r[0]) && inBrand(r[3]))
+      .map(r => ({ c: r[0], sc: r[3], q: r[4], d: r[2], w: r[5] || '' }));
+    // Online Order trạng thái Delivery: ngày order thuộc tuần, chưa có trong Dis Sale đến D-1
+    const deliv = (cur.orders || []).filter(o => /deliver/i.test(o[2]) && !inSbd(o) && inWk(orderDateKey(o[5])) && inScope(o[0]) && inBrand(o[3]));
+    deliv.forEach(o => lines.push({ c: o[0], sc: o[3], q: o[4], d: orderDateKey(o[5]), w: '', deliv: true }));
+    return { wStart, wEnd, lines, deliv };
+  }
+
   function viewTracking() {
     const cur = STATE.cur || {}; const A = (cur.alloc || []).filter(r => inScope(r[1]) && inBrand(r[2]));
     if (!A.length) return '<div class="card empty">Chưa có dữ liệu Allocation cho phạm vi này.</div>';
@@ -1030,14 +1047,9 @@
     // Nguyên tắc tracking (chỉ dùng Dis Sale by Date + Online Order, tất cả theo ngày order thuộc tuần đang theo dõi):
     //  Sale In = Dis Sale by Date có Invoice Date đến D-1 + Online Order trạng thái Delivery (chưa nằm trong Dis Sale đến D-1)
     //  Pending = Online Order trạng thái Order Approve / Schedule
-    const hasSbd = (cur.sbd || []).length > 0;
     const D = todayKey(); const sbdMax = addDay(D, -1);
-    const inWkO = (d, w) => w ? w === wk : inWk(d);
-    const lines = hasSbd ? cur.sbd.filter(r => r[1] < D && inWkO(r[2], r[5]) && inScope(r[0]) && inBrand(r[3])).map(r => ({ c: r[0], sc: r[3], q: r[4], d: r[2], w: r[5] || '' })) : [];
+    const { lines, deliv } = weekSaleIn(wk); const hasSbd = (cur.sbd || []).length > 0;
     const odk = o => orderDateKey(o[5]);
-    const inSbd = o => { const k = orderDateKey(o[8]); return !!(k && k < D); }; // đã xuất hoá đơn trước hôm nay -> đã có trong Dis Sale đến D-1
-    const deliv = (cur.orders || []).filter(o => /deliver/i.test(o[2]) && !inSbd(o) && inWk(odk(o)) && inScope(o[0]) && inBrand(o[3]));
-    deliv.forEach(o => lines.push({ c: o[0], sc: o[3], q: o[4], d: odk(o), w: '', deliv: true }));
     const online = (cur.orders || []).filter(o => /approve|schedule/i.test(o[2]) && inWk(odk(o)) && inScope(o[0]) && inBrand(o[3]));
     const lastData = addDay(todayKey(), -1);
     // Tiến độ tuần chỉ tính ngày làm việc thứ 2 – thứ 7 (bỏ Chủ nhật)
@@ -1053,7 +1065,7 @@
     const npps = [...new Set(A.map(r => r[1]))].sort(nppCmp);
     const calc = (cs, ss) => {
       const al = sumBy(A.filter(r => cs.includes(r[1]) && ss.includes(r[2]) && r[0] === wk), r => conv(r[3], r[2]));
-      const si = sumBy(lines.filter(l => cs.includes(l.c) && ss.includes(l.sc) && (l.w ? l.w === wk : inWk(l.d))), l => conv(l.q, l.sc));
+      const si = sumBy(lines.filter(l => cs.includes(l.c) && ss.includes(l.sc)), l => conv(l.q, l.sc));
       const pd = sumBy(P.filter(o => cs.includes(o[0]) && ss.includes(o[3])), o => conv(o[4], o[3]));
       return { al, si, pd, rem: al - si - pd, ps: al ? si / al : NaN, use: al ? (si + pd) / al : NaN };
     };
