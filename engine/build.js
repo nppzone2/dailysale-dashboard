@@ -49,6 +49,8 @@ if (fs.existsSync(VAULT)) {
   catch (e) { die('không mở được kho dữ liệu input/vault/state.enc (ADMIN_PASSWORD đã đổi?). Xoá file này rồi tải lại toàn bộ file dữ liệu.'); }
   console.log('Mở kho dữ liệu: tháng hiện hành ' + (state.cur.month || '—'));
 }
+// Chuẩn hoá tổng allocation từ các Batch đã lưu (dữ liệu nạp trước khi có quy tắc cộng Batch)
+if (state.cur && Array.isArray(state.cur.alloc)) state.cur.alloc.forEach(r => { if (Array.isArray(r[4]) && r[4].some(v => v != null)) r[3] = r[4].reduce((a, v) => a + (v || 0), 0); });
 
 /* ---------- nạp file mới ---------- */
 const now = new Date().toISOString();
