@@ -194,7 +194,10 @@ function applyParsed(state, p, opts = {}) {
       if (!c || !sc) return null;
       const n = state.npps[c] || (state.npps[c] = { name: '', area: '' });
       if (has('AREA') && g(r, 'AREA')) n.area = cleanStr(g(r, 'AREA'));
-      return [cleanStr(g(r, 'WEEK')), c, sc, num(g(r, 'Allocation')), batchCols.map(b => { const v = r[p.idx[b]]; return v == null || v === '' ? null : num(v); })];
+      const bs = batchCols.map(b => { const v = r[p.idx[b]]; return v == null || v === '' ? null : num(v); });
+      // Tổng allocation = tổng các Batch (kể cả Batch thêm sau) nếu có; không có batch thì dùng cột Allocation
+      const hasB = bs.some(v => v != null); const total = hasB ? bs.reduce((a, v) => a + (v || 0), 0) : num(g(r, 'Allocation'));
+      return [cleanStr(g(r, 'WEEK')), c, sc, total, bs];
     }).filter(Boolean);
     state.cur.allocBatches = batchCols;
     const wk = [...new Set(state.cur.alloc.map(x => x[0]))];
