@@ -550,4 +550,5 @@ table.trk thead th{vertical-align:bottom}
 /* kẻ dọc xuyên suốt bảng: cột Target, Sale In, Sale Out (tính từ phải để đúng cả hàng nhóm và hàng NPP) */
 .bgt td:nth-last-child(7),.bgt td:nth-last-child(6),.bgt td:nth-last-child(3){border-left:1px solid var(--line)}
 .bgt thead th[rowspan]{vertical-align:bottom}
-
+/* căn giữa tiêu đề cột phụ (Thực đạt, % đạt, Còn lại) để thẳng hàng với số liệu */
+.bgt tr.h2 th{text-align:center}
