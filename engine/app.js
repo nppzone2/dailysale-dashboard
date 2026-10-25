@@ -1336,7 +1336,7 @@
     v.querySelectorAll('.card').forEach((card, i) => { if (!card.querySelector('table') || card.querySelector('.img-dl')) return;
       const h2 = card.querySelector('h2'); const title = h2 ? h2.textContent.trim() : 'Bang';
       const b = document.createElement('button'); b.className = 'btn img-dl'; b.type = 'button'; b.title = 'Tải ảnh PNG của bảng này'; b.setAttribute('aria-label', 'Tải ảnh');
-      b.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M21 17l-5-5-8 7"/></svg>';
+      b.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
       const slug = title.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 50);
       b.onclick = () => { const t = b.innerHTML; b.disabled = true; b.textContent = 'Đang tạo…'; snapCard(card, `${slug}_${STATE.cur.month || ''}_${scopeTag()}.png`, b, false).finally(() => { b.disabled = false; b.innerHTML = t; }); };
       const c = document.createElement('button'); c.className = 'btn img-dl'; c.type = 'button'; c.title = 'Copy ảnh PNG của bảng này vào bộ nhớ tạm'; c.setAttribute('aria-label', 'Copy ảnh');
