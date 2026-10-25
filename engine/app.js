@@ -806,7 +806,7 @@
 
       ${pendingCard()}
       <div class="card c12"><div class="card-h"><div><h2>Còn lại theo BrandGroup</h2><p class="sub">Target − thực đạt lũy kế · bấm BrandGroup để xem từng SKU, bấm SKU để xem theo NPP · đơn vị ${U()}</p></div>${bgFilter}</div>
-        ${hlNote()}<div class="tw"><table class="sticky1 tgt bgt"><thead><tr><th>BrandFamily</th><th>SKU</th><th>Target</th><th>Sale In</th><th>% SI</th><th>Còn lại SI</th><th>Sale Out</th><th>% SO</th><th>Còn lại SO</th></tr></thead><tbody>${body}</tbody></table></div></div>
+        ${hlNote()}<div class="tw"><table class="sticky1 tgt bgt"><thead><tr><th rowspan="2">BrandFamily</th><th rowspan="2">SKU</th><th rowspan="2">Target</th><th colspan="3" class="gh gs">Sale In</th><th colspan="3" class="gh gs">Sale Out</th></tr><tr class="h2"><th class="gs">Thực đạt</th><th>% đạt</th><th>Còn lại</th><th class="gs">Thực đạt</th><th>% đạt</th><th>Còn lại</th></tr></thead><tbody>${body}</tbody></table></div></div>
 
       ${board}
       <div class="card c12"><div class="card-h"><div><h2>Tiến độ theo BrandFamily</h2><p class="sub">% đạt target tháng · vạch đứng là time gone ${pct(M.tgSi)}</p></div>${legend([['Sale In', cSi], ['Sale Out', cSo]])}</div>

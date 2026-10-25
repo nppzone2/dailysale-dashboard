@@ -544,3 +544,8 @@ tr.nsku .nppn{color:var(--brand)}
 table.trk thead th{vertical-align:bottom}
 /* vạch phân định giữa các khu vực (cụm NPP) trong bảng BrandFamily */
 .bgt tr.ablk td{border-top:2px solid var(--ink-2)}
+/* bảng BrandFamily: tiêu đề nhóm Sale In / Sale Out */
+.bgt th.gh{text-align:center;color:var(--ink-2);border-bottom:1px solid var(--line);padding-bottom:4px}
+.bgt .gs{border-left:2px solid var(--line)}
+.bgt thead th[rowspan]{vertical-align:bottom}
+
