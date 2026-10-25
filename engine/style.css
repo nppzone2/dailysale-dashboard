@@ -542,3 +542,5 @@ tr.nsku .nppn{color:var(--brand)}
 .thfw{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
 .thsel{width:100%;max-width:124px;font:inherit;font-size:11px;font-weight:600;text-transform:none;letter-spacing:0;padding:3px 22px 3px 8px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);cursor:pointer}
 table.trk thead th{vertical-align:bottom}
+/* vạch phân định giữa các khu vực (cụm NPP) trong bảng BrandFamily */
+.bgt tr.ablk td{border-top:2px solid var(--ink-2)}

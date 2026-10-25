@@ -719,7 +719,7 @@
           if (!multiN) { body += rowHtml(s.k, s, 'sku'); return; }
           const fk = 'bg:s:' + g + ':' + s.k, op = isOpen(fk, !!ui.bgS);
           body += rowHtml(s.k, s, 'sku click' + (op ? ' open' : ''), `data-fold="${esc(fk)}"`);
-          if (op) Object.values(aggregate(s.rows, r => r.c)).filter(n => n.t || n.si || n.so).sort((a, b) => nppCmp(a.k, b.k)).forEach(n => { body += rowHtml(n.k, n, 'nsku'); });
+          if (op) { let pa = null; Object.values(aggregate(s.rows, r => r.c)).filter(n => n.t || n.si || n.so).sort((a, b) => nppCmp(a.k, b.k)).forEach(n => { const ar = areaOf(n.k); body += rowHtml(n.k, n, pa !== null && ar !== pa ? 'nsku ablk' : 'nsku'); pa = ar; }); }
         }); }
     });
     body += rowHtml(ui.bgG || ui.bgS ? 'Tổng (theo bộ lọc)' : 'Tổng', ui.bgG || ui.bgS ? { t: fT, si: fSI, so: fSO } : { t: T, si: SI, so: SO }, 'tot');
