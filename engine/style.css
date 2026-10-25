@@ -457,12 +457,12 @@ tr.nsku .nppn{color:var(--brand)}
 .bgt td .mini{margin-left:6px}
 .card-h:has(.xl-r){flex-wrap:nowrap;align-items:flex-start}.card-h:has(.xl-r)>div{flex:1;min-width:0}.card-h .xl-r{flex:none}
 /* nút Tải ảnh */
-.img-dl{display:inline-flex;align-items:center;gap:6px}
+.img-dl{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;padding:0}
 .hbtns{display:flex;gap:8px;flex:none;align-items:flex-start}
 .card.has-img{position:relative}
 .img-dl.abs{position:absolute;top:14px;right:16px;z-index:4}
-.card.has-img > h2{padding-right:236px}
-@media (max-width:640px){.img-dl{padding-inline:10px}.img-dl svg{display:none}.card.has-img > h2{padding-right:180px}}
+.card.has-img > h2{padding-right:92px}
+@media (max-width:640px){.card.has-img > h2{padding-right:80px}}
 .card-h > div.hbtns{flex:none!important;min-width:auto}
 /* ô lọc chọn nhiều */
 .ms{position:relative}
