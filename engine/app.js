@@ -7,7 +7,7 @@
 
   let STATE = null; const ENC = window.ENC || { blobs: {} };
   let PUBLISHED = STATE; let previewing = false;
-  const ui = { trRem: 'all', alW: '', trSku: 'all', tab: 'overview', scope: 'all', area: 'all', npp: 'all', brand: 'all', bgf: 'all', unit: 'case', tMonth: '', open: new Set(), allocSku: 'all' };
+  const ui = { trRem: 'all', alW: '', trSku: 'all', tab: 'overview', scope: 'all', area: 'all', npp: 'all', brand: 'all', bgf: 'all', unit: 'case', tMonth: '', open: new Set(), allocSku: 'all', alN: '' };
   try { const s = JSON.parse(localStorage.getItem('npp-ui') || '{}'); if (s.tab) ui.tab = s.tab; if (s.unit) ui.unit = s.unit; if (s.brand) ui.brand = s.brand; } catch (e) {}
   const saveUi = () => { try { localStorage.setItem('npp-ui', JSON.stringify({ tab: ui.tab, unit: ui.unit, scope: ui.scope, brand: ui.brand })); } catch (e) {} };
 
@@ -843,6 +843,8 @@
     const aSum = f => sumBy(A.filter(f), r => conv(r[3], r[2]));
     const skus = [...new Set(A.map(r => r[2]))].map(sc => ({ sc, al: aSum(r => r[2] === sc) })).sort((a, b) => GROUPS.indexOf(grp(a.sc)) - GROUPS.indexOf(grp(b.sc)) || b.al - a.al).map(x => x.sc);
     const npps = [...new Set(A.map(r => r[1]))].sort(nppCmp);
+    if (ui.alN && !npps.includes(ui.alN)) ui.alN = '';
+    const nppsF = ui.alN ? npps.filter(c => c === ui.alN) : npps;
     const siOf = (c, sc) => conv(siMap[c + '|' + sc] || 0, sc);
     const bySku = skus.map(sc => { const w = {}; weeks.forEach(k => w[k] = aSum(r => r[2] === sc && r[0] === k));
       const al = sumBy(Object.values(w), x => x); const si = sumBy([...new Set(A.filter(r => r[2] === sc).map(r => r[1]))], c => siOf(c, sc));
@@ -889,7 +891,7 @@
     // 3) Theo Khu vực: số chia Current Week theo từng batch, mỗi SKU một dòng (số còn lại xem ở tab Tracking Allocation)
     let byNpp = '';
     if (npps.length > 1) {
-      const AG = byArea(npps);
+      const AG = byArea(nppsF);
       const inSc = (sc, x) => sc == null || (Array.isArray(sc) ? sc.includes(x) : x === sc);
       const bv = (cs, sc, i) => sumBy(A.filter(r => r[0] === wk && cs.includes(r[1]) && inSc(sc, r[2])), r => conv(Array.isArray(r[4]) ? (r[4][i] || 0) : 0, r[2]));
       const wv = (cs, sc) => aSum(r => r[0] === wk && cs.includes(r[1]) && inSc(sc, r[2]));
@@ -909,8 +911,8 @@
           let n = 0; byGrp(ss).forEach(([g, l]) => l.forEach((sc, gi) => {
             tb += `<tr class="sku${n === 0 ? ' first' : ''}${gi === 0 && n > 0 ? ' gfirst' : ''}"><td>${n === 0 ? nm : ''}</td><td class="gcol">${gi === 0 ? esc(gShort(g)) : ''}</td><td class="skuc">${esc(sc)}</td>${cells([c], sc)}</tr>`; n++; })); }); });
       const GT = byGrp(skus.filter(sc => A.some(r => r[0] === wk && r[2] === sc)));
-      tb += `<tr class="tot"><td>Tổng</td><td></td><td></td>${cells(npps, null)}</tr>`;
-      if (GT.length > 1) GT.forEach(([g, l]) => { tb += `<tr class="gsub gtot"><td></td><td class="gcol">${esc(gShort(g))}</td><td class="note">${l.length} SKU</td>${cells(npps, l)}</tr>`; });
+      tb += `<tr class="tot"><td>Tổng</td><td></td><td></td>${cells(nppsF, null)}</tr>`;
+      if (GT.length > 1) GT.forEach(([g, l]) => { tb += `<tr class="gsub gtot"><td></td><td class="gcol">${esc(gShort(g))}</td><td class="note">${l.length} SKU</td>${cells(nppsF, l)}</tr>`; });
       const table = `<table class="sticky1 trk batch alc3"><thead><tr><th>Khu vực / NPP</th><th>Group</th><th>SKU</th>${bIdx.map(bHead).join('')}<th>Tổng ${esc(wk)}</th></tr></thead><tbody>${tb}</tbody></table>`;
       // Xuất Excel có định dạng như web: đủ mọi Khu vực / NPP / Group / SKU
       allocExport = ev => {
@@ -927,7 +929,7 @@
             byGrp(ss).forEach(([g, l]) => l.forEach(sc => { row(a, c, gShort(g), sc, [c], 'sku'); any = true; })); });
           if (any) row(`Tổng ${a}`, `${cs.length} NPP`, '', null, cs, 'area');
         });
-        row('Tổng', '', '', null, npps, 'grand');
+        row('Tổng', '', '', null, nppsF, 'grand');
         const bName = i => `${BC[i]} · ${(AD[wk] || [])[i] ? fd(AD[wk][i]) : 'chưa có ngày'}${(AD[wk] || [])[i] && AD[wk][i] <= today ? ' (Đã Upload)' : ' (Chờ Upload)'}`;
         styledXlsx({ file: `Allocation_${wk}_${scopeTag()}.xlsx`, sheet: 'Allocation ' + wk,
           title: `Distributor Sales Performance · Allocation theo Khu vực / NPP · ${wk}`,
@@ -937,7 +939,7 @@
           widths: [12, 12, 12, 12, ...bIdx.map(() => 20), 16],
           concl: [`Tổng allocation ${wk}: ${fmt(wkTot)} ${U()}${bIdx.length ? ' (' + bIdx.map(i => `${BC[i]} ${fmt(bTot(i))}`).join(', ') + ')' : ''}.`] }, ev.currentTarget);
       };
-      byNpp = `<div class="card c12"><div class="card-h"><div><h2>Theo Khu vực / NPP · ${esc(wk)}</h2><p class="sub">Đơn vị ${U()} · số chia Current Week theo từng batch · bấm mũi tên để mở khu vực, NPP · số còn lại xem ở tab <button class="linkback" data-go="tracking" style="display:inline;margin:0">Tracking Allocation</button></p></div><button class="btn xl-r" id="xl-alloc">Tải Excel</button></div><div class="tw">${table}</div></div>`;
+      byNpp = `<div class="card c12"><div class="card-h"><div><h2>Theo Khu vực / NPP · ${esc(wk)}</h2><p class="sub">Đơn vị ${U()} · số chia Current Week theo từng batch · bấm mũi tên để mở khu vực, NPP · số còn lại xem ở tab <button class="linkback" data-go="tracking" style="display:inline;margin:0">Tracking Allocation</button></p></div><div class="btns"><div class="fld"><label for="al-npp">NPP</label><select id="al-npp"><option value="">Tất cả</option>${npps.map(c => `<option value="${esc(c)}"${ui.alN === c ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select></div><button class="btn xl-r" id="xl-alloc">Tải Excel</button></div></div><div class="tw">${table}</div></div>`;
     }
     const over = bySku.filter(s => s.si > s.al);
     const main = bySku[0];
@@ -1228,7 +1230,7 @@
       if (!f) return; const k = f.dataset.fold; ui.flip.has(k) ? ui.flip.delete(k) : ui.flip.add(k); render(); });
     v.querySelectorAll('tr[data-npp]').forEach(tr => tr.onclick = e => { e.stopPropagation(); if (ROLE.type === 'npp') return; const c = tr.dataset.npp; ui.npp = c; ui.area = (STATE.npps[c] || {}).area || ui.area; applyRole(); shell(); window.scrollTo({ top: 0, behavior: 'smooth' }); render(); });
     const tm = $('#tmonth'); if (tm) tm.onchange = () => { ui.tMonth = tm.value; render(); };
-    const aw = $('#aweek'); if (aw) aw.onchange = () => { ui.alW = aw.value; render(); };
+    const aw = $('#aweek'); if (aw) aw.onchange = () => { ui.alW = aw.value; render(); }; const an = $('#al-npp'); if (an) an.onchange = () => { ui.alN = an.value; render(); };
     const tr = $('#trem'); if (tr) tr.onchange = () => { ui.trRem = tr.value; render(); };
     v.querySelectorAll('[data-asku]').forEach(b => b.onclick = () => { ui.allocSku = b.dataset.asku; render(); });
     const xt = $('#xl-target'); if (xt) xt.onclick = exportTarget;
