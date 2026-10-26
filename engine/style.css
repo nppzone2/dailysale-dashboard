@@ -552,3 +552,7 @@ table.trk thead th{vertical-align:bottom}
 .bgt thead th[rowspan]{vertical-align:bottom}
 /* căn giữa tiêu đề cột phụ (Thực đạt, % đạt, Còn lại) để thẳng hàng với số liệu */
 .bgt tr.h2 th{text-align:center}
+/* bảng Lũy kế tháng theo SKU: full chiều ngang, kẻ dọc tách cột Target */
+.tgt.full{width:100%}
+.tgt.full .gs{border-left:1px solid var(--line)}
+

@@ -882,9 +882,9 @@
       ${nextTxt || siNote ? `<p class="note" style="margin:10px 0 0">${[siNote, nextTxt].filter(Boolean).join(' · ')}</p>` : ''}</div>`;
     // 2) cumulative by SKU
     const totAl = sumBy(bySku, s => s.al), totSi = sumBy(bySku, s => s.si);
-    const cum = `<div class="card c12"><h2>Lũy kế tháng theo SKU</h2><p class="sub">Allocation các tuần đã chốt vs. Sale In MTD · đơn vị ${U()}</p><div class="tw"><table class="sticky1 tgt"><thead><tr><th>BrandFamily</th><th>SKU</th>${weeks.map(w => `<th>${esc(w)}</th>`).join('')}<th>Target</th><th>Tổng allocation</th><th>Sale In MTD</th><th>% sử dụng</th><th>Còn lại</th></tr></thead><tbody>
-      ${bySku.map(s => `<tr class="sku"><td>${esc(item(s.sc).b || '—')}</td><td class="skuc">${esc(s.sc)}</td>${weeks.map(w => `<td>${fmt(s.w[w])}</td>`).join('')}<td>${fmt(s.tg)}</td><td>${fmt(s.al)}</td><td>${fmt(s.si)}</td><td>${usedBar(s.si, s.al)}</td>${remTd(s.al, s.si)}</tr>`).join('')}
-      ${bySku.length > 1 ? `<tr class="tot"><td colspan="2">Tổng</td>${weeks.map(w => `<td>${fmt(sumBy(bySku, s => s.w[w]))}</td>`).join('')}<td>${fmt(sumBy(bySku, s => s.tg))}</td><td>${fmt(totAl)}</td><td>${fmt(totSi)}</td><td>${usedBar(totSi, totAl)}</td>${remTd(totAl, totSi)}</tr>` : ''}
+    const cum = `<div class="card c12"><h2>Lũy kế tháng theo SKU</h2><p class="sub">Allocation các tuần đã chốt vs. Sale In MTD · đơn vị ${U()}</p><div class="tw"><table class="sticky1 tgt full"><thead><tr><th>BrandFamily</th><th>SKU</th><th class="gs">Target</th>${weeks.map(w => `<th>${esc(w)}</th>`).join('')}<th>Tổng allocation</th><th>Sale In MTD</th><th>% sử dụng</th><th>Còn lại</th></tr></thead><tbody>
+      ${bySku.map(s => `<tr class="sku"><td>${esc(item(s.sc).b || '—')}</td><td class="skuc">${esc(s.sc)}</td><td class="gs">${fmt(s.tg)}</td>${weeks.map(w => `<td>${fmt(s.w[w])}</td>`).join('')}<td>${fmt(s.al)}</td><td>${fmt(s.si)}</td><td>${usedBar(s.si, s.al)}</td>${remTd(s.al, s.si)}</tr>`).join('')}
+      ${bySku.length > 1 ? `<tr class="tot"><td colspan="2">Tổng</td><td class="gs">${fmt(sumBy(bySku, s => s.tg))}</td>${weeks.map(w => `<td>${fmt(sumBy(bySku, s => s.w[w]))}</td>`).join('')}<td>${fmt(totAl)}</td><td>${fmt(totSi)}</td><td>${usedBar(totSi, totAl)}</td>${remTd(totAl, totSi)}</tr>` : ''}
     </tbody></table></div></div>`;
     // 3) Theo Khu vực: số chia Current Week theo từng batch, mỗi SKU một dòng (số còn lại xem ở tab Tracking Allocation)
     let byNpp = '';
