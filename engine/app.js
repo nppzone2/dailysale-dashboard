@@ -556,32 +556,32 @@
     : { color: lv === 'good' ? XC.good : lv === 'warn' ? XC.warn : lv === 'bad' ? XC.bad : lv === 'org' ? XC.org : XC.muted, fill: lv === 'good' ? XC.goodBg : lv === 'warn' ? XC.warnBg : lv === 'bad' ? XC.badBg : lv === 'org' ? XC.orgBg : undefined, h: 'center', bold: true };
   let lastBoard = null; let allocExport = null; let trackExport = null;
   function exportBoard(ev) {
-    const B = lastBoard; if (!B) return; const { M, byN, groupsA, sumO, hasStock, SD } = B;
+    const B = lastBoard; if (!B) return; const { M, byN, groupsA, sumO, hasStock, SD, pdG } = B;
     const nfU = ui.unit === 'hl' ? '#,##0.0' : '#,##0'; const rnd = v => ui.unit === 'hl' ? Math.round(v * 10) / 10 : Math.round(v);
-    const H = ['Khu vực', 'NPP', 'Target', 'Sale In', '% đạt SI', 'Còn lại SI', 'Trạng thái SI', 'Sale Out', '% đạt SO', 'Còn lại SO', 'Trạng thái SO', ...(hasStock ? [`Tồn ${fD(M.stockDate)}`, 'Tồn hiện tại', 'Ngày tồn', 'Đánh giá tồn'] : [])];
+    const H = ['Khu vực', 'NPP', 'Target', 'Sale In', 'Pending', '% đạt SI', 'Còn lại SI', 'Trạng thái SI', 'Sale Out', '% đạt SO', 'Còn lại SO', 'Trạng thái SO', ...(hasStock ? [`Tồn ${fD(M.stockDate)}`, 'Tồn hiện tại', 'Ngày tồn', 'Đánh giá tồn'] : [])];
     const line = (a, n, o, kind) => {
       const aSi = o.t ? o.si / o.t : NaN, aSo = o.t ? o.so / o.t : NaN; const sSi = stTxt(aSi, M.tgSi), sSo = stTxt(aSo, M.tgSo);
       const now = o.st0 + o.si - o.so; const d = o.dso ? Math.max(0, now) / o.dso : NaN;
       const sSt = !isFinite(d) ? ['—', 'info'] : d < SD.low ? ['Thấp', 'org'] : d > SD.high ? ['Cao', 'bad'] : ['Chuẩn', 'good'];
-      const v = [a, n, rnd(o.t), rnd(o.si), isFinite(aSi) ? aSi : null, rnd(Math.max(0, o.t - o.si - (o.pd || 0))), sSi[0], rnd(o.so), isFinite(aSo) ? aSo : null, rnd(Math.max(0, o.t - o.so)), sSo[0],
+      const v = [a, n, rnd(o.t), rnd(o.si), rnd(o.pd || 0), isFinite(aSi) ? aSi : null, rnd(Math.max(0, o.t - o.si - (o.pd || 0))), sSi[0], rnd(o.so), isFinite(aSo) ? aSo : null, rnd(Math.max(0, o.t - o.so)), sSo[0],
         ...(hasStock ? [rnd(o.st0), rnd(now), isFinite(d) ? Math.round(d * 10) / 10 : null, sSt[0]] : [])];
       const dark = kind === 'area';
       return { v, kind, s: (k, base) => {
         if (k === 1 && kind === 'npp') return { color: XC.brand, bold: true };
         if (k < 2) return null;
-        if (k === 4 || k === 8) { const ok = (k === 4 ? aSi >= M.tgSi : aSo >= M.tgSo); const val = k === 4 ? aSi : aSo; return { nf: '0.0%', bold: true, h: 'center', ...(isFinite(val) ? (dark ? { color: ok ? '9FE3BC' : 'FFB3B8' } : { color: ok ? XC.good : XC.bad, fill: ok ? XC.goodBg : XC.badBg }) : {}) }; }
-        if (k === 6) return lvStyle(sSi[1], dark); if (k === 10) return lvStyle(sSo[1], dark);
-        if (k === 5 || k === 9) return { nf: nfU, bold: true };
-        if (hasStock && k === 13) return { nf: '0.0', h: 'center' };
-        if (hasStock && k === 14) return lvStyle(sSt[1], dark);
-        if (hasStock && k === 12) return { nf: nfU, bold: true };
+        if (k === 5 || k === 9) { const ok = (k === 5 ? aSi >= M.tgSi : aSo >= M.tgSo); const val = k === 5 ? aSi : aSo; return { nf: '0.0%', bold: true, h: 'center', ...(isFinite(val) ? (dark ? { color: ok ? '9FE3BC' : 'FFB3B8' } : { color: ok ? XC.good : XC.bad, fill: ok ? XC.goodBg : XC.badBg }) : {}) }; }
+        if (k === 7) return lvStyle(sSi[1], dark); if (k === 11) return lvStyle(sSo[1], dark);
+        if (k === 6 || k === 10) return { nf: nfU, bold: true };
+        if (hasStock && k === 14) return { nf: '0.0', h: 'center' };
+        if (hasStock && k === 15) return lvStyle(sSt[1], dark);
+        if (hasStock && k === 13) return { nf: nfU, bold: true };
         return { nf: nfU };
       } };
     };
     const body = [];
     groupsA.forEach(([a, cs]) => { body.push(line(a, `${cs.length} NPP`, sumO(cs.map(c => byN[c])), 'area'));
       cs.forEach(c => { const o = byN[c]; body.push(line('', c, o, 'npp'));
-        const g = aggregate(o.rows, r => grp(r.sc)); GROUPS.filter(k => g[k] && (g[k].t || g[k].si || g[k].so)).forEach(k => body.push(line('', '   ' + k, g[k], 'sub'))); }); });
+        const g = aggregate(o.rows, r => grp(r.sc)); GROUPS.filter(k => g[k] && (g[k].t || g[k].si || g[k].so)).forEach(k => { g[k].pd = pdG[c + '|' + k] || 0; body.push(line('', '   ' + k, g[k], 'sub')); }); }); });
     body.push(line('Tổng', '', sumO(Object.values(byN)), 'grand'));
     const T = sumO(Object.values(byN));
     styledXlsx({ file: `Tien_do_Khu_vuc_NPP_${M.m}_${M.lastSi}_${scopeTag()}.xlsx`, sheet: 'Tiến độ KV-NPP',
@@ -760,7 +760,7 @@
       const stockCells = o => { const now = o.st0 + o.si - o.so; const d = o.dso ? Math.max(0, now) / o.dso : NaN;
         const pill = !isFinite(d) ? '<span class="note">—</span>' : d < SD.low ? '<span class="pill orange" title="Tồn thấp">Thấp</span>' : d > SD.high ? '<span class="pill bad" title="Tồn cao">Cao</span>' : '<span class="pill good" title="Tồn phù hợp">Chuẩn</span>';
         return `<td class="gs">${fmt(o.st0)}</td><td><b>${fmt(now)}</b></td><td>${isFinite(d) ? nf1.format(d) : '—'}</td><td>${pill}</td>`; };
-      const cells = o => `<td class="gs">${fmt(o.t)}</td><td class="gs">${fmt(o.si)}</td><td>${o.t ? pctT(o.si / o.t, M.tgSi) : '—'}</td><td class="rem">${fmt(Math.max(0, o.t - o.si - (o.pd || 0)))}</td><td>${status(o.t ? o.si / o.t : NaN, M.tgSi)}</td><td class="gs">${fmt(o.so)}</td><td>${o.t ? pctT(o.so / o.t, M.tgSo) : '—'}</td><td class="rem">${fmt(Math.max(0, o.t - o.so))}</td><td>${status(o.t ? o.so / o.t : NaN, M.tgSo)}</td>${hasStock ? stockCells(o) : ''}`;
+      const cells = o => `<td class="gs">${fmt(o.t)}</td><td class="gs">${fmt(o.si)}</td><td>${fmt(o.pd || 0)}</td><td>${o.t ? pctT(o.si / o.t, M.tgSi) : '—'}</td><td class="rem">${fmt(Math.max(0, o.t - o.si - (o.pd || 0)))}</td><td>${status(o.t ? o.si / o.t : NaN, M.tgSi)}</td><td class="gs">${fmt(o.so)}</td><td>${o.t ? pctT(o.so / o.t, M.tgSo) : '—'}</td><td class="rem">${fmt(Math.max(0, o.t - o.so))}</td><td>${status(o.t ? o.so / o.t : NaN, M.tgSo)}</td>${hasStock ? stockCells(o) : ''}`;
       const sumO = os => ({ t: sumBy(os, o => o.t), si: sumBy(os, o => o.si), so: sumBy(os, o => o.so), st0: sumBy(os, o => o.st0), dso: sumBy(os, o => o.dso), pd: sumBy(os, o => o.pd || 0) });
       const groupsA = byArea(Object.keys(byN).filter(c => byN[c].t || byN[c].si || byN[c].so));
       let rb = '';
@@ -772,10 +772,10 @@
           if (nOpen) { const g = aggregate(o.rows, r => grp(r.sc)); GROUPS.filter(k => g[k] && (g[k].t || g[k].si || g[k].so)).forEach(k => { g[k].pd = pdG[c + '|' + k] || 0; rb += `<tr class="sku"><td></td><td class="skuc">${esc(k)}</td>${cells(g[k])}</tr>`; }); }
         }); });
       rb += `<tr class="tot"><td title="${ui.bdA.size || ui.bdN.size || ui.bdG.size ? 'Tổng theo bộ lọc' : 'Tổng'}">Tổng${ui.bdA.size || ui.bdN.size || ui.bdG.size ? '*' : ''}</td><td></td>${cells({ ...sumO(Object.values(byN)), pd: sumBy(PDo, o => conv(o[4], o[3])) })}</tr>`;
-      lastBoard = { M, byN, groupsA, sumO, hasStock, SD };
+      lastBoard = { M, byN, groupsA, sumO, hasStock, SD, pdG };
       board = `<div class="card c12"><div class="card-h"><div><h2>Tiến độ theo Khu vực / NPP</h2><p class="sub">${ui.bdA.size || ui.bdN.size || ui.bdG.size ? '<b>* Đang lọc:</b> ' + esc([...ui.bdA, ...ui.bdN, ...ui.bdG].join(', ')) + ' · ' : ''}Bấm mũi tên hoặc tên NPP để xem chi tiết · Còn lại = Target − Sale In − Pending · time gone ${pct(M.tgSi)} · đơn vị ${U()}${hasStock ? ` · Tồn hiện tại = Tồn ${fD(M.stockDate)} + Sale In − Sale Out (ước tính); Ngày tồn theo Sale Out bình quân ngày, phù hợp ${nf1.format(SD.low)}–${nf1.format(SD.high)} ngày` : ''}</p></div>${bdFilter}<button class="btn" id="xl-board">Tải Excel</button></div>
-      <div class="tw"><table class="rank ag frz2 cmp"><thead><tr><th rowspan="2">Khu vực</th><th rowspan="2">NPP</th><th rowspan="2" class="gs">Target</th><th colspan="4" class="gh gs">Sale In</th><th colspan="4" class="gh gs">Sale Out</th>${hasStock ? '<th colspan="4" class="gh gs">Tồn kho</th>' : ''}</tr>
-        <tr class="h2"><th class="gs">Thực đạt</th><th>% đạt</th><th>Còn lại</th><th>TT</th><th class="gs">Thực đạt</th><th>% đạt</th><th>Còn lại</th><th>TT</th>${hasStock ? `<th class="gs" title="Tồn đầu ngày theo file Stock">${fD(M.stockDate)}</th><th title="Tồn đầu tháng + Sale In MTD − Sale Out MTD">Hiện tại</th><th title="Tồn hiện tại ÷ Sale Out bình quân ngày (30 ngày trước ${fD(M.stockDate)})">Ngày</th><th>Đánh giá</th>` : ''}</tr></thead><tbody>${rb}</tbody></table></div></div>`;
+      <div class="tw"><table class="rank ag frz2 cmp"><thead><tr><th rowspan="2">Khu vực</th><th rowspan="2">NPP</th><th rowspan="2" class="gs">Target</th><th colspan="5" class="gh gs">Sale In</th><th colspan="4" class="gh gs">Sale Out</th>${hasStock ? '<th colspan="4" class="gh gs">Tồn kho</th>' : ''}</tr>
+        <tr class="h2"><th class="gs">Thực đạt</th><th>Pending</th><th>% đạt</th><th>Còn lại</th><th>TT</th><th class="gs">Thực đạt</th><th>% đạt</th><th>Còn lại</th><th>TT</th>${hasStock ? `<th class="gs" title="Tồn đầu ngày theo file Stock">${fD(M.stockDate)}</th><th title="Tồn đầu tháng + Sale In MTD − Sale Out MTD">Hiện tại</th><th title="Tồn hiện tại ÷ Sale Out bình quân ngày (30 ngày trước ${fD(M.stockDate)})">Ngày</th><th>Đánh giá</th>` : ''}</tr></thead><tbody>${rb}</tbody></table></div></div>`;
     }
     let cover = '';
     if (M.lastSo) {
