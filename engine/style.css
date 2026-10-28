@@ -555,4 +555,7 @@ table.trk thead th{vertical-align:bottom}
 /* bảng Lũy kế tháng theo SKU: full chiều ngang, kẻ dọc tách cột Target */
 .tgt.full{width:100%}
 .tgt.full .gs{border-left:1px solid var(--line)}
+/* dòng Backorder nhỏ bên dưới thẻ SO Pending (Landing) */
+.bo-strip{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:10px;padding-top:8px;border-top:1px dashed var(--line);font-size:12px;color:var(--ink-2)}
+.bo-strip b{color:var(--ink)}
 
