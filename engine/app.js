@@ -429,6 +429,7 @@
     const L = landingModel(); const { M, npps, row, add } = L;
     if (!M.m) return '<div class="card empty">Chưa có dữ liệu tháng hiện hành.</div>';
     const remC = v => v >= 0 ? fmtC(v) : `<span class="ov">Vượt ${fmtC(-v)}</span>`;
+    const boL = backorderOrders(); const boC = sumBy(boL, o => o[4]), boH = sumBy(boL, o => o[4] * (item(o[3]).hl || 0));
     const remH = v => v >= 0 ? nf2.format(v) : `<span class="ov">Vượt ${nf2.format(-v)}</span>`;
     const xeF = v => v == null ? '<span class="note">Chưa có</span>' : `<b>${fmtC(v)}</b>`;
     const cells = o => `<td class="gs">${fmtC(o.t)}</td><td>${fmtC(o.si)}</td><td>${fmtC(o.pd)}</td><td>${o.t ? pctT((o.si + o.pd) / o.t, M.tgSi) : '—'}</td><td class="rem">${remC(o.rc)}</td><td class="gs">${remH(o.rh)}</td><td>${o.on ? nf2.format(o.on) : '<span class="note">–</span>'}</td><td class="xe">${xeF(o.xe)}</td>`;
@@ -454,7 +455,7 @@
     <div class="grid">
       <div class="card c3 kpi"><div class="kpi-l">Target tháng</div><div class="kpi-v">${fmtC(T.t)}<small>Case</small></div><div class="kpi-f">${nf2.format(T.th)} HL</div></div>
       <div class="card c3 kpi${T.t && T.si / T.t < M.tgSi ? ' slowcard' : ''}"><div class="kpi-l">Sale In MTD</div><div class="kpi-v">${fmtC(T.si)}<small>Case</small></div><div class="kpi-f"><b>${pctT(T.t ? T.si / T.t : NaN, M.tgSi)}</b> target · time gone ${pct(M.tgSi)}</div></div>
-      <div class="card c3 kpi" role="button" tabindex="0" data-go="pending" style="cursor:pointer"><div class="kpi-l">SO Pending</div><div class="kpi-v">${fmtC(T.pd)}<small>Case</small></div><div class="kpi-f">${nf2.format(T.pdh)} HL · xem chi tiết →</div></div>
+      <div class="card c3 kpi" role="button" tabindex="0" data-go="pending" style="cursor:pointer"><div class="kpi-l">SO Pending + Backorder</div><div class="kpi-v">${fmtC(T.pd + boC)}<small>Case</small></div><div class="kpi-f">${nf2.format(T.pdh + boH)} HL · Backorder ${fmtC(boC)} · xem chi tiết →</div></div>
       <div class="card c3 kpi hero"><div class="kpi-l">Còn lại cần giao</div><div class="kpi-v">${fmtC(Math.max(0, T.rc))}<small>Case</small></div><div class="kpi-f">${nf2.format(Math.max(0, T.rh))} HL · <b>${T.xe == null ? '—' : fmtC(T.xe)} xe</b></div></div>
       <div class="card c12"><div class="card-h"><div><h2>Còn lại theo Khu vực / NPP / Group</h2><p class="sub">Target, Sale In, Pending, Còn lại theo Case · Còn lại, Ontop theo HL · % = (Sale In + Pending) ÷ Target, xanh khi ≥ time gone ${pct(M.tgSi)} · bấm mũi tên để mở hoặc thu gọn</p></div></div>
         <div class="tw"><table class="ag lnd"><thead><tr><th>Khu vực</th><th>NPP</th><th>Group</th><th class="gs">Target</th><th>Sale In</th><th>Pending</th><th title="(Sale In + Pending) ÷ Target, so với time gone">% (SI + Pending)</th><th>Còn lại (Case)</th><th class="gs">Còn lại (HL)</th><th>Ontop HL</th><th>Số xe còn lại</th></tr></thead><tbody>${body}</tbody></table></div>
@@ -964,6 +965,8 @@
     const cur = STATE.cur || {}; const inv = new Set((cur.lines || []).map(l => String(l[2])));
     return (cur.orders || []).filter(o => !/back\s*-?\s*order/i.test(o[2]) && !/deliver/i.test(o[2]) && !inv.has(String(o[1])) && inScope(o[0]) && inBrand(o[3]));
   }
+  // Đơn Backorder trong phạm vi đang xem (hiển thị riêng, cộng vào thẻ SO Pending ở Landing)
+  function backorderOrders() { return (STATE.cur.orders || []).filter(o => /back\s*-?\s*order/i.test(o[2]) && inScope(o[0]) && inBrand(o[3])); }
   function pendingCard() {
     const P = pendingOrders(); const n = new Set(P.map(o => o[1])).size; if (!(STATE.cur.orders || []).length) return '';
     const cs = sumBy(P, o => o[4]), hl = sumBy(P, o => o[4] * (item(o[3]).hl || 0));
@@ -986,6 +989,10 @@
       body += `<tr class="grp"><td colspan="2">${esc(g)}</td><td>${fmtC(sumBy(rr, r => r.c))}</td><td>${nf1.format(sumBy(rr, r => r.h))}</td><td></td><td></td></tr>`;
       rr.forEach(r => { body += `<tr class="sku"><td>${esc(item(r.sc).b || '—')}</td><td class="skuc">${esc(r.sc)}</td><td>${fmtC(r.c)}</td><td>${nf1.format(r.h)}</td><td>${r.ord.size}</td><td>${tc ? pct(r.c / tc) : '—'}</td></tr>`; }); });
     body += `<tr class="tot"><td colspan="2">Tổng</td><td>${fmtC(tc)}</td><td>${nf1.format(th)}</td><td>${new Set(P.map(o => o[1])).size}</td><td>100%</td></tr>`;
+    const BO = backorderOrders(); const bc = sumBy(BO, o => o[4]), bh = sumBy(BO, o => o[4] * (item(o[3]).hl || 0));
+    const bsku = {}; BO.forEach(o => { const x = bsku[o[3]] || (bsku[o[3]] = { sc: o[3], c: 0, h: 0, ord: new Set() }); x.c += o[4]; x.h += o[4] * (item(o[3]).hl || 0); x.ord.add(o[1]); });
+    const brows = Object.values(bsku).sort((a, b) => GROUPS.indexOf(grp(a.sc)) - GROUPS.indexOf(grp(b.sc)) || bi(a.sc) - bi(b.sc) || b.c - a.c);
+    const boList = [...BO].sort((a, b) => nppCmp(a[0], b[0]) || String(a[1]).localeCompare(String(b[1])));
     const nppRows = Object.entries(byN).sort((a, b) => nppCmp(a[0], b[0]));
     const list = [...P].sort((a, b) => nppCmp(a[0], b[0]) || String(a[1]).localeCompare(String(b[1])));
     return `
@@ -997,9 +1004,13 @@
       <div class="card c3 kpi"><div class="kpi-l">Pending (HL)</div><div class="kpi-v">${nf1.format(th)}<small>HL</small></div></div>
       <div class="card c3 kpi"><div class="kpi-l">Số đơn</div><div class="kpi-v">${new Set(P.map(o => o[1])).size}</div><div class="kpi-f">${Object.keys(byN).length} NPP</div></div>
       <div class="card c3 kpi"><div class="kpi-l">Số SKU</div><div class="kpi-v">${rows.length}</div></div>
+      <div class="card c3 kpi"><div class="kpi-l">Backorder (Case)</div><div class="kpi-v">${fmtC(bc)}<small>Case</small></div><div class="kpi-f">${nf1.format(bh)} HL · ${new Set(BO.map(o => o[1])).size} đơn</div></div>
       <div class="card c12"><h2>Pending theo SKU</h2><p class="sub">Case và HL chờ giao</p>${P.length ? `<div class="tw"><table class="sticky1 tgt"><thead><tr><th>BrandFamily</th><th>SKU</th><th>Case</th><th>HL</th><th>Số đơn</th><th>Tỷ trọng</th></tr></thead><tbody>${body}</tbody></table></div>` : '<p class="note">Không có đơn Pending trong phạm vi này.</p>'}</div>
       ${nppRows.length > 1 ? `<div class="card c5"><h2>Theo NPP</h2><p class="sub">Bấm để xem từng NPP</p><div class="tw"><table><thead><tr><th>Khu vực</th><th>NPP</th><th>Case</th><th>HL</th><th>Số đơn</th></tr></thead><tbody>
         ${nppRows.map(([c, x]) => `<tr class="click" data-npp="${esc(c)}"><td style="text-align:left">${esc(areaOf(c))}</td><td style="text-align:left"><b>${esc(c)}</b></td><td>${fmtC(x.c)}</td><td>${nf1.format(x.h)}</td><td>${x.ord.size}</td></tr>`).join('')}</tbody></table></div></div>` : ''}
+      <div class="card c12"><h2>Backorder theo SKU</h2><p class="sub">Cộng vào SO Pending ở thẻ Landing</p>${brows.length ? `<div class="tw"><table class="sticky1 tgt"><thead><tr><th>BrandFamily</th><th>SKU</th><th>Case</th><th>HL</th><th>Số đơn</th></tr></thead><tbody>${brows.map(r => `<tr class="sku"><td>${esc(item(r.sc).b || '—')}</td><td class="skuc">${esc(r.sc)}</td><td>${fmtC(r.c)}</td><td>${nf1.format(r.h)}</td><td>${r.ord.size}</td></tr>`).join('')}<tr class="tot"><td colspan="2">Tổng</td><td>${fmtC(bc)}</td><td>${nf1.format(bh)}</td><td>${new Set(BO.map(o => o[1])).size}</td></tr></tbody></table></div>` : '<p class="note">Không có đơn Backorder trong phạm vi này.</p>'}</div>
+      ${BO.length ? `<div class="card c12"><h2>Danh sách Backorder</h2><p class="sub">Ngày đặt · ngày hẹn giao · trạng thái</p><div class="tw"><table><thead><tr><th>NPP</th><th>Số đơn</th><th>Trạng thái</th><th>Ngày đặt</th><th>Hẹn giao</th><th>SKU</th><th>Case</th></tr></thead><tbody>
+        ${boList.map(o => `<tr><td>${esc(o[0])}</td><td>${esc(o[1])}</td><td>${esc(o[2])}</td><td>${esc(o[5])}</td><td>${esc(o[6])}</td><td><b>${esc(o[3])}</b></td><td>${fmtC(o[4])}</td></tr>`).join('')}</tbody></table></div></div>` : ''}
       ${P.length ? `<div class="card ${nppRows.length > 1 ? 'c7' : 'c12'}"><h2>Danh sách đơn</h2><p class="sub">Ngày đặt · ngày hẹn giao · trạng thái</p><div class="tw"><table><thead><tr><th>NPP</th><th>Số đơn</th><th>Trạng thái</th><th>Ngày đặt</th><th>Hẹn giao</th><th>SKU</th><th>Case</th></tr></thead><tbody>
         ${list.map(o => `<tr><td>${esc(o[0])}</td><td>${esc(o[1])}</td><td>${esc(o[2])}</td><td>${esc(o[5])}</td><td>${esc(o[6])}</td><td><b>${esc(o[3])}</b></td><td>${fmtC(o[4])}</td></tr>`).join('')}</tbody></table></div></div>` : ''}
     </div>
@@ -1012,7 +1023,7 @@
   function exportPending(ev) {
     const P = pendingOrders();
     const rows = [['Khu vực', 'Mã NPP', 'Số đơn', 'Trạng thái', 'Ngày đặt', 'Hẹn giao', 'BrandFamily', 'BrandGroup', 'ShortCode', 'Case', 'HL']];
-    [...P].sort((a, b) => nppCmp(a[0], b[0])).forEach(o => rows.push([(STATE.npps[o[0]] || {}).area || '', o[0], o[1], o[2], o[5], o[6], item(o[3]).b || '', grp(o[3]), o[3], o[4], Math.round(o[4] * (item(o[3]).hl || 0) * 100) / 100]));
+    [...P, ...backorderOrders()].sort((a, b) => nppCmp(a[0], b[0])).forEach(o => rows.push([(STATE.npps[o[0]] || {}).area || '', o[0], o[1], o[2], o[5], o[6], item(o[3]).b || '', grp(o[3]), o[3], o[4], Math.round(o[4] * (item(o[3]).hl || 0) * 100) / 100]));
     if (rows.length === 1) { toastBtn(ev.currentTarget, 'Không có đơn Pending'); return; }
     saveXlsx(`SO_Pending_${todayKey()}_${scopeTag()}.xlsx`, [['SO Pending', rows, [9, 9, 12, 14, 10, 10, 12, 11, 10, 9, 9]]], ev.currentTarget);
   }
