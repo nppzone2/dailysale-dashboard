@@ -563,7 +563,7 @@
       const aSi = o.t ? o.si / o.t : NaN, aSo = o.t ? o.so / o.t : NaN; const sSi = stTxt(aSi, M.tgSi), sSo = stTxt(aSo, M.tgSo);
       const now = o.st0 + o.si - o.so; const d = o.dso ? Math.max(0, now) / o.dso : NaN;
       const sSt = !isFinite(d) ? ['—', 'info'] : d < SD.low ? ['Thấp', 'org'] : d > SD.high ? ['Cao', 'bad'] : ['Chuẩn', 'good'];
-      const v = [a, n, rnd(o.t), rnd(o.si), isFinite(aSi) ? aSi : null, rnd(Math.max(0, o.t - o.si)), sSi[0], rnd(o.so), isFinite(aSo) ? aSo : null, rnd(Math.max(0, o.t - o.so)), sSo[0],
+      const v = [a, n, rnd(o.t), rnd(o.si), isFinite(aSi) ? aSi : null, rnd(Math.max(0, o.t - o.si - (o.pd || 0))), sSi[0], rnd(o.so), isFinite(aSo) ? aSo : null, rnd(Math.max(0, o.t - o.so)), sSo[0],
         ...(hasStock ? [rnd(o.st0), rnd(now), isFinite(d) ? Math.round(d * 10) / 10 : null, sSt[0]] : [])];
       const dark = kind === 'area';
       return { v, kind, s: (k, base) => {
@@ -749,14 +749,19 @@
       const keepN = c => (!ui.bdA.size || ui.bdA.has(areaOf(c))) && (!ui.bdN.size || ui.bdN.has(c));
       const Lb = L.filter(r => keepN(r.c) && (!ui.bdG.size || ui.bdG.has(grp(r.sc))));
       const byN = aggregate(Lb, r => r.c);
+      // Pending (SO chờ giao) theo cùng bộ lọc: Còn lại = Target − Sale In − Pending
+      const PDo = pendingOrders().filter(o => keepN(o[0]) && (!ui.bdG.size || ui.bdG.has(grp(o[3]))));
+      const pdN = {}, pdG = {};
+      PDo.forEach(o => { const v = conv(o[4], o[3]); pdN[o[0]] = (pdN[o[0]] || 0) + v; const k = o[0] + '|' + grp(o[3]); pdG[k] = (pdG[k] || 0) + v; });
+      Object.values(byN).forEach(o => { o.pd = pdN[o.k] || 0; });
       const bdFilter = `<div class="minif">${msHtml('bdA', 'Khu vực', optA.map(a => [a, a]))}${msHtml('bdN', 'NPP', optN.map(c => [c, c]))}${msHtml('bdG', 'Group', optG.map(g => [g, g]))}</div>`;
       const hasStock = !!M.stockDate && L.some(r => r.st0 || r.dso);
       const SD = ENC.stockDays || { low: 3, high: 3.5 };
       const stockCells = o => { const now = o.st0 + o.si - o.so; const d = o.dso ? Math.max(0, now) / o.dso : NaN;
         const pill = !isFinite(d) ? '<span class="note">—</span>' : d < SD.low ? '<span class="pill orange" title="Tồn thấp">Thấp</span>' : d > SD.high ? '<span class="pill bad" title="Tồn cao">Cao</span>' : '<span class="pill good" title="Tồn phù hợp">Chuẩn</span>';
         return `<td class="gs">${fmt(o.st0)}</td><td><b>${fmt(now)}</b></td><td>${isFinite(d) ? nf1.format(d) : '—'}</td><td>${pill}</td>`; };
-      const cells = o => `<td class="gs">${fmt(o.t)}</td><td class="gs">${fmt(o.si)}</td><td>${o.t ? pctT(o.si / o.t, M.tgSi) : '—'}</td><td class="rem">${fmt(Math.max(0, o.t - o.si))}</td><td>${status(o.t ? o.si / o.t : NaN, M.tgSi)}</td><td class="gs">${fmt(o.so)}</td><td>${o.t ? pctT(o.so / o.t, M.tgSo) : '—'}</td><td class="rem">${fmt(Math.max(0, o.t - o.so))}</td><td>${status(o.t ? o.so / o.t : NaN, M.tgSo)}</td>${hasStock ? stockCells(o) : ''}`;
-      const sumO = os => ({ t: sumBy(os, o => o.t), si: sumBy(os, o => o.si), so: sumBy(os, o => o.so), st0: sumBy(os, o => o.st0), dso: sumBy(os, o => o.dso) });
+      const cells = o => `<td class="gs">${fmt(o.t)}</td><td class="gs">${fmt(o.si)}</td><td>${o.t ? pctT(o.si / o.t, M.tgSi) : '—'}</td><td class="rem">${fmt(Math.max(0, o.t - o.si - (o.pd || 0)))}</td><td>${status(o.t ? o.si / o.t : NaN, M.tgSi)}</td><td class="gs">${fmt(o.so)}</td><td>${o.t ? pctT(o.so / o.t, M.tgSo) : '—'}</td><td class="rem">${fmt(Math.max(0, o.t - o.so))}</td><td>${status(o.t ? o.so / o.t : NaN, M.tgSo)}</td>${hasStock ? stockCells(o) : ''}`;
+      const sumO = os => ({ t: sumBy(os, o => o.t), si: sumBy(os, o => o.si), so: sumBy(os, o => o.so), st0: sumBy(os, o => o.st0), dso: sumBy(os, o => o.dso), pd: sumBy(os, o => o.pd || 0) });
       const groupsA = byArea(Object.keys(byN).filter(c => byN[c].t || byN[c].si || byN[c].so));
       let rb = '';
       groupsA.forEach(([a, cs]) => { const ak = 'rk:a:' + a, aOpen = isOpen(ak, true);
@@ -764,11 +769,11 @@
         if (!aOpen) return;
         cs.forEach((c, i) => { const nk = 'rk:n:' + c, nOpen = isOpen(nk, false); const o = byN[c];
           rb += `<tr class="npp click${nOpen ? ' open' : ''}${i === 0 ? ' first' : ''}" data-fold="${esc(nk)}"><td></td><td><span class="caret">▸</span> <span class="click-npp" data-npp="${esc(c)}">${esc(c)}</span></td>${cells(o)}</tr>`;
-          if (nOpen) { const g = aggregate(o.rows, r => grp(r.sc)); GROUPS.filter(k => g[k] && (g[k].t || g[k].si || g[k].so)).forEach(k => { rb += `<tr class="sku"><td></td><td class="skuc">${esc(k)}</td>${cells(g[k])}</tr>`; }); }
+          if (nOpen) { const g = aggregate(o.rows, r => grp(r.sc)); GROUPS.filter(k => g[k] && (g[k].t || g[k].si || g[k].so)).forEach(k => { g[k].pd = pdG[c + '|' + k] || 0; rb += `<tr class="sku"><td></td><td class="skuc">${esc(k)}</td>${cells(g[k])}</tr>`; }); }
         }); });
-      rb += `<tr class="tot"><td title="${ui.bdA.size || ui.bdN.size || ui.bdG.size ? 'Tổng theo bộ lọc' : 'Tổng'}">Tổng${ui.bdA.size || ui.bdN.size || ui.bdG.size ? '*' : ''}</td><td></td>${cells(sumO(Object.values(byN)))}</tr>`;
+      rb += `<tr class="tot"><td title="${ui.bdA.size || ui.bdN.size || ui.bdG.size ? 'Tổng theo bộ lọc' : 'Tổng'}">Tổng${ui.bdA.size || ui.bdN.size || ui.bdG.size ? '*' : ''}</td><td></td>${cells({ ...sumO(Object.values(byN)), pd: sumBy(PDo, o => conv(o[4], o[3])) })}</tr>`;
       lastBoard = { M, byN, groupsA, sumO, hasStock, SD };
-      board = `<div class="card c12"><div class="card-h"><div><h2>Tiến độ theo Khu vực / NPP</h2><p class="sub">${ui.bdA.size || ui.bdN.size || ui.bdG.size ? '<b>* Đang lọc:</b> ' + esc([...ui.bdA, ...ui.bdN, ...ui.bdG].join(', ')) + ' · ' : ''}Bấm mũi tên hoặc tên NPP để xem chi tiết · time gone ${pct(M.tgSi)} · đơn vị ${U()}${hasStock ? ` · Tồn hiện tại = Tồn ${fD(M.stockDate)} + Sale In − Sale Out (ước tính); Ngày tồn theo Sale Out bình quân ngày, phù hợp ${nf1.format(SD.low)}–${nf1.format(SD.high)} ngày` : ''}</p></div>${bdFilter}<button class="btn" id="xl-board">Tải Excel</button></div>
+      board = `<div class="card c12"><div class="card-h"><div><h2>Tiến độ theo Khu vực / NPP</h2><p class="sub">${ui.bdA.size || ui.bdN.size || ui.bdG.size ? '<b>* Đang lọc:</b> ' + esc([...ui.bdA, ...ui.bdN, ...ui.bdG].join(', ')) + ' · ' : ''}Bấm mũi tên hoặc tên NPP để xem chi tiết · Còn lại = Target − Sale In − Pending · time gone ${pct(M.tgSi)} · đơn vị ${U()}${hasStock ? ` · Tồn hiện tại = Tồn ${fD(M.stockDate)} + Sale In − Sale Out (ước tính); Ngày tồn theo Sale Out bình quân ngày, phù hợp ${nf1.format(SD.low)}–${nf1.format(SD.high)} ngày` : ''}</p></div>${bdFilter}<button class="btn" id="xl-board">Tải Excel</button></div>
       <div class="tw"><table class="rank ag frz2 cmp"><thead><tr><th rowspan="2">Khu vực</th><th rowspan="2">NPP</th><th rowspan="2" class="gs">Target</th><th colspan="4" class="gh gs">Sale In</th><th colspan="4" class="gh gs">Sale Out</th>${hasStock ? '<th colspan="4" class="gh gs">Tồn kho</th>' : ''}</tr>
         <tr class="h2"><th class="gs">Thực đạt</th><th>% đạt</th><th>Còn lại</th><th>TT</th><th class="gs">Thực đạt</th><th>% đạt</th><th>Còn lại</th><th>TT</th>${hasStock ? `<th class="gs" title="Tồn đầu ngày theo file Stock">${fD(M.stockDate)}</th><th title="Tồn đầu tháng + Sale In MTD − Sale Out MTD">Hiện tại</th><th title="Tồn hiện tại ÷ Sale Out bình quân ngày (30 ngày trước ${fD(M.stockDate)})">Ngày</th><th>Đánh giá</th>` : ''}</tr></thead><tbody>${rb}</tbody></table></div></div>`;
     }
