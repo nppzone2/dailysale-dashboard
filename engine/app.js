@@ -7,7 +7,7 @@
 
   let STATE = null; const ENC = window.ENC || { blobs: {} };
   let PUBLISHED = STATE; let previewing = false;
-  const ui = { trRem: 'all', alW: '', trSku: 'all', tab: 'overview', scope: 'all', area: 'all', npp: 'all', brand: 'all', bgf: 'all', unit: 'case', tMonth: '', open: new Set(), allocSku: 'all', alN: '' };
+  const ui = { trRem: 'all', alW: '', trSku: 'all', tab: 'overview', scope: 'all', area: 'all', npp: 'all', brand: 'all', bgf: 'all', unit: 'case', tMonth: '', open: new Set(), allocSku: 'all', alN: '', trW: '' };
   try { const s = JSON.parse(localStorage.getItem('npp-ui') || '{}'); if (s.tab) ui.tab = s.tab; if (s.unit) ui.unit = s.unit; if (s.brand) ui.brand = s.brand; } catch (e) {}
   const saveUi = () => { try { localStorage.setItem('npp-ui', JSON.stringify({ tab: ui.tab, unit: ui.unit, scope: ui.scope, brand: ui.brand })); } catch (e) {} };
 
@@ -1069,7 +1069,8 @@
   function viewTracking() {
     const cur = STATE.cur || {}; const A = (cur.alloc || []).filter(r => inScope(r[1]) && inBrand(r[2]));
     if (!A.length) return '<div class="card empty">Chưa có dữ liệu Allocation cho phạm vi này.</div>';
-    const weeks = [...new Set(A.map(r => r[0]))].sort(wkSort); const wk = currentWeek(weeks);
+    const weeks = [...new Set(A.map(r => r[0]))].sort(wkSort); const curW = currentWeek(weeks); const wk = ui.trW && weeks.includes(ui.trW) ? ui.trW : curW;
+    const weekSelT = `<div class="fld"><label for="tweek">Tuần</label><select id="tweek">${[...weeks].reverse().map(w => `<option value="${esc(w)}" ${w === wk ? 'selected' : ''}>${esc(w)}${w === curW ? ' (Current)' : ''}</option>`).join('')}</select></div>`;
     const AD = cur.allocDates || {}; const fd = d => d ? d.slice(6, 8) + '/' + d.slice(4, 6) : '';
     // Tuần bắt đầu từ thứ 2: lấy thứ 2 của tuần chứa ngày upload đầu tiên, kết thúc Chủ nhật. Phần còn lại của tuần trước không chuyển sang tuần sau.
     const monday = d => addDay(d, -((new Date(Date.UTC(+d.slice(0, 4), +d.slice(4, 6) - 1, +d.slice(6, 8))).getUTCDay() + 6) % 7));
@@ -1162,7 +1163,7 @@
       <div class="card c3 kpi"><div class="kpi-l">Sale In ${esc(wk)}</div><div class="kpi-v">${fmt(T.si)}<small>${U()}</small></div><div class="kpi-f"><span class="${T.ps < gone ? 'lo' : 'hi'}">${pct(T.ps)}</span> allocation · tiến độ ${pct(gone)}</div></div>
       <div class="card c3 kpi" role="button" tabindex="0" data-go="pending" style="cursor:pointer"><div class="kpi-l">SO Pending ${esc(wk)}</div><div class="kpi-v">${fmt(T.pd)}<small>${U()}</small></div><div class="kpi-f">Xem theo SKU →</div></div>
       <div class="card c3 kpi"><div class="kpi-l">Còn lại ${esc(wk)}</div><div class="kpi-v" style="color:${T.rem < 0 ? 'var(--good)' : 'inherit'}">${fmt(T.rem)}<small>${U()}</small></div><div class="kpi-f">Đã dùng <b>${pct(T.use)}</b> (Sale In + Pending)</div><div class="bar"><i style="width:${Math.min(100, (T.use || 0) * 100)}%;background:${T.use > 1 ? 'var(--good)' : 'var(--si)'}"></i></div></div>
-      <div class="card c12"><div class="card-h"><div><h2>Theo khu vực / NPP / SKU · ${esc(wk)}</h2><p class="sub">Đơn vị ${U()}</p></div><button class="btn xl-r" id="xl-track">Tải Excel</button></div><div class="tw"><table class="sticky1 trk"><thead><tr><th>Khu vực / NPP</th><th>SKU</th><th>Allocation ${esc(wk)}</th><th>Sale In ${esc(wk)}</th><th>% Sale In</th><th>SO Pending</th><th>% đã dùng</th><th class="thf"><div class="thfw"><select id="trem" class="thsel" aria-label="Lọc cột Còn lại"><option value="all" ${ui.trRem === 'all' ? 'selected' : ''}>Tất cả</option><option value="pos" ${ui.trRem === 'pos' ? 'selected' : ''}>Còn lại &gt; 0</option><option value="neg" ${ui.trRem === 'neg' ? 'selected' : ''}>Vượt (&lt; 0)</option></select><span>Còn lại</span></div></th></tr></thead><tbody>${body}</tbody></table></div>
+      <div class="card c12"><div class="card-h"><div><h2>Theo khu vực / NPP / SKU · ${esc(wk)}</h2><p class="sub">Đơn vị ${U()}</p></div><div class="btns">${weekSelT}<button class="btn xl-r" id="xl-track">Tải Excel</button></div></div><div class="tw"><table class="sticky1 trk"><thead><tr><th>Khu vực / NPP</th><th>SKU</th><th>Allocation ${esc(wk)}</th><th>Sale In ${esc(wk)}</th><th>% Sale In</th><th>SO Pending</th><th>% đã dùng</th><th class="thf"><div class="thfw"><select id="trem" class="thsel" aria-label="Lọc cột Còn lại"><option value="all" ${ui.trRem === 'all' ? 'selected' : ''}>Tất cả</option><option value="pos" ${ui.trRem === 'pos' ? 'selected' : ''}>Còn lại &gt; 0</option><option value="neg" ${ui.trRem === 'neg' ? 'selected' : ''}>Vượt (&lt; 0)</option></select><span>Còn lại</span></div></th></tr></thead><tbody>${body}</tbody></table></div>
         <p class="note" style="margin:8px 0 0">Tính theo ngày order thuộc ${esc(wk)} (${wStart ? fd(wStart) + ' → ' + fd(wEnd) : '—'}). ${hasSbd ? `Sale In = Dis Sale by Date có Invoice Date đến ${fd(sbdMax)} (D-1)` : 'Chưa có file Dis Sale by Date'}${deliv.length ? ` + ${fmt(sumBy(deliv.filter(o => shown.includes(o[3])), o => conv(o[4], o[3])))} ${U()} đơn Delivery` : ''}. Pending = Online Order trạng thái Order Approve / Schedule (${new Set(P.map(o => o[1])).size} đơn).</p></div>
     </div>
     ${conclusion([
@@ -1258,6 +1259,7 @@
     const tm = $('#tmonth'); if (tm) tm.onchange = () => { ui.tMonth = tm.value; render(); };
     const aw = $('#aweek'); if (aw) aw.onchange = () => { ui.alW = aw.value; render(); }; const an = $('#al-npp'); if (an) an.onchange = () => { ui.alN = an.value; render(); };
     const tr = $('#trem'); if (tr) tr.onchange = () => { ui.trRem = tr.value; render(); };
+    const tw = $('#tweek'); if (tw) tw.onchange = () => { ui.trW = tw.value; render(); };
     v.querySelectorAll('[data-asku]').forEach(b => b.onclick = () => { ui.allocSku = b.dataset.asku; render(); });
     const xt = $('#xl-target'); if (xt) xt.onclick = exportTarget;
     const xp = $('#xl-progress'); if (xp) xp.onclick = exportProgress;
