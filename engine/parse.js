@@ -3,6 +3,7 @@ const KINDS = {
   items:   { label: 'Item Master',              need: ['ShortCode', 'BrandGroup', 'hl'] },
   hist:    { label: 'Target Total (lịch sử)',   need: ['Target (Case)', 'calendar_month', 'Distributor_Name'] },
   target:  { label: 'Target Current Month',     need: ['Ref', 'Alpha_Name', 'Unit'] },
+  hist2:   { label: 'Target Total (lịch sử, dạng dài Sales_Target)', need: ['Sales_Target', ['Calendar_month', 'calendar_month'], 'Distributor_Name'] },
   sales:   { label: 'Sale In/Out theo tháng (Case, dạng dài)', need: ['Customer_Name', 'TypeName', 'Calendar_Month', 'ValueFormat'] },
   si:      { label: 'SO Invoice (Sale In)',     need: ['InvoiceNumber', 'UOM_Invoice', 'Date_ID'] },
   so:      { label: 'SaleOut by Seller',        need: ['Seller_Name', 'Outlet_ID', 'UOM'] },
@@ -15,7 +16,7 @@ const KINDS = {
   ref:     { label: 'Tham chiếu xe (Ontop HL, HL của 1 xe)', need: ['NPP', ['HL của 1 xe', 'HL trên 1 xe', 'HL/xe', 'HL/Xe']] },
   sbd:     { label: 'Dis Sale by Date (Sale In theo ngày order)', need: [['Order Date', 'OrderDate'], ['Calendar_Day_Name', 'ConfirmDate', 'Invoice Date', 'InvoiceDate'], 'ShortCode', 'Unit'] }
 };
-const KIND_ORDER = ['items', 'hist', 'sales', 'si', 'sbd', 'so', 'sodd', 'orders', 'alloc', 'allocdates', 'target', 'stock', 'aso', 'ref'];
+const KIND_ORDER = ['items', 'hist', 'hist2', 'sales', 'si', 'sbd', 'so', 'sodd', 'orders', 'alloc', 'allocdates', 'target', 'stock', 'aso', 'ref'];
 
 function cleanStr(v) { return v == null ? '' : String(v).trim(); }
 function num(v) { const n = typeof v === 'number' ? v : parseFloat(String(v ?? '').replace(/,/g, '')); return isFinite(n) ? n : 0; }
@@ -84,6 +85,23 @@ function applyParsed(state, p, opts = {}) {
         num(g(r, 'Sales Out (Case)')), num(g(r, 'Sales Out (Htls)'))]);
     });
     Object.keys(by).forEach(m => { state.months[m] = { rows: by[m], at: now }; });
+    msg.note = 'Tháng ' + Object.keys(by).map(fmtMonth).join(', ');
+  }
+
+  if (p.kind === 'hist2') {
+    // Target Total dạng dài (export Power BI mới): Sales_Target / Sales_In_Actual / Sales_Out_Actual theo Case, HL tính từ Item Master.
+    const by = {}; const hlOf = sc => { const it = state.items[sc]; return it && it.hl ? it.hl : 0; };
+    const mh = has('Calendar_month') ? 'Calendar_month' : 'calendar_month';
+    p.rows.forEach(r => {
+      const m = cleanStr(g(r, mh)).slice(0, 6); const sc = cleanStr(g(r, 'ShortCode'));
+      if (!/^\d{6}$/.test(m) || !sc) return;
+      const c = touchNpp(state, g(r, 'Distributor_Name'), has('Area') ? g(r, 'Area') : '');
+      const k = c + '|' + sc; const hl = hlOf(sc);
+      const mm = by[m] || (by[m] = {}); const x = mm[k] || (mm[k] = [c, sc, 0, 0, 0, 0, 0, 0]);
+      const t = num(g(r, 'Sales_Target')), si = num(g(r, 'Sales_In_Actual')), so = num(g(r, 'Sales_Out_Actual'));
+      x[2] += t; x[3] += t * hl; x[4] += si; x[5] += si * hl; x[6] += so; x[7] += so * hl;
+    });
+    Object.keys(by).forEach(m => { state.months[m] = { rows: Object.values(by[m]), at: now }; });
     msg.note = 'Tháng ' + Object.keys(by).map(fmtMonth).join(', ');
   }
 
