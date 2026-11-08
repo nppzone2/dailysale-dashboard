@@ -234,9 +234,14 @@ function applyParsed(state, p, opts = {}) {
       if (!c || !sc || !cd) return;
       const k = [c, cd, od || cd, sc, w ? 'W' + w : ''].join('|'); agg[k] = (agg[k] || 0) + num(g(r, 'Unit'));
     });
-    state.cur.sbd = Object.entries(agg).map(([k, v]) => { const [c, cd, od, sc, w] = k.split('|'); return [c, cd, od, sc, v, w]; });
+    // Chỉ thay các dòng có ngày order nằm trong phạm vi file mới; các ngày khác đã nạp trước đó được giữ lại.
+    const newRows = Object.entries(agg).map(([k, v]) => { const [c, cd, od, sc, w] = k.split('|'); return [c, cd, od, sc, v, w]; });
+    const ods2 = newRows.map(x => x[2]).filter(Boolean);
+    const lo = ods2.length ? ods2.reduce((a, b) => (b < a ? b : a)) : '', hi = ods2.length ? ods2.reduce((a, b) => (b > a ? b : a)) : '';
+    const keep = (state.cur.sbd || []).filter(x => !(lo && x[2] >= lo && x[2] <= hi));
+    state.cur.sbd = [...keep, ...newRows];
     const ods = state.cur.sbd.map(x => x[2]).sort();
-    msg.note = ods.length ? 'Ngày order ' + fmtDate(ods[0]) + ' → ' + fmtDate(ods[ods.length - 1]) : 'Không có dòng';
+    msg.note = ods.length ? 'Ngày order ' + fmtDate(ods[0]) + ' → ' + fmtDate(ods[ods.length - 1]) + (lo ? ' (cập nhật ' + fmtDate(lo) + ' → ' + fmtDate(hi) + ')' : '') : 'Không có dòng';
   }
 
   if (p.kind === 'orders') {
