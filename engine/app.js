@@ -1395,7 +1395,8 @@
       c.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
       c.onclick = () => { const t = c.innerHTML; c.disabled = true; c.textContent = 'Đang tạo…'; snapCard(card, '', c, true).finally(() => { c.disabled = false; c.innerHTML = t; }); };
       const head = card.querySelector('.card-h');
-      if (head) { const xl = head.querySelector(':scope > .btn'); let box = head.querySelector(':scope > .hbtns');
+      if (head) { const xl = head.querySelector(':scope > .btn'); const row = head.querySelector(':scope > .trk-btns'); let box = head.querySelector(':scope > .hbtns');
+        if (!box && row) { box = document.createElement('div'); box.className = 'hbtns'; row.appendChild(box); } // Tracking: icon nằm cùng hàng với Tải Excel
         if (!box) { box = document.createElement('div'); box.className = 'hbtns'; if (xl) { head.insertBefore(box, xl); box.appendChild(xl); } else head.appendChild(box); }
         box.insertBefore(c, box.firstChild); box.insertBefore(b, box.firstChild); }
       else { card.classList.add('has-img'); const wrap = document.createElement('div'); wrap.className = 'hbtns abs'; wrap.append(b, c); card.insertBefore(wrap, card.firstChild); }

@@ -457,7 +457,6 @@ tr.nsku .nppn{color:var(--brand)}
 .bgt td .mini{margin-left:6px}
 .card-h:has(.xl-r){flex-wrap:nowrap;align-items:flex-start}.card-h:has(.xl-r)>div{flex:1;min-width:0}.card-h .xl-r{flex:none}
 /* Tab Tracking: tiêu đề một hàng, thanh chọn ngày + Tải Excel một hàng riêng bên dưới, chừa chỗ cho 2 icon */
-.card.has-img:has(.trk-btns) .card-h{padding-right:92px}
 .card-h:has(.trk-btns){flex-wrap:nowrap;align-items:flex-start}
 .card-h:has(.trk-btns)>div:first-child{flex:1 1 auto;min-width:200px}
 .card-h:has(.trk-btns)>.trk-btns{flex:none;width:auto}
