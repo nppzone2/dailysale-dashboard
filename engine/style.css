@@ -461,7 +461,7 @@ tr.nsku .nppn{color:var(--brand)}
 .card-h:has(.trk-btns){flex-wrap:wrap}
 .card-h:has(.trk-btns)>div{flex:1 1 100%;min-width:0}
 .card-h:has(.trk-btns)>.trk-btns{flex:1 1 100%;width:100%;justify-content:flex-start}
-@media (min-width:900px){.trk-btns{flex-wrap:nowrap;align-items:flex-end;gap:10px}.trk-btns .fld{flex-direction:column;align-items:flex-start;gap:4px}.trk-btns .fld select{width:150px}.trk-btns .fld input[type=date]{width:140px}.trk-btns .btn{white-space:nowrap;flex:none}}
+@media (min-width:900px){.trk-btns{flex-wrap:nowrap;align-items:flex-end;gap:10px}.trk-btns .fld{flex-direction:column;align-items:flex-start;gap:4px}.trk-btns>*{flex:none}.trk-btns .fld select,.trk-btns .fld input[type=date]{width:170px;min-width:170px;box-sizing:border-box}.trk-btns .btn{white-space:nowrap;flex:none}}
 /* nút Tải ảnh */
 .img-dl{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;padding:0}
 .hbtns{display:flex;gap:8px;flex:none;align-items:flex-start}
