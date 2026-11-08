@@ -1048,6 +1048,15 @@
   }
   // Logic Sale In của tuần, dùng chung cho tab Allocation và tab Tracking Allocation
   function weekBounds(wk, AD) {
+    // Tuần theo số tuần ISO trong tên (W45 = thứ 2 02/11 → chủ nhật 08/11 năm 2026), không theo ngày upload.
+    const mt = /W(\d{1,2})/i.exec(String(wk || '')); const ym = String((STATE.cur || {}).month || '');
+    if (mt && /^\d{6}$/.test(ym)) {
+      const n = +mt[1]; let Y = +ym.slice(0, 4); const mo = +ym.slice(4, 6);
+      if (mo === 1 && n >= 50) Y--; if (mo === 12 && n <= 2) Y++;
+      const jan4 = Date.UTC(Y, 0, 4); const dow = (new Date(jan4).getUTCDay() + 6) % 7;
+      const mon = new Date(jan4 - dow * 864e5 + (n - 1) * 7 * 864e5).toISOString().slice(0, 10).replace(/-/g, '');
+      return { wStart: mon, wEnd: addDay(mon, 6) };
+    }
     const d = (AD[wk] || []).find(Boolean) || null; if (!d) return { wStart: null, wEnd: null };
     const dow = new Date(Date.UTC(+d.slice(0, 4), +d.slice(4, 6) - 1, +d.slice(6, 8))).getUTCDay();
     const wStart = addDay(d, -((dow + 6) % 7)); return { wStart, wEnd: addDay(wStart, 6) }; // thứ 2 → chủ nhật
