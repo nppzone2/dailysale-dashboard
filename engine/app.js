@@ -7,7 +7,7 @@
 
   let STATE = null; const ENC = window.ENC || { blobs: {} };
   let PUBLISHED = STATE; let previewing = false;
-  const ui = { trRem: 'all', alW: '', trSku: 'all', tab: 'overview', scope: 'all', area: 'all', npp: 'all', brand: 'all', bgf: 'all', unit: 'case', tMonth: '', open: new Set(), allocSku: 'all', alN: '', trW: '' };
+  const ui = { trRem: 'all', alW: '', trSku: 'all', tab: 'overview', scope: 'all', area: 'all', npp: 'all', brand: 'all', bgf: 'all', unit: 'case', tMonth: '', open: new Set(), allocSku: 'all', alN: '', trW: '', trFrom: '', trTo: '' };
   try { const s = JSON.parse(localStorage.getItem('npp-ui') || '{}'); if (s.tab) ui.tab = s.tab; if (s.unit) ui.unit = s.unit; if (s.brand) ui.brand = s.brand; } catch (e) {}
   const saveUi = () => { try { localStorage.setItem('npp-ui', JSON.stringify({ tab: ui.tab, unit: ui.unit, scope: ui.scope, brand: ui.brand })); } catch (e) {} };
 
@@ -1061,13 +1061,19 @@
     const dow = new Date(Date.UTC(+d.slice(0, 4), +d.slice(4, 6) - 1, +d.slice(6, 8))).getUTCDay();
     const wStart = addDay(d, -((dow + 6) % 7)); return { wStart, wEnd: addDay(wStart, 6) }; // thứ 2 → chủ nhật
   }
-  function weekSaleIn(wk) {
-    const cur = STATE.cur || {}; const { wStart, wEnd } = weekBounds(wk, cur.allocDates || {});
+  // Khoảng ngày tự chọn trong tab Tracking (yyyy-mm-dd → yyyymmdd); null nếu chưa chọn đủ hoặc sai thứ tự
+  function trCustom() {
+    const f = String(ui.trFrom || '').replace(/-/g, ''), t = String(ui.trTo || '').replace(/-/g, '');
+    return /^\d{8}$/.test(f) && /^\d{8}$/.test(t) && f <= t ? { from: f, to: t } : null;
+  }
+  function weekSaleIn(wk, custom) {
+    const cur = STATE.cur || {}; const cr = custom ? trCustom() : null;
+    const { wStart, wEnd } = cr ? cr : weekBounds(wk, cur.allocDates || {});
     const inWk = d => d && wStart && d >= wStart && d <= wEnd;
     const D = todayKey();
     const inSbd = o => { const k = orderDateKey(o[8]); return !!(k && k < D); }; // đã xuất hoá đơn trước hôm nay -> đã nằm trong Dis Sale đến D-1
     // Dis Sale by Date: ngày order thuộc tuần, invoice đến D-1
-    const lines = (cur.sbd || []).filter(r => r[1] < D && (r[5] ? r[5] === wk : inWk(r[2])) && inScope(r[0]) && inBrand(r[3]))
+    const lines = (cur.sbd || []).filter(r => r[1] < D && (!cr && r[5] ? r[5] === wk : inWk(r[2])) && inScope(r[0]) && inBrand(r[3]))
       .map(r => ({ c: r[0], sc: r[3], q: r[4], d: r[2], w: r[5] || '' }));
     // Online Order trạng thái Delivery: ngày order thuộc tuần, chưa có trong Dis Sale đến D-1
     const deliv = (cur.orders || []).filter(o => /deliver/i.test(o[2]) && !inSbd(o) && inWk(orderDateKey(o[5])) && inScope(o[0]) && inBrand(o[3]));
@@ -1080,16 +1086,19 @@
     if (!A.length) return '<div class="card empty">Chưa có dữ liệu Allocation cho phạm vi này.</div>';
     const weeks = [...new Set(A.map(r => r[0]))].sort(wkSort); const curW = currentWeek(weeks); const wk = ui.trW && weeks.includes(ui.trW) ? ui.trW : curW;
     const weekSelT = `<div class="fld"><label for="tweek">Tuần</label><select id="tweek">${[...weeks].reverse().map(w => `<option value="${esc(w)}" ${w === wk ? 'selected' : ''}>${esc(w)}${w === curW ? ' (Current)' : ''}</option>`).join('')}</select></div>`;
+    const crT = trCustom();
+    const rangeSelT = `<div class="fld"><label for="tfrom">Từ</label><input type="date" id="tfrom" value="${esc(ui.trFrom)}"></div><div class="fld"><label for="tto">Đến</label><input type="date" id="tto" value="${esc(ui.trTo)}"></div>${ui.trFrom || ui.trTo ? '<button class="btn" id="trng-clear" type="button">Theo tuần</button>' : ''}`;
     const AD = cur.allocDates || {}; const fd = d => d ? d.slice(6, 8) + '/' + d.slice(4, 6) : '';
     // Tuần bắt đầu từ thứ 2: lấy thứ 2 của tuần chứa ngày upload đầu tiên, kết thúc Chủ nhật. Phần còn lại của tuần trước không chuyển sang tuần sau.
     const monday = d => addDay(d, -((new Date(Date.UTC(+d.slice(0, 4), +d.slice(4, 6) - 1, +d.slice(6, 8))).getUTCDay() + 6) % 7));
-    const firstUp = (AD[wk] || []).find(Boolean) || null; const wStart = firstUp ? monday(firstUp) : null;
-    const wEnd = wStart ? addDay(wStart, 6) : null; const inWk = d => d && wStart && d >= wStart && d <= wEnd;
+    const firstUp = (AD[wk] || []).find(Boolean) || null;
+    const wStart = crT ? crT.from : firstUp ? monday(firstUp) : null;
+    const wEnd = crT ? crT.to : wStart ? addDay(wStart, 6) : null; const inWk = d => d && wStart && d >= wStart && d <= wEnd;
     // Nguyên tắc tracking (chỉ dùng Dis Sale by Date + Online Order, tất cả theo ngày order thuộc tuần đang theo dõi):
     //  Sale In = Dis Sale by Date có Invoice Date đến D-1 + Online Order trạng thái Delivery (chưa nằm trong Dis Sale đến D-1)
     //  Pending = Online Order trạng thái Order Approve / Schedule
     const D = todayKey(); const sbdMax = addDay(D, -1);
-    const { lines, deliv } = weekSaleIn(wk); const hasSbd = (cur.sbd || []).length > 0;
+    const { lines, deliv } = weekSaleIn(wk, true); const hasSbd = (cur.sbd || []).length > 0;
     const odk = o => orderDateKey(o[5]);
     const online = (cur.orders || []).filter(o => /approve|schedule/i.test(o[2]) && inWk(odk(o)) && inScope(o[0]) && inBrand(o[3]));
     const lastData = addDay(todayKey(), -1);
@@ -1172,8 +1181,8 @@
       <div class="card c3 kpi"><div class="kpi-l">Sale In ${esc(wk)}</div><div class="kpi-v">${fmt(T.si)}<small>${U()}</small></div><div class="kpi-f"><span class="${T.ps < gone ? 'lo' : 'hi'}">${pct(T.ps)}</span> allocation · tiến độ ${pct(gone)}</div></div>
       <div class="card c3 kpi" role="button" tabindex="0" data-go="pending" style="cursor:pointer"><div class="kpi-l">SO Pending ${esc(wk)}</div><div class="kpi-v">${fmt(T.pd)}<small>${U()}</small></div><div class="kpi-f">Xem theo SKU →</div></div>
       <div class="card c3 kpi"><div class="kpi-l">Còn lại ${esc(wk)}</div><div class="kpi-v" style="color:${T.rem < 0 ? 'var(--good)' : 'inherit'}">${fmt(T.rem)}<small>${U()}</small></div><div class="kpi-f">Đã dùng <b>${pct(T.use)}</b> (Sale In + Pending)</div><div class="bar"><i style="width:${Math.min(100, (T.use || 0) * 100)}%;background:${T.use > 1 ? 'var(--good)' : 'var(--si)'}"></i></div></div>
-      <div class="card c12"><div class="card-h"><div><h2>Theo khu vực / NPP / SKU · ${esc(wk)}</h2><p class="sub">Đơn vị ${U()}</p></div><div class="btns">${weekSelT}<button class="btn xl-r" id="xl-track">Tải Excel</button></div></div><div class="tw"><table class="sticky1 trk"><thead><tr><th>Khu vực / NPP</th><th>SKU</th><th>Allocation ${esc(wk)}</th><th>Sale In ${esc(wk)}</th><th>% Sale In</th><th>SO Pending</th><th>% đã dùng</th><th class="thf"><div class="thfw"><select id="trem" class="thsel" aria-label="Lọc cột Còn lại"><option value="all" ${ui.trRem === 'all' ? 'selected' : ''}>Tất cả</option><option value="pos" ${ui.trRem === 'pos' ? 'selected' : ''}>Còn lại &gt; 0</option><option value="neg" ${ui.trRem === 'neg' ? 'selected' : ''}>Vượt (&lt; 0)</option></select><span>Còn lại</span></div></th></tr></thead><tbody>${body}</tbody></table></div>
-        <p class="note" style="margin:8px 0 0">Tính theo ngày order thuộc ${esc(wk)} (${wStart ? fd(wStart) + ' → ' + fd(wEnd) : '—'}). ${hasSbd ? `Sale In = Dis Sale by Date có Invoice Date đến ${fd(sbdMax)} (D-1)` : 'Chưa có file Dis Sale by Date'}${deliv.length ? ` + ${fmt(sumBy(deliv.filter(o => shown.includes(o[3])), o => conv(o[4], o[3])))} ${U()} đơn Delivery` : ''}. Pending = Online Order trạng thái Order Approve / Schedule (${new Set(P.map(o => o[1])).size} đơn).</p></div>
+      <div class="card c12"><div class="card-h"><div><h2>Theo khu vực / NPP / SKU · ${esc(wk)}</h2><p class="sub">Đơn vị ${U()}</p></div><div class="btns">${weekSelT}${rangeSelT}<button class="btn xl-r" id="xl-track">Tải Excel</button></div></div><div class="tw"><table class="sticky1 trk"><thead><tr><th>Khu vực / NPP</th><th>SKU</th><th>Allocation ${esc(wk)}</th><th>Sale In ${esc(wk)}</th><th>% Sale In</th><th>SO Pending</th><th>% đã dùng</th><th class="thf"><div class="thfw"><select id="trem" class="thsel" aria-label="Lọc cột Còn lại"><option value="all" ${ui.trRem === 'all' ? 'selected' : ''}>Tất cả</option><option value="pos" ${ui.trRem === 'pos' ? 'selected' : ''}>Còn lại &gt; 0</option><option value="neg" ${ui.trRem === 'neg' ? 'selected' : ''}>Vượt (&lt; 0)</option></select><span>Còn lại</span></div></th></tr></thead><tbody>${body}</tbody></table></div>
+        <p class="note" style="margin:8px 0 0">${crT ? `Tính theo ngày order từ ${fd(wStart)} đến ${fd(wEnd)} (khoảng tự chọn).` : `Tính theo ngày order thuộc ${esc(wk)} (${wStart ? fd(wStart) + ' → ' + fd(wEnd) : '—'}).`} ${hasSbd ? `Sale In = Dis Sale by Date có Invoice Date đến ${fd(sbdMax)} (D-1)` : 'Chưa có file Dis Sale by Date'}${deliv.length ? ` + ${fmt(sumBy(deliv.filter(o => shown.includes(o[3])), o => conv(o[4], o[3])))} ${U()} đơn Delivery` : ''}. Pending = Online Order trạng thái Order Approve / Schedule (${new Set(P.map(o => o[1])).size} đơn).</p></div>
     </div>
     ${conclusion([
       `Current Week <b>${esc(wk)}</b>: Sale In đạt <b>${pct(T.ps)}</b> allocation so với tiến độ tuần ${pct(gone)}; tính cả Pending đã dùng <b>${pct(T.use)}</b>, ${T.rem >= 0 ? `còn <b>${fmt(T.rem)} ${U()}</b>` : `vượt allocation <b>${fmt(-T.rem)} ${U()}</b>`}.`,
@@ -1269,6 +1278,9 @@
     const aw = $('#aweek'); if (aw) aw.onchange = () => { ui.alW = aw.value; render(); }; const an = $('#al-npp'); if (an) an.onchange = () => { ui.alN = an.value; render(); };
     const tr = $('#trem'); if (tr) tr.onchange = () => { ui.trRem = tr.value; render(); };
     const tw = $('#tweek'); if (tw) tw.onchange = () => { ui.trW = tw.value; render(); };
+    const tf = $('#tfrom'); if (tf) tf.onchange = () => { ui.trFrom = tf.value; render(); };
+    const tt = $('#tto'); if (tt) tt.onchange = () => { ui.trTo = tt.value; render(); };
+    const tc = $('#trng-clear'); if (tc) tc.onclick = () => { ui.trFrom = ''; ui.trTo = ''; render(); };
     v.querySelectorAll('[data-asku]').forEach(b => b.onclick = () => { ui.allocSku = b.dataset.asku; render(); });
     const xt = $('#xl-target'); if (xt) xt.onclick = exportTarget;
     const xp = $('#xl-progress'); if (xp) xp.onclick = exportProgress;
