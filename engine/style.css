@@ -458,10 +458,10 @@ tr.nsku .nppn{color:var(--brand)}
 .card-h:has(.xl-r){flex-wrap:nowrap;align-items:flex-start}.card-h:has(.xl-r)>div{flex:1;min-width:0}.card-h .xl-r{flex:none}
 /* Tab Tracking: tiêu đề một hàng, thanh chọn ngày + Tải Excel một hàng riêng bên dưới, chừa chỗ cho 2 icon */
 .card.has-img:has(.trk-btns) .card-h{padding-right:92px}
-.card-h:has(.trk-btns){flex-wrap:wrap}
-.card-h:has(.trk-btns)>div{flex:1 1 100%;min-width:0}
-.card-h:has(.trk-btns)>.trk-btns{flex:1 1 100%;width:100%;justify-content:flex-start}
-@media (min-width:900px){.trk-btns{flex-wrap:nowrap;align-items:flex-end;gap:10px}.trk-btns .fld{flex-direction:column;align-items:flex-start;gap:4px}.trk-btns>*{flex:none}.trk-btns .fld select,.trk-btns .fld input[type=date]{width:170px;min-width:170px;box-sizing:border-box}.trk-btns .btn{white-space:nowrap;flex:none}}
+.card-h:has(.trk-btns){flex-wrap:nowrap;align-items:flex-start}
+.card-h:has(.trk-btns)>div:first-child{flex:1 1 auto;min-width:200px}
+.card-h:has(.trk-btns)>.trk-btns{flex:none;width:auto}
+@media (min-width:900px){.trk-btns{flex-wrap:nowrap;align-items:flex-end;gap:10px}.trk-btns .fld{flex-direction:column;align-items:flex-start;gap:4px}.trk-btns>*{flex:none}.trk-btns .fld select,.trk-btns .fld input[type=date]{width:150px;min-width:150px;box-sizing:border-box}.trk-btns .btn{white-space:nowrap;flex:none}}
 /* nút Tải ảnh */
 .img-dl{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;padding:0}
 .hbtns{display:flex;gap:8px;flex:none;align-items:flex-start}
