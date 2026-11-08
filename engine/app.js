@@ -1055,7 +1055,12 @@
       if (mo === 1 && n >= 50) Y--; if (mo === 12 && n <= 2) Y++;
       const jan4 = Date.UTC(Y, 0, 4); const dow = (new Date(jan4).getUTCDay() + 6) % 7;
       const mon = new Date(jan4 - dow * 864e5 + (n - 1) * 7 * 864e5).toISOString().slice(0, 10).replace(/-/g, '');
-      return { wStart: mon, wEnd: addDay(mon, 6) };
+      // Tuần giao giữa 2 tháng chỉ tính phần thuộc tháng đang xem (tuần đầu tháng tính từ ngày 1)
+      const first = ym + '01'; const last = new Date(Date.UTC(+ym.slice(0, 4), +ym.slice(4, 6), 0)).toISOString().slice(0, 10).replace(/-/g, '');
+      const sun = addDay(mon, 6);
+      const ws = mon < first ? first : mon, we = sun > last ? last : sun;
+      if (ws > we) return { wStart: null, wEnd: null }; // tuần nằm hoàn toàn ngoài tháng đang xem
+      return { wStart: ws, wEnd: we };
     }
     const d = (AD[wk] || []).find(Boolean) || null; if (!d) return { wStart: null, wEnd: null };
     const dow = new Date(Date.UTC(+d.slice(0, 4), +d.slice(4, 6) - 1, +d.slice(6, 8))).getUTCDay();
