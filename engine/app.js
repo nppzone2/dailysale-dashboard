@@ -1068,7 +1068,7 @@
   }
   function weekSaleIn(wk, custom) {
     const cur = STATE.cur || {}; const cr = custom ? trCustom() : null;
-    const { wStart, wEnd } = cr ? cr : weekBounds(wk, cur.allocDates || {});
+    const { wStart, wEnd } = cr ? { wStart: cr.from, wEnd: cr.to } : weekBounds(wk, cur.allocDates || {});
     const inWk = d => d && wStart && d >= wStart && d <= wEnd;
     const D = todayKey();
     const inSbd = o => { const k = orderDateKey(o[8]); return !!(k && k < D); }; // đã xuất hoá đơn trước hôm nay -> đã nằm trong Dis Sale đến D-1
