@@ -1333,7 +1333,7 @@
     catch (e) { toastBtn(btn, 'Trình duyệt chưa cho copy ảnh, hãy dùng Tải ảnh'); }
   }
   async function snapCard(card, name, btn, copy) {
-    const hideSel = '.btn, .img-dl, .linkback, button.tab';
+    const hideSel = '.btn, .img-dl, .linkback, button.tab, .msel-p';  // ẩn nút và danh sách chọn SKU khi chụp
     const hidden = [...card.querySelectorAll(hideSel)]; hidden.forEach(e => { e.dataset.vis = e.style.visibility; e.style.visibility = 'hidden'; });
     // mở rộng khung cuộn ngang để chụp đủ bảng
     const tws = [...card.querySelectorAll('.tw')]; const old = { w: card.style.width, mw: card.style.maxWidth };
