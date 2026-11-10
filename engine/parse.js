@@ -54,7 +54,8 @@ function touchNpp(state, rawName, area, dis) {
 }
 
 function resetCur(state, month) {
-  state.cur = { month, target: [], si: {}, so: {}, alloc: [], outl: [] };
+  // Outlet Allocation là danh sách theo tháng: đổi tháng (upload Allocation tháng mới) không xoá danh sách đã upload
+  state.cur = { month, target: [], si: {}, so: {}, alloc: [], outl: (state.cur && state.cur.outl) || [] };
 }
 
 /* opts: { month: 'YYYYMM' (tháng hiện hành cho Target/Allocation), soDate: 'YYYYMMDD', now: ISO } */
