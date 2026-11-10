@@ -169,10 +169,11 @@ if (!hasData) console.log('Chưa có dữ liệu: trang sẽ báo "Dashboard ch�
 const odFiles = {};
 const sealAcct = (key, payload, pw) => { const st = payload.state; const sod = st.cur && st.cur.sod; const an = st.cur && st.cur.asoNames; const aa = st.cur && st.cur.asoAddr;
   const lean = { ...st, cur: { ...st.cur } }; delete lean.cur.sod; delete lean.cur.asoNames; delete lean.cur.asoAddr;
-  // Sale Out MTD theo outlet (tính sẵn, nhẹ) để tab Outlet Allocation dùng ngay mà không cần tải file chi tiết đơn
-  { const gi = sc => sc === 'HS2' ? 0 : sc === 'TS25' ? 1 : 2; const om = {}; let to = '';
-    ((sod && sod.lines) || []).forEach(l => { const k = l[0] + '|' + l[2]; const v = om[k] || (om[k] = [0, 0, 0]); v[gi(l[8])] += l[9] || 0; if (l[1] > to) to = l[1]; });
-    lean.cur.outMtd = om; lean.cur.outMtdTo = to; }
+  // Sale Out theo outlet, theo ngày giao (tính sẵn, gọn) để tab Outlet Allocation tính MTD / WTD mà không cần tải file chi tiết đơn
+  { const gi = sc => sc === 'HS2' ? 0 : sc === 'TS25' ? 1 : 2; const od = {}; let to = '';
+    ((sod && sod.lines) || []).forEach(l => { const k = l[0] + '|' + l[2]; const d = l[1]; const m = od[k] || (od[k] = {}); const v = m[d] || (m[d] = [0, 0, 0]); v[gi(l[8])] += l[9] || 0; if (d > to) to = d; });
+    lean.cur.outDay = Object.fromEntries(Object.entries(od).map(([k, m]) => [k, Object.entries(m).map(([d, v]) => [d, ...v])]));
+    lean.cur.outMtdTo = to; }
   blobs[key] = seal({ ...payload, state: lean }, pw);
   if ((sod && (sod.lines || []).length) || (an && Object.keys(an).length) || (aa && Object.keys(aa).length)) odFiles[key] = seal({ sod: sod || { lines: [], outlets: {} }, asoNames: an || {}, asoAddr: aa || {} }, pw); };
 if (hasData) sealAcct('admin', { role: { type: 'admin', id: 'ADMIN', label: 'Admin · toàn vùng' }, state }, ADMIN);
