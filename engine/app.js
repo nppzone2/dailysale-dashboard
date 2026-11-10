@@ -1094,8 +1094,8 @@
       if (!t) return 0; const R = Math.max(0, t[j].t - t[j].cp); const sum = S[o[0]][j];
       return R > 0 && sum > 0 ? Math.floor(R * (o[L3[j]] || 0) / sum) : 0; }); });
     const mtd = {}; const nppM = {};
-    ((cur.sod && cur.sod.lines) || []).forEach(l => { const k = l[0] + '|' + l[2]; if (filt && !inF.has(k)) return; const j = gi(l[8]);
-      (mtd[k] || (mtd[k] = [0, 0, 0]))[j] += l[9] || 0; (nppM[l[0]] || (nppM[l[0]] = [0, 0, 0]))[j] += l[9] || 0; });
+    Object.entries(cur.outMtd || {}).forEach(([k, v]) => { if (filt && !inF.has(k)) return; const n = k.split('|')[0];
+      mtd[k] = v.slice(); const t = nppM[n] || (nppM[n] = [0, 0, 0]); v.forEach((x, j) => { t[j] += x || 0; }); });
     const npps = [...new Set([...Object.keys(nppT), ...OLall.map(o => o[0])])].sort(nppCmp);
     const rows = [];
     npps.forEach(n => { [0, 1, 2].forEach(j => {
@@ -1129,7 +1129,7 @@
     const tierSel = `<div class="fld"><label for="outtier">Tier</label><select id="outtier"><option value="">Tất cả</option>${tiers.map(x => `<option value="${esc(x)}" ${x === ui.outTier ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></div>`;
     const weekSel = `<div class="fld"><label for="outw">Tuần</label><select id="outw">${[...weeks].reverse().map(w => `<option value="${esc(w)}" ${w === wk ? 'selected' : ''}>${esc(w)}${w === curW ? ' (Current)' : ''}</option>`).join('')}</select></div>`;
     const nppSel = `<div class="fld"><label for="outn">NPP</label><select id="outn">${nppList.map(n => `<option value="${esc(n)}" ${n === ui.outN ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></div>`;
-    const lastSo = (cur.sod && cur.sod.lines || []).reduce((m, l) => l[1] > m ? l[1] : m, '');
+    const lastSo = cur.outMtdTo || '';
     return `
     <section class="lead"><div><div class="eyebrow">Outlet Allocation · ${esc(wk)}</div><h1>${esc(scopeLabel())}</h1>
       <p>Số chia NPP = Tổng allocation − CP/Ecom, tách theo HS2, TS25 và Other SKU. Phân bổ outlet theo tỷ lệ L3M, làm tròn xuống, phần dư không cộng thêm.${lastSo ? ` Sale Out MTD đến ${fdt(lastSo)}.` : ''}</p></div></section>
