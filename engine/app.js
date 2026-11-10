@@ -909,7 +909,8 @@
       const bv = (cs, sc, i) => sumBy(A.filter(r => r[0] === wk && cs.includes(r[1]) && inSc(sc, r[2])), r => conv(Array.isArray(r[4]) ? (r[4][i] || 0) : 0, r[2]));
       const wv = (cs, sc) => aSum(r => r[0] === wk && cs.includes(r[1]) && inSc(sc, r[2]));
       const byGrp = ss => GROUPS.map(g => [g, ss.filter(sc => grp(sc) === g)]).filter(([, l]) => l.length);
-      const cells = (cs, sc) => bIdx.map(i => `<td>${fmt(bv(cs, sc, i))}</td>`).join('') + `<td><b>${fmt(wv(cs, sc))}</b></td>`;
+      const cpv = (cs, sc) => sumBy(A.filter(r => r[0] === wk && cs.includes(r[1]) && inSc(sc, r[2])), r => conv(r[5] || 0, r[2])); // CP/Ecom (trừ khỏi số chia, không cộng vào tổng)
+      const cells = (cs, sc) => bIdx.map(i => `<td>${fmt(bv(cs, sc, i))}</td>`).join('') + `<td><b>${fmt(wv(cs, sc))}</b></td><td>${fmt(cpv(cs, sc))}</td>`;
       // Gọn dòng: mỗi SKU 1 dòng, tên NPP nằm ở dòng SKU đầu tiên, Group là một cột (không có dòng tổng Group / NPP riêng)
       let tb = '';
       const skusOf = list => skus.filter(sc => A.some(r => r[0] === wk && list.includes(r[1]) && r[2] === sc && r[3]));
@@ -926,7 +927,7 @@
       const GT = byGrp(skus.filter(sc => A.some(r => r[0] === wk && r[2] === sc)));
       tb += `<tr class="tot"><td>Tổng</td><td></td><td></td>${cells(nppsF, null)}</tr>`;
       if (GT.length > 1) GT.forEach(([g, l]) => { tb += `<tr class="gsub gtot"><td></td><td class="gcol">${esc(gShort(g))}</td><td class="note">${l.length} SKU</td>${cells(nppsF, l)}</tr>`; });
-      const table = `<table class="sticky1 trk batch alc3"><thead><tr><th>Khu vực / NPP</th><th>Group</th><th>SKU</th>${bIdx.map(bHead).join('')}<th>Tổng ${esc(wk)}</th></tr></thead><tbody>${tb}</tbody></table>`;
+      const table = `<table class="sticky1 trk batch alc3"><thead><tr><th>Khu vực / NPP</th><th>Group</th><th>SKU</th>${bIdx.map(bHead).join('')}<th>Tổng ${esc(wk)}</th><th>CP/Ecom</th></tr></thead><tbody>${tb}</tbody></table>`;
       // Xuất Excel có định dạng như web: đủ mọi Khu vực / NPP / Group / SKU
       allocExport = ev => {
         const skusOf = list => skus.filter(sc => A.some(r => r[0] === wk && list.includes(r[1]) && r[2] === sc));
@@ -934,7 +935,7 @@
         const nf = ui.unit === 'hl' ? '#,##0.0' : '#,##0';
         const nB = bIdx.length; const body = [];
         // Cột: Khu vực | NPP | Group | SKU | Batch… | Total Allocation; mỗi khu vực kết thúc bằng một dòng tổng
-        const row = (a, n, g, sc, cs, kind) => body.push({ v: [a, n, g, sc, ...bIdx.map(i => rnd(bv(cs, sc, i))), rnd(wv(cs, sc))], kind,
+        const row = (a, n, g, sc, cs, kind) => body.push({ v: [a, n, g, sc, ...bIdx.map(i => rnd(bv(cs, sc, i))), rnd(wv(cs, sc)), rnd(cpv(cs, sc))], kind,
           s: k => k < 4 ? (kind === 'sku' && k === 2 ? { color: XC.muted } : kind === 'area' || kind === 'grand' ? { bold: true } : null) : { nf, bold: k === 4 + nB || kind === 'area' || kind === 'grand' } });
         AG.forEach(([a, cs]) => {
           let any = false;
@@ -948,8 +949,8 @@
           title: `Distributor Sales Performance · Allocation theo Khu vực / NPP · ${wk}`,
           sub: `RTC - Future Fit · HCM Zone 2 · ${scopeLabel()} · ${rangeTxt || 'Current Week ' + wk} · đơn vị ${U()}`,
           note: 'Số chia Current Week theo từng batch. Số còn lại sau Sale In và Pending xem ở tab Tracking Allocation.',
-          H: ['Khu vực', 'NPP', 'Group', 'SKU', ...bIdx.map(bName), `Total Allocation ${wk}`], body, leftCols: 4, sepCols: [4, 4 + nB],
-          widths: [12, 12, 12, 12, ...bIdx.map(() => 20), 16],
+          H: ['Khu vực', 'NPP', 'Group', 'SKU', ...bIdx.map(bName), `Total Allocation ${wk}`, 'CP/Ecom'], body, leftCols: 4, sepCols: [4, 4 + nB],
+          widths: [12, 12, 12, 12, ...bIdx.map(() => 20), 16, 14],
           concl: [`Tổng allocation ${wk}: ${fmt(wkTot)} ${U()}${bIdx.length ? ' (' + bIdx.map(i => `${BC[i]} ${fmt(bTot(i))}`).join(', ') + ')' : ''}.`] }, ev.currentTarget);
       };
       byNpp = `<div class="card c12"><div class="card-h"><div><h2>Theo Khu vực / NPP · ${esc(wk)}</h2><p class="sub">Đơn vị ${U()} · số chia Current Week theo từng batch · bấm mũi tên để mở khu vực, NPP · số còn lại xem ở tab <button class="linkback" data-go="tracking" style="display:inline;margin:0">Tracking Allocation</button></p></div><div class="btns"><div class="fld"><label for="al-npp">NPP</label><select id="al-npp"><option value="">Tất cả</option>${npps.map(c => `<option value="${esc(c)}"${ui.alN === c ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select></div><button class="btn xl-r" id="xl-alloc">Tải Excel</button></div></div><div class="tw">${table}</div></div>`;
