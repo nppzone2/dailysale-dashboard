@@ -143,6 +143,7 @@ function slice(st, keep) {
   c.inv = Object.fromEntries(Object.entries(c.inv || {}).filter(([key]) => keep(key.split('|')[1])));
   Object.values(c.so || {}).forEach(sn => { ['rows', 'seg', 'out', 'segB', 'outB'].forEach(f => { if (sn[f]) sn[f] = sn[f].filter(k); }); });
   c.alloc = (c.alloc || []).filter(r => keep(r[1]));
+  c.outl = (c.outl || []).filter(o => keep(o[0]));
   c.lines = (c.lines || []).filter(l => keep(l[1]));
   c.orders = (c.orders || []).filter(o => keep(o[0]));
   c.sbd = (c.sbd || []).filter(r => keep(r[0]));

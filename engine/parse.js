@@ -8,6 +8,7 @@ const KINDS = {
   si:      { label: 'SO Invoice (Sale In)',     need: ['InvoiceNumber', 'UOM_Invoice', 'Date_ID'] },
   so:      { label: 'SaleOut by Seller',        need: ['Seller_Name', 'Outlet_ID', 'UOM'] },
   alloc:   { label: 'Allocation Current Month', need: ['WEEK', 'Alpha_Name', 'Allocation'] },
+  outl:    { label: 'Outlet Allocation (danh sách outlet + L3M)', need: ['OutletID', 'Supplier Name', 'HS2 (L3M)', 'TS25 (L3M)', 'Other SKU (L3M)'] },
   allocdates: { label: 'Allocation · Upload Date', need: ['WEEK', 'WEEK No'] },
   orders:  { label: 'Online Order (SO chờ giao)', need: ['Order Number', 'Status', 'ShortCode', 'Sum of Case'] },
   sodd:    { label: 'SaleOut by DeliveryDate', need: ['Seller_Name', 'Outlet_ID', 'FullDelivDateTime', 'Quantity'] },
@@ -16,7 +17,7 @@ const KINDS = {
   ref:     { label: 'Tham chiếu xe (Ontop HL, HL của 1 xe)', need: ['NPP', ['HL của 1 xe', 'HL trên 1 xe', 'HL/xe', 'HL/Xe']] },
   sbd:     { label: 'Dis Sale by Date (Sale In theo ngày order)', need: [['Order Date', 'OrderDate'], ['Calendar_Day_Name', 'ConfirmDate', 'Invoice Date', 'InvoiceDate'], 'ShortCode', 'Unit'] }
 };
-const KIND_ORDER = ['items', 'hist', 'hist2', 'sales', 'si', 'sbd', 'so', 'sodd', 'orders', 'alloc', 'allocdates', 'target', 'stock', 'aso', 'ref'];
+const KIND_ORDER = ['items', 'hist', 'hist2', 'sales', 'si', 'sbd', 'so', 'sodd', 'orders', 'alloc', 'allocdates', 'outl', 'target', 'stock', 'aso', 'ref'];
 
 function cleanStr(v) { return v == null ? '' : String(v).trim(); }
 function num(v) { const n = typeof v === 'number' ? v : parseFloat(String(v ?? '').replace(/,/g, '')); return isFinite(n) ? n : 0; }
@@ -40,7 +41,7 @@ function detect(aoa) {
 }
 
 function emptyState() {
-  return { v: 1, updatedAt: {}, items: {}, npps: {}, months: {}, cur: { month: '', target: [], si: {}, so: {}, alloc: [] } };
+  return { v: 1, updatedAt: {}, items: {}, npps: {}, months: {}, cur: { month: '', target: [], si: {}, so: {}, alloc: [], outl: [] } };
 }
 
 function touchNpp(state, rawName, area, dis) {
@@ -53,7 +54,7 @@ function touchNpp(state, rawName, area, dis) {
 }
 
 function resetCur(state, month) {
-  state.cur = { month, target: [], si: {}, so: {}, alloc: [] };
+  state.cur = { month, target: [], si: {}, so: {}, alloc: [], outl: [] };
 }
 
 /* opts: { month: 'YYYYMM' (tháng hiện hành cho Target/Allocation), soDate: 'YYYYMMDD', now: ISO } */
@@ -215,7 +216,8 @@ function applyParsed(state, p, opts = {}) {
       const bs = batchCols.map(b => { const v = r[p.idx[b]]; return v == null || v === '' ? null : num(v); });
       // Tổng allocation = tổng các Batch (kể cả Batch thêm sau) nếu có; không có batch thì dùng cột Allocation
       const hasB = bs.some(v => v != null); const total = hasB ? bs.reduce((a, v) => a + (v || 0), 0) : num(g(r, 'Allocation'));
-      return [cleanStr(g(r, 'WEEK')), c, sc, total, bs];
+      const cpCol = ['CP/Ecom', 'CP_Ecom', 'CP Ecom', 'CP/ECOM'].find(h => has(h)); const cp = cpCol ? num(g(r, cpCol)) : 0; // CP/Ecom trừ khỏi tổng trước khi chia outlet
+      return [cleanStr(g(r, 'WEEK')), c, sc, total, bs, cp];
     }).filter(Boolean);
     state.cur.allocBatches = batchCols;
     const wk = [...new Set(state.cur.alloc.map(x => x[0]))];
@@ -321,6 +323,20 @@ function applyParsed(state, p, opts = {}) {
     state.cur.sod = { outlets: Object.fromEntries(Object.entries(outlets).filter(([o]) => used.has(o))), lines: lines.map(l => l.slice(0, 10)) };
     msg.note = days.length ? `Ngày giao ${fmtDate(days[0])} → ${fmtDate(days[days.length - 1])} · ${new Set(lines.map(l => l[3])).size} đơn` : 'Không có dòng thuộc tháng hiện hành';
     if (skip) msg.note += ` · bỏ qua ${skip} dòng của NPP ngoài HCM Zone 2`;
+  }
+
+  if (p.kind === 'outl') {
+    // Outlet Allocation (sheet Detail): bỏ qua các dòng tổng đầu file, chỉ lấy danh sách outlet để tính L3M và tỷ lệ phân bổ
+    const known = new Set(Object.keys(state.npps)); let skip = 0; const list = [];
+    p.rows.forEach(r => {
+      const o = cleanStr(g(r, 'OutletID')); if (!o) return;
+      const c = nppCode(g(r, 'Supplier Name')); if (!c) return;
+      if (known.size && !known.has(c)) { skip++; return; }
+      const prog = has('is Program') && num(g(r, 'is Program')) === 1 ? 1 : 0;
+      list.push([c, o, cleanStr(has('Outlet Name') ? g(r, 'Outlet Name') : ''), cleanStr(has('Segment') ? g(r, 'Segment') : '') || 'Khác', cleanStr(has('Tier') ? g(r, 'Tier') : ''), prog, num(g(r, 'HS2 (L3M)')), num(g(r, 'TS25 (L3M)')), num(g(r, 'Other SKU (L3M)'))]);
+    });
+    state.cur.outl = list;
+    msg.note = `${list.length} outlet` + (skip ? ` · bỏ qua ${skip} outlet ngoài HCM Zone 2` : '');
   }
 
   if (p.kind === 'aso') {

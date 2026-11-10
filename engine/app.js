@@ -3,11 +3,11 @@
   const $ = (s, el = document) => el.querySelector(s);
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const GROUPS = ['Group AA', 'Group BB', 'Khác'];
-    const TABS = [['target', 'Target tháng'], ['overview', 'Tổng quan'], ['landing', 'Landing'], ['progress', 'Sale In-Out MTD'], ['alloc', 'Allocation'], ['tracking', 'Tracking Allocation'], ['history', 'YTD as of M-1']];
+    const TABS = [['target', 'Target tháng'], ['overview', 'Tổng quan'], ['landing', 'Landing'], ['progress', 'Sale In-Out MTD'], ['alloc', 'Allocation'], ['outlet', 'Outlet Allocation'], ['tracking', 'Tracking Allocation'], ['history', 'YTD as of M-1']];
 
   let STATE = null; const ENC = window.ENC || { blobs: {} };
   let PUBLISHED = STATE; let previewing = false;
-  const ui = { trRem: 'all', alW: '', trSku: 'all', tab: 'overview', scope: 'all', area: 'all', npp: 'all', brand: 'all', bgf: 'all', unit: 'case', tMonth: '', open: new Set(), allocSku: 'all', alN: '', trW: '', trFrom: '', trTo: '', bgS: [], bgSOpen: false };
+  const ui = { trRem: 'all', alW: '', trSku: 'all', tab: 'overview', scope: 'all', area: 'all', npp: 'all', brand: 'all', bgf: 'all', unit: 'case', tMonth: '', open: new Set(), allocSku: 'all', alN: '', trW: '', trFrom: '', trTo: '', bgS: [], bgSOpen: false, outW: '', outN: '' };
   try { const s = JSON.parse(localStorage.getItem('npp-ui') || '{}'); if (s.tab) ui.tab = s.tab; if (s.unit) ui.unit = s.unit; if (s.brand) ui.brand = s.brand; } catch (e) {}
   const saveUi = () => { try { localStorage.setItem('npp-ui', JSON.stringify({ tab: ui.tab, unit: ui.unit, scope: ui.scope, brand: ui.brand })); } catch (e) {} };
 
@@ -277,7 +277,7 @@
   }
   function render() { missingHl.clear(); const v = $('#view'); chartId = 0; CHARTS = [];
     if (ui.tab === 'ref' && ROLE.type !== 'admin') ui.tab = 'overview';
-    v.innerHTML = ({ overview: viewOverview, landing: viewLanding, ref: viewRef, target: viewTarget, progress: viewProgress, alloc: viewAlloc, tracking: viewTracking, pending: viewPending, history: viewHistory }[ui.tab] || viewProgress)();
+    v.innerHTML = ({ overview: viewOverview, landing: viewLanding, ref: viewRef, target: viewTarget, progress: viewProgress, alloc: viewAlloc, outlet: viewOutlet, tracking: viewTracking, pending: viewPending, history: viewHistory }[ui.tab] || viewProgress)();
     bindView(); drawCharts(); }
 
   const conclusion = pts => `<section class="concl"><svg class="star" width="18" height="18" viewBox="0 0 30 30" aria-hidden="true"><path d="M15 2l3.9 8.4 9.1 1-6.8 6.2 1.9 9-8.1-4.6-8.1 4.6 1.9-9L2 11.4l9.1-1z" fill="currentColor"/></svg><div><div class="eyebrow">Kết luận nhanh</div><ul>${pts.filter(Boolean).map(p => `<li>${p}</li>`).join('')}</ul></div></section>`;
@@ -1081,6 +1081,71 @@
     return { wStart, wEnd, lines, deliv };
   }
 
+  // Outlet Allocation: số chia NPP (Tổng allocation − CP/Ecom) tách theo nhóm HS2 / TS25 / Other SKU, chia xuống outlet theo tỷ lệ L3M
+  function outletModel(wk) {
+    const cur = STATE.cur || {}; const A = (cur.alloc || []).filter(r => inScope(r[1]) && r[0] === wk);
+    const OL = (cur.outl || []).filter(o => inScope(o[0]));
+    const gi = sc => sc === 'HS2' ? 0 : sc === 'TS25' ? 1 : 2; const L3 = [6, 7, 8];
+    const nppT = {}; A.forEach(r => { const n = nppT[r[1]] || (nppT[r[1]] = [0, 1, 2].map(() => ({ t: 0, cp: 0 }))); const x = n[gi(r[2])]; x.t += r[3] || 0; x.cp += r[5] || 0; });
+    const S = {}; OL.forEach(o => { const s0 = S[o[0]] || (S[o[0]] = [0, 0, 0]); L3.forEach((c, j) => { s0[j] += o[c] || 0; }); });
+    const share = {}; // NPP|outlet → [phân bổ HS2, TS25, Other]
+    OL.forEach(o => { const t = nppT[o[0]]; share[o[0] + '|' + o[1]] = [0, 1, 2].map(j => {
+      if (!t) return 0; const R = Math.max(0, t[j].t - t[j].cp); const sum = S[o[0]][j];
+      return R > 0 && sum > 0 ? Math.floor(R * (o[L3[j]] || 0) / sum) : 0; }); });
+    const mtd = {}; const nppM = {};
+    ((cur.sod && cur.sod.lines) || []).forEach(l => { const j = gi(l[8]); const k = l[0] + '|' + l[2];
+      (mtd[k] || (mtd[k] = [0, 0, 0]))[j] += l[9] || 0; (nppM[l[0]] || (nppM[l[0]] = [0, 0, 0]))[j] += l[9] || 0; });
+    const npps = [...new Set([...Object.keys(nppT), ...OL.map(o => o[0])])].sort(nppCmp);
+    const rows = [];
+    npps.forEach(n => { [0, 1, 2].forEach(j => {
+      const t = nppT[n] ? nppT[n][j].t : 0, cp = nppT[n] ? nppT[n][j].cp : 0, R = Math.max(0, t - cp);
+      const al = OL.filter(o => o[0] === n).reduce((a, o) => a + share[n + '|' + o[1]][j], 0);
+      const so = (nppM[n] || [0, 0, 0])[j];
+      rows.push({ n, area: areaOf(n), j, t, cp, R, al, so, pct: al ? so / al : NaN, rem: al - so });
+    }); });
+    return { wk, npps, rows, OL, share, mtd };
+  }
+  function viewOutlet() {
+    const cur = STATE.cur || {}; const A = (cur.alloc || []).filter(r => inScope(r[1]));
+    const OL0 = (cur.outl || []).filter(o => inScope(o[0]));
+    if (!A.length && !OL0.length) return '<div class="card empty">Chưa có dữ liệu Allocation hoặc Outlet Allocation cho phạm vi này.</div>';
+    const weeks = [...new Set(A.map(r => r[0]))].sort(wkSort); const curW = currentWeek(weeks); const wk = ui.outW && weeks.includes(ui.outW) ? ui.outW : curW;
+    const M = outletModel(wk); const GN = ['HS2', 'TS25', 'Other SKU'];
+    const fdt = d => d ? d.slice(6, 8) + '/' + d.slice(4, 6) : '';
+    const sumR = (f) => M.rows.reduce((a, r) => a + f(r), 0);
+    const nppList = M.npps.filter(n => OL0.some(o => o[0] === n) || M.rows.some(r => r.n === n && r.t));
+    if (!ui.outN || !nppList.includes(ui.outN)) ui.outN = nppList[0] || '';
+    const cellPct = v => isFinite(v) ? pctA(v) : '—';
+    const rowsHtml = M.rows.filter(r => nppList.includes(r.n)).map(r => `<tr class="${r.j === 0 ? 'ablk' : ''}${r.j === 2 ? '' : ''}"><td>${r.j === 0 ? `<b>${esc(r.n)}</b>` : ''}</td><td>${r.j === 0 ? esc(r.area) : ''}</td><td>${esc(GN[r.j])}</td><td>${fmtC(r.t)}</td><td>${fmtC(r.cp)}</td><td>${fmtC(r.R)}</td><td>${fmtC(r.al)}</td><td>${fmtC(r.so)}</td><td>${cellPct(r.pct)}</td><td>${fmtC(r.rem)}</td></tr>`).join('');
+    const totHtml = `<tr class="tot"><td><b>Tổng</b></td><td></td><td></td><td>${fmtC(sumR(r => r.t))}</td><td>${fmtC(sumR(r => r.cp))}</td><td>${fmtC(sumR(r => r.R))}</td><td>${fmtC(sumR(r => r.al))}</td><td>${fmtC(sumR(r => r.so))}</td><td>${cellPct(sumR(r => r.so) / (sumR(r => r.al) || NaN))}</td><td>${fmtC(sumR(r => r.rem))}</td></tr>`;
+    const oRows = M.OL.filter(o => o[0] === ui.outN).sort((a, b) => (b[6] + b[7] + b[8]) - (a[6] + a[7] + a[8]));
+    const oHtml = oRows.map(o => { const k = o[0] + '|' + o[1]; const a = M.share[k] || [0, 0, 0]; const m = M.mtd[k] || [0, 0, 0];
+      return `<tr><td>${esc(o[1])}</td><td>${esc(o[2])}</td><td>${esc(o[3])}</td><td>${esc(o[4])}</td>${[0, 1, 2].map(j => `<td>${fmtC(a[j])}</td><td>${fmtC(m[j])}</td>`).join('')}</tr>`; }).join('');
+    const sumOut = (j) => oRows.reduce((x, o) => x + (M.share[o[0] + '|' + o[1]] || [0, 0, 0])[j], 0);
+    const weekSel = `<div class="fld"><label for="outw">Tuần</label><select id="outw">${[...weeks].reverse().map(w => `<option value="${esc(w)}" ${w === wk ? 'selected' : ''}>${esc(w)}${w === curW ? ' (Current)' : ''}</option>`).join('')}</select></div>`;
+    const nppSel = `<div class="fld"><label for="outn">NPP</label><select id="outn">${nppList.map(n => `<option value="${esc(n)}" ${n === ui.outN ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></div>`;
+    const lastSo = (cur.sod && cur.sod.lines || []).reduce((m, l) => l[1] > m ? l[1] : m, '');
+    return `
+    <section class="lead"><div><div class="eyebrow">Outlet Allocation · ${esc(wk)}</div><h1>${esc(scopeLabel())}</h1>
+      <p>Số chia NPP = Tổng allocation − CP/Ecom, tách theo HS2, TS25 và Other SKU. Phân bổ outlet theo tỷ lệ L3M, làm tròn xuống, phần dư không cộng thêm.${lastSo ? ` Sale Out MTD đến ${fdt(lastSo)}.` : ''}</p></div></section>
+    <div class="card c12"><div class="card-h"><div><h2>Tiến độ phân bổ theo NPP · ${esc(wk)}</h2><p class="sub">Đơn vị Case · HS2, TS25 là hot SKU, còn lại là Other SKU</p></div><div class="btns trk-btns">${weekSel}<button class="btn xl-r" id="xl-outlet">Tải Excel</button></div></div>
+      <div class="tw"><table class="sticky1 trk"><thead><tr><th>NPP</th><th>Khu vực</th><th>Nhóm SKU</th><th>Tổng allocation</th><th>CP/Ecom</th><th>Số chia tuần</th><th>Phân bổ outlet</th><th>Sale Out MTD</th><th>% đạt</th><th>Còn lại</th></tr></thead><tbody>${rowsHtml}${totHtml}</tbody></table></div>
+    </div>
+    <div class="card c12"><div class="card-h"><div><h2>Chi tiết outlet · ${esc(ui.outN || '—')}</h2><p class="sub">Phân bổ tuần và Sale Out MTD theo từng outlet · ${oRows.length} outlet</p></div><div class="btns">${nppSel}</div></div>
+      <div class="tw"><table class="sticky1 trk"><thead><tr><th>Outlet ID</th><th>Tên outlet</th><th>Segment</th><th>Tier</th><th>Phân bổ HS2</th><th>MTD HS2</th><th>Phân bổ TS25</th><th>MTD TS25</th><th>Phân bổ Other</th><th>MTD Other</th></tr></thead><tbody>${oHtml || '<tr><td colspan="10">Không có outlet</td></tr>'}</tbody></table></div>
+    </div>`;
+  }
+  function exportOutlet(btn) {
+    const cur = STATE.cur || {}; const A = (cur.alloc || []).filter(r => inScope(r[1])); const weeks = [...new Set(A.map(r => r[0]))].sort(wkSort);
+    const wk = ui.outW && weeks.includes(ui.outW) ? ui.outW : currentWeek(weeks); const M = outletModel(wk); const GN = ['HS2', 'TS25', 'Other SKU'];
+    const sumAoa = [['NPP', 'Khu vực', 'Nhóm SKU', 'Tổng allocation', 'CP/Ecom', 'Số chia tuần', 'Phân bổ outlet', 'Sale Out MTD', '% đạt', 'Còn lại']];
+    M.rows.forEach(r => sumAoa.push([r.n, r.area, GN[r.j], r.t, r.cp, r.R, r.al, r.so, isFinite(r.pct) ? r.pct : '', r.rem]));
+    const oAoa = [['NPP', 'Outlet ID', 'Tên outlet', 'Segment', 'Tier', 'L3M HS2', 'L3M TS25', 'L3M Other', 'Phân bổ HS2', 'MTD HS2', 'Phân bổ TS25', 'MTD TS25', 'Phân bổ Other', 'MTD Other']];
+    M.OL.forEach(o => { const k = o[0] + '|' + o[1]; const a = M.share[k] || [0, 0, 0]; const m = M.mtd[k] || [0, 0, 0];
+      oAoa.push([o[0], o[1], o[2], o[3], o[4], o[6], o[7], o[8], a[0], m[0], a[1], m[1], a[2], m[2]]); });
+    saveXlsx(`Outlet_Allocation_${wk}.xlsx`, [['Tổng hợp', sumAoa, [10, 12, 12, 16, 12, 14, 16, 16, 10, 12]], ['Outlet', oAoa, [10, 12, 30, 18, 12, 10, 10, 10, 12, 12, 12, 12, 12, 12]]], btn);
+  }
+
   function viewTracking() {
     const cur = STATE.cur || {}; const A = (cur.alloc || []).filter(r => inScope(r[1]) && inBrand(r[2]));
     if (!A.length) return '<div class="card empty">Chưa có dữ liệu Allocation cho phạm vi này.</div>';
@@ -1278,6 +1343,9 @@
     const aw = $('#aweek'); if (aw) aw.onchange = () => { ui.alW = aw.value; render(); }; const an = $('#al-npp'); if (an) an.onchange = () => { ui.alN = an.value; render(); };
     const tr = $('#trem'); if (tr) tr.onchange = () => { ui.trRem = tr.value; render(); };
     const tw = $('#tweek'); if (tw) tw.onchange = () => { ui.trW = tw.value; render(); };
+    const ow = $('#outw'); if (ow) ow.onchange = () => { ui.outW = ow.value; render(); };
+    const on = $('#outn'); if (on) on.onchange = () => { ui.outN = on.value; render(); };
+    const xOut = $('#xl-outlet'); if (xOut) xOut.onclick = () => exportOutlet(xOut);
     const tf = $('#tfrom'); if (tf) tf.onchange = () => { ui.trFrom = tf.value; render(); };
     const tt = $('#tto'); if (tt) tt.onchange = () => { ui.trTo = tt.value; render(); };
     const tc = $('#trng-clear'); if (tc) tc.onclick = () => { ui.trFrom = ''; ui.trTo = ''; render(); };
