@@ -564,3 +564,11 @@ table.trk thead th{vertical-align:bottom}
 .bo-strip{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:10px;padding-top:8px;border-top:1px dashed var(--line);font-size:12px;color:var(--ink-2)}
 .bo-strip b{color:var(--ink)}
 
+
+/* Bộ lọc SKU nhiều lựa chọn (bảng Còn lại theo BrandGroup) */
+.msel{position:relative;min-width:0}
+.msel>summary{list-style:none;cursor:pointer;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:7px 10px;min-width:170px;font-size:14px;white-space:nowrap}
+.msel>summary::-webkit-details-marker{display:none}
+.msel-p{position:absolute;z-index:20;top:100%;left:0;margin-top:4px;min-width:260px;max-height:340px;overflow:auto;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px;box-shadow:var(--shadow)}
+.msel-o{display:flex;gap:8px;align-items:center;padding:4px 2px;font-size:13px;cursor:pointer;white-space:nowrap}
+.msel-a{margin-bottom:6px}

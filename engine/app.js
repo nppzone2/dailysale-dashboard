@@ -7,7 +7,7 @@
 
   let STATE = null; const ENC = window.ENC || { blobs: {} };
   let PUBLISHED = STATE; let previewing = false;
-  const ui = { trRem: 'all', alW: '', trSku: 'all', tab: 'overview', scope: 'all', area: 'all', npp: 'all', brand: 'all', bgf: 'all', unit: 'case', tMonth: '', open: new Set(), allocSku: 'all', alN: '', trW: '', trFrom: '', trTo: '' };
+  const ui = { trRem: 'all', alW: '', trSku: 'all', tab: 'overview', scope: 'all', area: 'all', npp: 'all', brand: 'all', bgf: 'all', unit: 'case', tMonth: '', open: new Set(), allocSku: 'all', alN: '', trW: '', trFrom: '', trTo: '', bgS: [], bgSOpen: false };
   try { const s = JSON.parse(localStorage.getItem('npp-ui') || '{}'); if (s.tab) ui.tab = s.tab; if (s.unit) ui.unit = s.unit; if (s.brand) ui.brand = s.brand; } catch (e) {}
   const saveUi = () => { try { localStorage.setItem('npp-ui', JSON.stringify({ tab: ui.tab, unit: ui.unit, scope: ui.scope, brand: ui.brand })); } catch (e) {} };
 
@@ -704,33 +704,33 @@
     let body = '';
     // Bộ lọc riêng của bảng: Group, SKU (SKU đã chọn thì tự mở chi tiết theo NPP)
     const gList = GROUPS.filter(g => groups[g] && (groups[g].t || groups[g].si || groups[g].so));
-    if (ui.bgG && !gList.includes(ui.bgG)) { ui.bgG = ''; ui.bgS = ''; }
+    if (ui.bgG && !gList.includes(ui.bgG)) { ui.bgG = ''; ui.bgS = []; }
     const bo0 = ['Heineken', 'Tiger', 'Bia Viet', 'Larue', 'Bivina', 'Strongbow', 'Edelweiss']; const bi0 = sc => (bo0.indexOf(brandOf(sc)) + 1) || 99;
     const skuOpts = [...new Set(L.filter(r => (r.t || r.si || r.so) && (!ui.bgG || grp(r.sc) === ui.bgG)).map(r => r.sc))].sort((a, b) => GROUPS.indexOf(grp(a)) - GROUPS.indexOf(grp(b)) || bi0(a) - bi0(b) || a.localeCompare(b));
-    if (ui.bgS && !skuOpts.includes(ui.bgS)) ui.bgS = '';
+    ui.bgS = (ui.bgS || []).filter(x => skuOpts.includes(x)); const selS = ui.bgS; // SKU chọn nhiều
     const bgFilter = `<div class="minif"><div class="fld"><label for="bg-g">Group</label><select id="bg-g"><option value="">Tất cả</option>${gList.map(g => `<option value="${esc(g)}"${ui.bgG === g ? ' selected' : ''}>${esc(g)}</option>`).join('')}</select></div>
-      <div class="fld"><label for="bg-s">SKU</label><select id="bg-s"><option value="">Tất cả</option>${skuOpts.map(sc => `<option value="${esc(sc)}"${ui.bgS === sc ? ' selected' : ''}>${esc(sc)}${item(sc).b ? ' · ' + esc(item(sc).b) : ''}</option>`).join('')}</select></div></div>`;
-    const fRows = L.filter(r => (!ui.bgG || grp(r.sc) === ui.bgG) && (!ui.bgS || r.sc === ui.bgS));
+      <div class="fld"><label>SKU</label><details class="msel" id="bg-s"${ui.bgSOpen ? ' open' : ''}><summary>${selS.length ? (selS.length <= 3 ? selS.join(', ') : selS.length + ' SKU') : 'Tất cả'}</summary><div class="msel-p"><div class="msel-a"><button type="button" class="btn" id="bg-s-clear">Bỏ chọn</button></div>${skuOpts.map(sc => `<label class="msel-o"><input type="checkbox" class="bg-sku" value="${esc(sc)}"${selS.includes(sc) ? ' checked' : ''}> ${esc(sc)}${item(sc).b ? ' · ' + esc(item(sc).b) : ''}</label>`).join('')}</div></details></div></div>`;
+    const fRows = L.filter(r => (!ui.bgG || grp(r.sc) === ui.bgG) && (!selS.length || selS.includes(r.sc)));
     const fT = sumBy(fRows, r => conv(r.t, r.sc)), fSI = sumBy(fRows, r => conv(r.si, r.sc)), fSO = sumBy(fRows, r => conv(r.so, r.sc));
     // Pending (SO chờ giao) theo cùng bộ lọc Group / SKU của bảng
-    const PDb = pendingOrders().filter(o => (!ui.bgG || grp(o[3]) === ui.bgG) && (!ui.bgS || o[3] === ui.bgS));
+    const PDb = pendingOrders().filter(o => (!ui.bgG || grp(o[3]) === ui.bgG) && (!selS.length || selS.includes(o[3])));
     const pdG = {}, pdS = {}, pdNS = {};
     PDb.forEach(o => { const v = conv(o[4], o[3]); const g = grp(o[3]); pdG[g] = (pdG[g] || 0) + v; pdS[o[3]] = (pdS[o[3]] || 0) + v; const k = o[0] + '|' + o[3]; pdNS[k] = (pdNS[k] || 0) + v; });
     const pdAll = sumBy(PDb, o => conv(o[4], o[3]));
-    gList.filter(g => (!ui.bgG || g === ui.bgG) && (!ui.bgS || grp(ui.bgS) === g)).forEach(g => {
-      const o = ui.bgS ? Object.values(aggregate(groups[g].rows.filter(r => r.sc === ui.bgS), () => g))[0] : groups[g]; const gOpen = ui.open.has(g) || !!ui.bgS || !!ui.bgG;
+    gList.filter(g => (!ui.bgG || g === ui.bgG) && (!selS.length || selS.some(x => grp(x) === g))).forEach(g => {
+      const o = selS.length ? Object.values(aggregate(groups[g].rows.filter(r => selS.includes(r.sc)), () => g))[0] : groups[g]; const gOpen = ui.open.has(g) || selS.length > 0 || !!ui.bgG;
       o.pd = pdG[g] || 0;
       body += rowHtml(`<span class="caret">▸</span> ${esc(g)}`, o, 'grp click' + (gOpen ? ' open' : ''), `data-g="${esc(g)}"`);
       if (gOpen) { const sk = aggregate(o.rows, r => r.sc); const bo = ['Heineken', 'Tiger', 'Bia Viet', 'Larue', 'Bivina', 'Strongbow', 'Edelweiss']; const bi = sc => (bo.indexOf(brandOf(sc)) + 1) || 99; const multiN = new Set(o.rows.map(r => r.c)).size > 1;
         Object.values(sk).filter(s => s.t || s.si || s.so).sort((a, b) => bi(a.k) - bi(b.k) || b.t - a.t).forEach(s => {
           s.pd = pdS[s.k] || 0;
           if (!multiN) { body += rowHtml(s.k, s, 'sku'); return; }
-          const fk = 'bg:s:' + g + ':' + s.k, op = isOpen(fk, !!ui.bgS);
+          const fk = 'bg:s:' + g + ':' + s.k, op = isOpen(fk, selS.length > 0);
           body += rowHtml(s.k, s, 'sku click' + (op ? ' open' : ''), `data-fold="${esc(fk)}"`);
           if (op) { let pa = null; Object.values(aggregate(s.rows, r => r.c)).filter(n => n.t || n.si || n.so).sort((a, b) => nppCmp(a.k, b.k)).forEach(n => { n.pd = pdNS[n.k + '|' + s.k] || 0; const ar = areaOf(n.k); body += rowHtml(n.k, n, pa !== null && ar !== pa ? 'nsku ablk' : 'nsku'); pa = ar; }); }
         }); }
     });
-    body += rowHtml(ui.bgG || ui.bgS ? 'Tổng (theo bộ lọc)' : 'Tổng', ui.bgG || ui.bgS ? { t: fT, si: fSI, so: fSO, pd: pdAll } : { t: T, si: SI, so: SO, pd: pdAll }, 'tot');
+    body += rowHtml(ui.bgG || selS.length ? 'Tổng (theo bộ lọc)' : 'Tổng', ui.bgG || selS.length ? { t: fT, si: fSI, so: fSO, pd: pdAll } : { t: T, si: SI, so: SO, pd: pdAll }, 'tot');
     function rowHtml(label, o, cls, attr = '') {
       const a1 = o.t ? (o.si + (o.pd || 0)) / o.t : NaN, a2 = o.t ? o.so / o.t : NaN; const r1 = o.t - o.si - (o.pd || 0), r2 = o.t - o.so;
       const bar = (a, c) => `<span class="mini"><i style="width:${Math.min(100, (a || 0) * 100)}%;background:${c}"></i></span>`;
@@ -1294,8 +1294,12 @@
     const xo2 = $('#xl-outlet'); if (xo2) xo2.onclick = exportOutlets;
     const xa = $('#xl-alloc'); if (xa) xa.onclick = ev => allocExport && allocExport(ev);
     const xt2 = $('#xl-track'); if (xt2) xt2.onclick = ev => trackExport && trackExport(ev);
-    const bgg = $('#bg-g'); if (bgg) bgg.onchange = () => { ui.bgG = bgg.value; ui.bgS = ''; render(); };
-    const bgs = $('#bg-s'); if (bgs) bgs.onchange = () => { ui.bgS = bgs.value; render(); };
+    const bgg = $('#bg-g'); if (bgg) bgg.onchange = () => { ui.bgG = bgg.value; ui.bgS = []; render(); };
+    const bgs = $('#bg-s'); if (bgs) {
+      bgs.addEventListener('toggle', () => { ui.bgSOpen = bgs.open; });
+      bgs.querySelectorAll('.bg-sku').forEach(cb => cb.onchange = () => { ui.bgS = [...bgs.querySelectorAll('.bg-sku:checked')].map(x => x.value); ui.bgSOpen = true; render(); });
+      const bgc = bgs.querySelector('#bg-s-clear'); if (bgc) bgc.onclick = () => { ui.bgS = []; ui.bgSOpen = true; render(); };
+    }
     const ra = $('#ref-apply'); if (ra) ra.onclick = () => { STATE.ref = { rows: readRefInputs(), at: 'draft' }; render(); };
     const rx2 = $('#ref-xl'); if (rx2) rx2.onclick = exportRef;
   }
