@@ -1122,6 +1122,12 @@
       rows.push({ n, area: areaOf(n), j, mR, mAl, mSo, mRem: mAl - mSo, mPct: mAl ? mSo / mAl : NaN, wR, wAl, wSo, wRem: wAl - wSo, wPct: wAl ? wSo / wAl : NaN }); }); });
     return { npps, rows, OL, OLall, mtShare: mt.share, mtdSO, wtShare: wt.share, wtdSO, cb, mStart: today.slice(0, 6) + '01', lastSo: cur.outMtdTo || '', curW, mtdWeeks };
   }
+  // Chi tiết outlet: lọc theo NPP, Outlet ID và/hoặc tên outlet (có thể dùng một trong hai hoặc cả hai)
+  function outDetailRows(M) {
+    const id = String(ui.outId || '').trim(), nm = normTxt(String(ui.outNm || '').trim());
+    return M.OL.filter(o => o[0] === ui.outN && (!id || String(o[1]).includes(id)) && (!nm || normTxt(o[2]).includes(nm)))
+      .sort((a, b) => (b[6] + b[7] + b[8]) - (a[6] + a[7] + a[8]));
+  }
   function viewOutlet() {
     const cur = STATE.cur || {}; const A = (cur.alloc || []).filter(r => inScope(r[1]));
     const OL0 = (cur.outl || []).filter(o => inScope(o[0]));
@@ -1142,8 +1148,7 @@
     const mAlT = sumR(r => r.mAl), mSoT = sumR(r => r.mSo), wAlT = sumR(r => r.wAl), wSoT = sumR(r => r.wSo);
     const totHtml = `<tr class="tot"><td><b>Tổng</b></td><td></td><td></td><td class="ob">${fmtC(sumR(r => r.mR))}</td><td>${fmtC(mAlT)}</td><td>${fmtC(mSoT)}</td><td>${pc(mSoT / mAlT)}</td><td>${fmtC(mAlT - mSoT)}</td>` +
       `<td class="ob">${fmtC(sumR(r => r.wR))}</td><td>${fmtC(wAlT)}</td><td>${fmtC(wSoT)}</td><td>${pc(wSoT / wAlT)}</td><td>${fmtC(wAlT - wSoT)}</td></tr>`;
-    const oRows = M.OL.filter(o => o[0] === ui.outN && (!ui.outId || String(o[1]).includes(ui.outId.trim())) && (!ui.outNm || normTxt(o[2]).includes(normTxt(ui.outNm.trim()))))
-      .sort((a, b) => (b[6] + b[7] + b[8]) - (a[6] + a[7] + a[8]));
+    const oRows = outDetailRows(M);
     const oHtml = oRows.map(o => { const k = o[0] + '|' + o[1]; const a = M.mtShare[k] || [0, 0, 0]; const m = M.mtdSO[k] || [0, 0, 0];
       return `<tr><td>${esc(o[1])}</td><td>${esc(o[2])}</td><td>${esc(o[3])}</td><td>${esc(o[4])}</td>${[0, 1, 2].map(j => `<td>${fmtC(a[j])}</td><td>${fmtC(m[j])}</td>`).join('')}</tr>`; }).join('');
     const segSel = `<div class="fld"><label for="outseg">Segment</label><select id="outseg"><option value="">Tất cả</option>${segs.map(x => `<option value="${esc(x)}" ${x === ui.outSeg ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></div>`;
@@ -1160,9 +1165,16 @@
         <tr><th class="ob">Số chia</th><th>Phân bổ outlet</th><th>Sale Out</th><th>% đạt</th><th>Còn lại</th><th class="ob">Số chia</th><th>Phân bổ outlet</th><th>Sale Out</th><th>% đạt</th><th>Còn lại</th></tr>
       </thead><tbody>${rowsHtml}${totHtml}</tbody></table></div>
     </div>
-    <div class="card c12"><div class="card-h"><div><h2>Chi tiết outlet · ${esc(ui.outN || '—')}</h2><p class="sub">Phân bổ và Sale Out MTD theo từng outlet · ${oRows.length} outlet</p></div><div class="btns trk-btns">${nppSel}${idIn}${nmIn}</div></div>
+    <div class="card c12"><div class="card-h"><div><h2>Chi tiết outlet · ${esc(ui.outN || '—')}</h2><p class="sub">Phân bổ và Sale Out MTD theo từng outlet · ${oRows.length} outlet</p></div><div class="btns trk-btns">${nppSel}${idIn}${nmIn}<button class="btn xl-r" id="xl-outdet">Tải Excel</button></div></div>
       <div class="tw"><table class="sticky1 trk"><thead><tr><th>Outlet ID</th><th>Tên outlet</th><th>Segment</th><th>Tier</th><th>Phân bổ HS2</th><th>MTD HS2</th><th>Phân bổ TS25</th><th>MTD TS25</th><th>Phân bổ Other</th><th>MTD Other</th></tr></thead><tbody>${oHtml || '<tr><td colspan="10">Không có outlet</td></tr>'}</tbody></table></div>
     </div>`;
+  }
+  function exportDetail(btn) {
+    const M = outletModel(ui.outSeg, ui.outTier); const rows = outDetailRows(M);
+    const aoa = [['NPP', 'Outlet ID', 'Tên outlet', 'Segment', 'Tier', 'L3M HS2', 'L3M TS25', 'L3M Other', 'MTD Phân bổ HS2', 'MTD SO HS2', 'MTD Phân bổ TS25', 'MTD SO TS25', 'MTD Phân bổ Other', 'MTD SO Other']];
+    rows.forEach(o => { const k = o[0] + '|' + o[1]; const a = M.mtShare[k] || [0, 0, 0], m = M.mtdSO[k] || [0, 0, 0];
+      aoa.push([o[0], o[1], o[2], o[3], o[4], o[6], o[7], o[8], a[0], m[0], a[1], m[1], a[2], m[2]]); });
+    saveXlsx(`Outlet_Detail_${ui.outN || 'NPP'}_${todayKey()}.xlsx`, [['Outlet', aoa, [10, 12, 30, 18, 12, 10, 10, 10, 14, 12, 14, 12, 14, 12]]], btn);
   }
   function exportOutlet(btn) {
     const M = outletModel(ui.outSeg, ui.outTier); const GN = ['HS2', 'TS25', 'Other SKU'];
@@ -1376,6 +1388,7 @@
     const on = $('#outn'); if (on) on.onchange = () => { ui.outN = on.value; render(); };
     const oid = $('#outid'); if (oid) oid.onchange = () => { ui.outId = oid.value; render(); };
     const onm = $('#outnm'); if (onm) onm.onchange = () => { ui.outNm = onm.value; render(); };
+    const xDet = $('#xl-outdet'); if (xDet) xDet.onclick = () => exportDetail(xDet);
     const xOut = $('#xl-outlet'); if (xOut) xOut.onclick = () => exportOutlet(xOut);
     const tf = $('#tfrom'); if (tf) tf.onchange = () => { ui.trFrom = tf.value; render(); };
     const tt = $('#tto'); if (tt) tt.onchange = () => { ui.trTo = tt.value; render(); };
