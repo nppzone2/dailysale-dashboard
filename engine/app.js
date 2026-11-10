@@ -7,7 +7,7 @@
 
   let STATE = null; const ENC = window.ENC || { blobs: {} };
   let PUBLISHED = STATE; let previewing = false;
-  const ui = { trRem: 'all', alW: '', trSku: 'all', tab: 'overview', scope: 'all', area: 'all', npp: 'all', brand: 'all', bgf: 'all', unit: 'case', tMonth: '', open: new Set(), allocSku: 'all', alN: '', trW: '', trFrom: '', trTo: '', bgS: [], bgSOpen: false, outN: '', outSeg: '', outTier: '', outId: '', outNm: '' };
+  const ui = { trRem: 'all', alW: '', trSku: 'all', tab: 'overview', scope: 'all', area: 'all', npp: 'all', brand: 'all', bgf: 'all', unit: 'case', tMonth: '', open: new Set(), allocSku: 'all', alN: '', trW: '', trFrom: '', trTo: '', bgS: [], bgSOpen: false, outN: '', outSeg: '', outTier: '', outQ: '' };
   try { const s = JSON.parse(localStorage.getItem('npp-ui') || '{}'); if (s.tab) ui.tab = s.tab; if (s.unit) ui.unit = s.unit; if (s.brand) ui.brand = s.brand; } catch (e) {}
   const saveUi = () => { try { localStorage.setItem('npp-ui', JSON.stringify({ tab: ui.tab, unit: ui.unit, scope: ui.scope, brand: ui.brand })); } catch (e) {} };
 
@@ -1122,10 +1122,10 @@
       rows.push({ n, area: areaOf(n), j, mR, mAl, mSo, mRem: mAl - mSo, mPct: mAl ? mSo / mAl : NaN, wR, wAl, wSo, wRem: wAl - wSo, wPct: wAl ? wSo / wAl : NaN }); }); });
     return { npps, rows, OL, OLall, mtShare: mt.share, mtdSO, wtShare: wt.share, wtdSO, cb, mStart: today.slice(0, 6) + '01', lastSo: cur.outMtdTo || '', curW, mtdWeeks };
   }
-  // Chi tiết outlet: lọc theo NPP, Outlet ID và/hoặc tên outlet (có thể dùng một trong hai hoặc cả hai)
+  // Chi tiết outlet: lọc theo NPP và một ô tìm kiếm, khớp Outlet ID hoặc tên outlet
   function outDetailRows(M) {
-    const id = String(ui.outId || '').trim(), nm = normTxt(String(ui.outNm || '').trim());
-    return M.OL.filter(o => o[0] === ui.outN && (!id || String(o[1]).includes(id)) && (!nm || normTxt(o[2]).includes(nm)))
+    const q = String(ui.outQ || '').trim(), qn = normTxt(q);
+    return M.OL.filter(o => o[0] === ui.outN && (!q || String(o[1]).includes(q) || normTxt(o[2]).includes(qn)))
       .sort((a, b) => (b[6] + b[7] + b[8]) - (a[6] + a[7] + a[8]));
   }
   function viewOutlet() {
@@ -1154,8 +1154,7 @@
     const segSel = `<div class="fld"><label for="outseg">Segment</label><select id="outseg"><option value="">Tất cả</option>${segs.map(x => `<option value="${esc(x)}" ${x === ui.outSeg ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></div>`;
     const tierSel = `<div class="fld"><label for="outtier">Tier</label><select id="outtier"><option value="">Tất cả</option>${tiers.map(x => `<option value="${esc(x)}" ${x === ui.outTier ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></div>`;
     const nppSel = `<div class="fld"><label for="outn">NPP</label><select id="outn">${npps.map(n => `<option value="${esc(n)}" ${n === ui.outN ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></div>`;
-    const idIn = `<div class="fld"><label for="outid">Outlet ID</label><input type="text" id="outid" value="${esc(ui.outId || '')}" placeholder="Nhập mã" style="width:130px"></div>`;
-    const nmIn = `<div class="fld"><label for="outnm">Tên outlet</label><input type="text" id="outnm" value="${esc(ui.outNm || '')}" placeholder="Nhập tên" style="width:180px"></div>`;
+    const qIn = `<div class="fld"><label for="outq">Tìm Outlet ID / tên</label><input type="text" id="outq" value="${esc(ui.outQ || '')}" placeholder="Mã hoặc tên outlet" style="width:220px"></div>`;
     return `
     <section class="lead"><div><div class="eyebrow">Outlet Allocation</div><h1>${esc(scopeLabel())}</h1>
       <p>Số chia NPP = Tổng allocation − CP/Ecom, tách theo HS2, TS25 và Other SKU. Phân bổ outlet theo tỷ lệ L3M, làm tròn xuống, phần dư không cộng thêm.</p></div></section>
@@ -1165,7 +1164,7 @@
         <tr><th class="ob">Số chia</th><th>Phân bổ outlet</th><th>Sale Out</th><th>% đạt</th><th>Còn lại</th><th class="ob">Số chia</th><th>Phân bổ outlet</th><th>Sale Out</th><th>% đạt</th><th>Còn lại</th></tr>
       </thead><tbody>${rowsHtml}${totHtml}</tbody></table></div>
     </div>
-    <div class="card c12"><div class="card-h"><div><h2>Chi tiết outlet · ${esc(ui.outN || '—')}</h2><p class="sub">Phân bổ và Sale Out MTD theo từng outlet · ${oRows.length} outlet</p></div><div class="btns trk-btns">${nppSel}${idIn}${nmIn}<button class="btn xl-r" id="xl-outdet">Tải Excel</button></div></div>
+    <div class="card c12"><div class="card-h"><div><h2>Chi tiết outlet · ${esc(ui.outN || '—')}</h2><p class="sub">Phân bổ và Sale Out MTD theo từng outlet · ${oRows.length} outlet</p></div><div class="btns trk-btns">${nppSel}${qIn}<button class="btn xl-r" id="xl-outdet">Tải Excel</button></div></div>
       <div class="tw"><table class="sticky1 trk"><thead><tr><th>Outlet ID</th><th>Tên outlet</th><th>Segment</th><th>Tier</th><th>Phân bổ HS2</th><th>MTD HS2</th><th>Phân bổ TS25</th><th>MTD TS25</th><th>Phân bổ Other</th><th>MTD Other</th></tr></thead><tbody>${oHtml || '<tr><td colspan="10">Không có outlet</td></tr>'}</tbody></table></div>
     </div>`;
   }
@@ -1386,8 +1385,7 @@
     const osg = $('#outseg'); if (osg) osg.onchange = () => { ui.outSeg = osg.value; render(); };
     const otr = $('#outtier'); if (otr) otr.onchange = () => { ui.outTier = otr.value; render(); };
     const on = $('#outn'); if (on) on.onchange = () => { ui.outN = on.value; render(); };
-    const oid = $('#outid'); if (oid) oid.onchange = () => { ui.outId = oid.value; render(); };
-    const onm = $('#outnm'); if (onm) onm.onchange = () => { ui.outNm = onm.value; render(); };
+    const oq = $('#outq'); if (oq) oq.onchange = () => { ui.outQ = oq.value; render(); };
     const xDet = $('#xl-outdet'); if (xDet) xDet.onclick = () => exportDetail(xDet);
     const xOut = $('#xl-outlet'); if (xOut) xOut.onclick = () => exportOutlet(xOut);
     const tf = $('#tfrom'); if (tf) tf.onchange = () => { ui.trFrom = tf.value; render(); };
