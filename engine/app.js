@@ -1162,7 +1162,7 @@
       <p>Số chia NPP = Tổng allocation − CP/Ecom, tách theo HS2, TS25 và Other SKU. Phân bổ outlet theo tỷ lệ L3M, làm tròn xuống, phần dư không cộng thêm.</p></div></section>
     <div class="card c12"><div class="card-h"><div><h2>Tiến độ phân bổ theo NPP</h2><p class="sub">Đơn vị Case · MTD ${esc(mLabel)} · WTD ${esc(wLabel)}</p></div><div class="btns trk-btns">${segSel}${tierSel}<button class="btn xl-r" id="xl-outlet">Tải Excel</button></div></div>
       <div class="tw"><table class="sticky3 trk"><thead>
-        <tr><th rowspan="2">NPP</th><th rowspan="2">Khu vực</th><th rowspan="2">Nhóm SKU</th><th colspan="5" class="oh ob">MTD · ${esc(mLabel)}</th><th colspan="5" class="oh ob">WTD · ${esc(wLabel)}</th></tr>
+        <tr><th rowspan="2">NPP</th><th rowspan="2">Khu vực</th><th rowspan="2">Nhóm SKU</th><th colspan="5" class="oh ob">MTD<br><span class="oh-d">${esc(mLabel)}</span></th><th colspan="5" class="oh ob">WTD<br><span class="oh-d">${esc(wLabel)}</span></th></tr>
         <tr><th class="ob">Số chia</th><th>Phân bổ outlet</th><th>Sale Out</th><th>% đạt</th><th>Còn lại</th><th class="ob">Số chia</th><th>Phân bổ outlet</th><th>Sale Out</th><th>% đạt</th><th>Còn lại</th></tr>
       </thead><tbody>${rowsHtml}${totHtml}</tbody></table></div>
     </div>
