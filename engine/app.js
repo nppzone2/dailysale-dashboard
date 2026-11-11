@@ -7,7 +7,7 @@
 
   let STATE = null; const ENC = window.ENC || { blobs: {} };
   let PUBLISHED = STATE; let previewing = false;
-  const ui = { trRem: 'all', alW: '', trSku: 'all', tab: 'overview', scope: 'all', area: 'all', npp: 'all', brand: 'all', bgf: 'all', unit: 'case', tMonth: '', open: new Set(), allocSku: 'all', alN: '', trW: '', trFrom: '', trTo: '', bgS: [], bgSOpen: false, outN: '', outSeg: [], outSegOpen: false, outTier: '', outQ: '' };
+  const ui = { trRem: 'all', alW: '', trSku: 'all', tab: 'overview', scope: 'all', area: 'all', npp: 'all', brand: 'all', bgf: 'all', unit: 'case', tMonth: '', open: new Set(), allocSku: 'all', alN: '', trW: '', trFrom: '', trTo: '', bgS: new Set(), outN: '', outSeg: new Set(), outTier: '', outQ: '' };
   try { const s = JSON.parse(localStorage.getItem('npp-ui') || '{}'); if (s.tab) ui.tab = s.tab; if (s.unit) ui.unit = s.unit; if (s.brand) ui.brand = s.brand; } catch (e) {}
   const saveUi = () => { try { localStorage.setItem('npp-ui', JSON.stringify({ tab: ui.tab, unit: ui.unit, scope: ui.scope, brand: ui.brand })); } catch (e) {} };
 
@@ -704,12 +704,12 @@
     let body = '';
     // Bộ lọc riêng của bảng: Group, SKU (SKU đã chọn thì tự mở chi tiết theo NPP)
     const gList = GROUPS.filter(g => groups[g] && (groups[g].t || groups[g].si || groups[g].so));
-    if (ui.bgG && !gList.includes(ui.bgG)) { ui.bgG = ''; ui.bgS = []; }
+    if (ui.bgG && !gList.includes(ui.bgG)) { ui.bgG = ''; ui.bgS = new Set(); }
     const bo0 = ['Heineken', 'Tiger', 'Bia Viet', 'Larue', 'Bivina', 'Strongbow', 'Edelweiss']; const bi0 = sc => (bo0.indexOf(brandOf(sc)) + 1) || 99;
     const skuOpts = [...new Set(L.filter(r => (r.t || r.si || r.so) && (!ui.bgG || grp(r.sc) === ui.bgG)).map(r => r.sc))].sort((a, b) => GROUPS.indexOf(grp(a)) - GROUPS.indexOf(grp(b)) || bi0(a) - bi0(b) || a.localeCompare(b));
-    ui.bgS = (ui.bgS || []).filter(x => skuOpts.includes(x)); const selS = ui.bgS; // SKU chọn nhiều
+    ui.bgS = new Set([...ui.bgS].filter(x => skuOpts.includes(x))); const selS = [...ui.bgS]; // SKU chọn nhiều
     const bgFilter = `<div class="minif"><div class="fld"><label for="bg-g">Group</label><select id="bg-g"><option value="">Tất cả</option>${gList.map(g => `<option value="${esc(g)}"${ui.bgG === g ? ' selected' : ''}>${esc(g)}</option>`).join('')}</select></div>
-      <div class="fld"><label>SKU</label><details class="msel" id="bg-s"${ui.bgSOpen ? ' open' : ''}><summary>${selS.length ? (selS.length <= 3 ? selS.join(', ') : selS.length + ' SKU') : 'Tất cả'}</summary><div class="msel-p"><div class="msel-a"><button type="button" class="btn" id="bg-s-clear">Bỏ chọn</button></div>${skuOpts.map(sc => `<label class="msel-o"><input type="checkbox" class="bg-sku" value="${esc(sc)}"${selS.includes(sc) ? ' checked' : ''}> ${esc(sc)}${item(sc).b ? ' · ' + esc(item(sc).b) : ''}</label>`).join('')}</div></details></div></div>`;
+      ${msHtml('bgS', 'SKU', skuOpts.map(sc => [sc, sc + (item(sc).b ? ' · ' + item(sc).b : '')]))}`;
     const fRows = L.filter(r => (!ui.bgG || grp(r.sc) === ui.bgG) && (!selS.length || selS.includes(r.sc)));
     const fT = sumBy(fRows, r => conv(r.t, r.sc)), fSI = sumBy(fRows, r => conv(r.si, r.sc)), fSO = sumBy(fRows, r => conv(r.so, r.sc));
     // Pending (SO chờ giao) theo cùng bộ lọc Group / SKU của bảng
@@ -1130,25 +1130,13 @@
     return M.OL.filter(o => o[0] === ui.outN && (!q || String(o[1]).includes(q) || normTxt(o[2]).includes(qn)))
       .sort((a, b) => (b[6] + b[7] + b[8]) - (a[6] + a[7] + a[8]));
   }
-  // Bộ lọc nhiều lựa chọn (details + checkbox): chọn thoải mái trong danh sách, chỉ áp dụng khi đóng (bấm tóm tắt hoặc bấm ra ngoài)
-  function bindMulti(det, cls, key, openKey, clearId, unit, max) {
-    const sum = det.querySelector('summary'); const pick = () => [...det.querySelectorAll('.' + cls + ':checked')].map(x => x.value);
-    const label = v => v.length ? (v.length <= max ? v.join(', ') : v.length + ' ' + unit) : 'Tất cả';
-    det.addEventListener('toggle', () => { ui[openKey] = det.open; if (!det.open) { ui[key] = pick(); render(); } });
-    det.querySelectorAll('.' + cls).forEach(cb => cb.onchange = () => { sum.textContent = label(pick()); });
-    const c = det.querySelector('#' + clearId); if (c) c.onclick = () => { det.querySelectorAll('.' + cls).forEach(x => { x.checked = false; }); sum.textContent = 'Tất cả'; };
-    window.__msOut = window.__msOut || {};
-    if (window.__msOut[det.id]) document.removeEventListener('pointerdown', window.__msOut[det.id], true);
-    const out = e => { if (det.open && !det.contains(e.target)) det.open = false; };
-    window.__msOut[det.id] = out; document.addEventListener('pointerdown', out, true);
-  }
   function viewOutlet() {
     const cur = STATE.cur || {}; const A = (cur.alloc || []).filter(r => inScope(r[1]));
     const OL0 = (cur.outl || []).filter(o => inScope(o[0]));
     if (!A.length && !OL0.length) return '<div class="card empty">Chưa có dữ liệu Allocation hoặc Outlet Allocation cho phạm vi này.</div>';
     const segs = [...new Set(OL0.map(o => o[3]))].sort(), tiers = [...new Set(OL0.map(o => o[4]).filter(Boolean))].sort();
-    ui.outSeg = (ui.outSeg || []).filter(x => segs.includes(x)); if (ui.outTier && !tiers.includes(ui.outTier)) ui.outTier = '';
-    const M = outletModel(ui.outSeg, ui.outTier); const GN = ['HS2', 'TS25', 'Other SKU'];
+    ui.outSeg = new Set([...ui.outSeg].filter(x => segs.includes(x))); if (ui.outTier && !tiers.includes(ui.outTier)) ui.outTier = '';
+    const M = outletModel([...ui.outSeg], ui.outTier); const GN = ['HS2', 'TS25', 'Other SKU'];
     const fdt = d => d ? d.slice(6, 8) + '/' + d.slice(4, 6) : '';
     const mLabel = `${fdt(M.mStart)} → ${fdt(M.lastSo || todayKey())}`;
     const wLabel = M.cb.wStart ? `${fdt(M.cb.wStart)} → ${fdt(M.cb.wEnd)}${M.curW ? ' · ' + M.curW : ''}` : '—';
@@ -1165,8 +1153,7 @@
     const oRows = outDetailRows(M);
     const oHtml = oRows.map(o => { const k = o[0] + '|' + o[1]; const a = M.mtShare[k] || [0, 0, 0]; const m = M.mtdSO[k] || [0, 0, 0];
       return `<tr><td>${esc(o[1])}</td><td>${esc(o[2])}</td><td>${esc(o[3])}</td><td>${esc(o[4])}</td>${[0, 1, 2].map(j => `<td>${fmtC(a[j])}</td><td>${fmtC(m[j])}</td>`).join('')}</tr>`; }).join('');
-    const segLbl = ui.outSeg.length ? (ui.outSeg.length <= 2 ? ui.outSeg.join(', ') : ui.outSeg.length + ' segment') : 'Tất cả';
-    const segSel = `<div class="fld"><label>Segment</label><details class="msel" id="outseg-d"${ui.outSegOpen ? ' open' : ''}><summary>${esc(segLbl)}</summary><div class="msel-p"><div class="msel-a"><button type="button" class="btn" id="outseg-clear">Bỏ chọn</button></div>${segs.map(x => `<label class="msel-o"><input type="checkbox" class="outseg-cb" value="${esc(x)}"${ui.outSeg.includes(x) ? ' checked' : ''}> ${esc(x)}</label>`).join('')}</div></details></div>`;
+    const segSel = msHtml('outSeg', 'Segment', segs.map(x => [x, x]));
     const tierSel = `<div class="fld"><label for="outtier">Tier</label><select id="outtier"><option value="">Tất cả</option>${tiers.map(x => `<option value="${esc(x)}" ${x === ui.outTier ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></div>`;
     const nppSel = `<div class="fld"><label for="outn">NPP</label><select id="outn">${npps.map(n => `<option value="${esc(n)}" ${n === ui.outN ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></div>`;
     const qIn = `<div class="fld"><label for="outq">Tìm Outlet ID / tên</label><input type="text" id="outq" value="${esc(ui.outQ || '')}" placeholder="Mã hoặc tên outlet" style="width:220px"></div>`;
@@ -1184,14 +1171,14 @@
     </div>`;
   }
   function exportDetail(btn) {
-    const M = outletModel(ui.outSeg, ui.outTier); const rows = outDetailRows(M);
+    const M = outletModel([...ui.outSeg], ui.outTier); const rows = outDetailRows(M);
     const aoa = [['NPP', 'Outlet ID', 'Tên outlet', 'Segment', 'Tier', 'L3M HS2', 'L3M TS25', 'L3M Other', 'MTD Phân bổ HS2', 'MTD SO HS2', 'MTD Phân bổ TS25', 'MTD SO TS25', 'MTD Phân bổ Other', 'MTD SO Other']];
     rows.forEach(o => { const k = o[0] + '|' + o[1]; const a = M.mtShare[k] || [0, 0, 0], m = M.mtdSO[k] || [0, 0, 0];
       aoa.push([o[0], o[1], o[2], o[3], o[4], o[6], o[7], o[8], a[0], m[0], a[1], m[1], a[2], m[2]]); });
     saveXlsx(`Outlet_Detail_${ui.outN || 'NPP'}_${todayKey()}.xlsx`, [['Outlet', aoa, [10, 12, 30, 18, 12, 10, 10, 10, 14, 12, 14, 12, 14, 12]]], btn);
   }
   function exportOutlet(btn) {
-    const M = outletModel(ui.outSeg, ui.outTier); const GN = ['HS2', 'TS25', 'Other SKU'];
+    const M = outletModel([...ui.outSeg], ui.outTier); const GN = ['HS2', 'TS25', 'Other SKU'];
     const sumAoa = [['NPP', 'Khu vực', 'Nhóm SKU', 'MTD Số chia', 'MTD Phân bổ outlet', 'MTD Sale Out', 'MTD % đạt', 'MTD Còn lại', 'WTD Số chia', 'WTD Phân bổ outlet', 'WTD Sale Out', 'WTD % đạt', 'WTD Còn lại']];
     M.rows.forEach(r => sumAoa.push([r.n, r.area, GN[r.j], r.mR, r.mAl, r.mSo, isFinite(r.mPct) ? r.mPct : '', r.mRem, r.wR, r.wAl, r.wSo, isFinite(r.wPct) ? r.wPct : '', r.wRem]));
     const oAoa = [['NPP', 'Outlet ID', 'Tên outlet', 'Segment', 'Tier', 'L3M HS2', 'L3M TS25', 'L3M Other', 'MTD Phân bổ HS2', 'MTD Phân bổ TS25', 'MTD Phân bổ Other', 'MTD SO HS2', 'MTD SO TS25', 'MTD SO Other', 'WTD Phân bổ HS2', 'WTD Phân bổ TS25', 'WTD Phân bổ Other', 'WTD SO HS2', 'WTD SO TS25', 'WTD SO Other']];
@@ -1397,7 +1384,6 @@
     const aw = $('#aweek'); if (aw) aw.onchange = () => { ui.alW = aw.value; render(); }; const an = $('#al-npp'); if (an) an.onchange = () => { ui.alN = an.value; render(); };
     const tr = $('#trem'); if (tr) tr.onchange = () => { ui.trRem = tr.value; render(); };
     const tw = $('#tweek'); if (tw) tw.onchange = () => { ui.trW = tw.value; render(); };
-    const osd = $('#outseg-d'); if (osd) bindMulti(osd, 'outseg-cb', 'outSeg', 'outSegOpen', 'outseg-clear', 'segment', 2);
     const otr = $('#outtier'); if (otr) otr.onchange = () => { ui.outTier = otr.value; render(); };
     const on = $('#outn'); if (on) on.onchange = () => { ui.outN = on.value; render(); };
     const oq = $('#outq'); if (oq) oq.onchange = () => { ui.outQ = oq.value; render(); };
@@ -1419,8 +1405,7 @@
     const xo2 = $('#xl-outlet'); if (xo2) xo2.onclick = exportOutlets;
     const xa = $('#xl-alloc'); if (xa) xa.onclick = ev => allocExport && allocExport(ev);
     const xt2 = $('#xl-track'); if (xt2) xt2.onclick = ev => trackExport && trackExport(ev);
-    const bgg = $('#bg-g'); if (bgg) bgg.onchange = () => { ui.bgG = bgg.value; ui.bgS = []; render(); };
-    const bgs = $('#bg-s'); if (bgs) bindMulti(bgs, 'bg-sku', 'bgS', 'bgSOpen', 'bg-s-clear', 'SKU', 3);
+    const bgg = $('#bg-g'); if (bgg) bgg.onchange = () => { ui.bgG = bgg.value; ui.bgS = new Set(); render(); };
     const ra = $('#ref-apply'); if (ra) ra.onclick = () => { STATE.ref = { rows: readRefInputs(), at: 'draft' }; render(); };
     const rx2 = $('#ref-xl'); if (rx2) rx2.onclick = exportRef;
   }
