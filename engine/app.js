@@ -7,7 +7,7 @@
 
   let STATE = null; const ENC = window.ENC || { blobs: {} };
   let PUBLISHED = STATE; let previewing = false;
-  const ui = { trRem: 'all', alW: '', trSku: 'all', tab: 'overview', scope: 'all', area: 'all', npp: 'all', brand: 'all', bgf: 'all', unit: 'case', tMonth: '', open: new Set(), allocSku: 'all', alN: '', trW: '', trFrom: '', trTo: '', bgS: [], bgSOpen: false, outN: '', outSeg: '', outTier: '', outQ: '' };
+  const ui = { trRem: 'all', alW: '', trSku: 'all', tab: 'overview', scope: 'all', area: 'all', npp: 'all', brand: 'all', bgf: 'all', unit: 'case', tMonth: '', open: new Set(), allocSku: 'all', alN: '', trW: '', trFrom: '', trTo: '', bgS: [], bgSOpen: false, outN: '', outSeg: [], outSegOpen: false, outTier: '', outQ: '' };
   try { const s = JSON.parse(localStorage.getItem('npp-ui') || '{}'); if (s.tab) ui.tab = s.tab; if (s.unit) ui.unit = s.unit; if (s.brand) ui.brand = s.brand; } catch (e) {}
   const saveUi = () => { try { localStorage.setItem('npp-ui', JSON.stringify({ tab: ui.tab, unit: ui.unit, scope: ui.scope, brand: ui.brand })); } catch (e) {} };
 
@@ -1086,12 +1086,12 @@
   // Outlet Allocation: số chia NPP (Tổng allocation − CP/Ecom) tách theo HS2 / TS25 / Other SKU, chia xuống outlet theo tỷ lệ L3M.
   // MTD = các tuần đã bắt đầu đến hôm nay; WTD = tuần hiện tại. Sale Out theo ngày giao lấy từ cur.outDay (tính sẵn khi build).
   const normTxt = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
-  function outletModel(seg, tier) {
+  function outletModel(seg, tier) { seg = Array.isArray(seg) ? seg : (seg ? [seg] : []);
     const cur = STATE.cur || {}; const today = todayKey(); const AD = cur.allocDates || {};
     const A = (cur.alloc || []).filter(r => inScope(r[1]));
     const OLall = (cur.outl || []).filter(o => inScope(o[0]));
-    const OL = OLall.filter(o => (!seg || o[3] === seg) && (!tier || o[4] === tier));
-    const filt = !!(seg || tier); const inF = new Set(OL.map(o => o[0] + '|' + o[1]));
+    const OL = OLall.filter(o => (!seg.length || seg.includes(o[3])) && (!tier || o[4] === tier));
+    const filt = seg.length > 0 || !!tier; const inF = new Set(OL.map(o => o[0] + '|' + o[1]));
     const weeks = [...new Set(A.map(r => r[0]))].sort(wkSort);
     const curW = currentWeek(weeks); const cb = curW ? weekBounds(curW, AD) : { wStart: null, wEnd: null };
     const mtdWeeks = weeks.filter(w => { const b = weekBounds(w, AD); return b.wStart && b.wStart <= today; });
@@ -1135,7 +1135,7 @@
     const OL0 = (cur.outl || []).filter(o => inScope(o[0]));
     if (!A.length && !OL0.length) return '<div class="card empty">Chưa có dữ liệu Allocation hoặc Outlet Allocation cho phạm vi này.</div>';
     const segs = [...new Set(OL0.map(o => o[3]))].sort(), tiers = [...new Set(OL0.map(o => o[4]).filter(Boolean))].sort();
-    if (ui.outSeg && !segs.includes(ui.outSeg)) ui.outSeg = ''; if (ui.outTier && !tiers.includes(ui.outTier)) ui.outTier = '';
+    ui.outSeg = (ui.outSeg || []).filter(x => segs.includes(x)); if (ui.outTier && !tiers.includes(ui.outTier)) ui.outTier = '';
     const M = outletModel(ui.outSeg, ui.outTier); const GN = ['HS2', 'TS25', 'Other SKU'];
     const fdt = d => d ? d.slice(6, 8) + '/' + d.slice(4, 6) : '';
     const mLabel = `${fdt(M.mStart)} → ${fdt(M.lastSo || todayKey())}`;
@@ -1153,7 +1153,8 @@
     const oRows = outDetailRows(M);
     const oHtml = oRows.map(o => { const k = o[0] + '|' + o[1]; const a = M.mtShare[k] || [0, 0, 0]; const m = M.mtdSO[k] || [0, 0, 0];
       return `<tr><td>${esc(o[1])}</td><td>${esc(o[2])}</td><td>${esc(o[3])}</td><td>${esc(o[4])}</td>${[0, 1, 2].map(j => `<td>${fmtC(a[j])}</td><td>${fmtC(m[j])}</td>`).join('')}</tr>`; }).join('');
-    const segSel = `<div class="fld"><label for="outseg">Segment</label><select id="outseg"><option value="">Tất cả</option>${segs.map(x => `<option value="${esc(x)}" ${x === ui.outSeg ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></div>`;
+    const segLbl = ui.outSeg.length ? (ui.outSeg.length <= 2 ? ui.outSeg.join(', ') : ui.outSeg.length + ' segment') : 'Tất cả';
+    const segSel = `<div class="fld"><label>Segment</label><details class="msel" id="outseg-d"${ui.outSegOpen ? ' open' : ''}><summary>${esc(segLbl)}</summary><div class="msel-p"><div class="msel-a"><button type="button" class="btn" id="outseg-clear">Bỏ chọn</button></div>${segs.map(x => `<label class="msel-o"><input type="checkbox" class="outseg-cb" value="${esc(x)}"${ui.outSeg.includes(x) ? ' checked' : ''}> ${esc(x)}</label>`).join('')}</div></details></div>`;
     const tierSel = `<div class="fld"><label for="outtier">Tier</label><select id="outtier"><option value="">Tất cả</option>${tiers.map(x => `<option value="${esc(x)}" ${x === ui.outTier ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></div>`;
     const nppSel = `<div class="fld"><label for="outn">NPP</label><select id="outn">${npps.map(n => `<option value="${esc(n)}" ${n === ui.outN ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></div>`;
     const qIn = `<div class="fld"><label for="outq">Tìm Outlet ID / tên</label><input type="text" id="outq" value="${esc(ui.outQ || '')}" placeholder="Mã hoặc tên outlet" style="width:220px"></div>`;
@@ -1384,7 +1385,11 @@
     const aw = $('#aweek'); if (aw) aw.onchange = () => { ui.alW = aw.value; render(); }; const an = $('#al-npp'); if (an) an.onchange = () => { ui.alN = an.value; render(); };
     const tr = $('#trem'); if (tr) tr.onchange = () => { ui.trRem = tr.value; render(); };
     const tw = $('#tweek'); if (tw) tw.onchange = () => { ui.trW = tw.value; render(); };
-    const osg = $('#outseg'); if (osg) osg.onchange = () => { ui.outSeg = osg.value; render(); };
+    const osd = $('#outseg-d'); if (osd) {
+      osd.addEventListener('toggle', () => { ui.outSegOpen = osd.open; });
+      osd.querySelectorAll('.outseg-cb').forEach(cb => cb.onchange = () => { ui.outSeg = [...osd.querySelectorAll('.outseg-cb:checked')].map(x => x.value); ui.outSegOpen = true; render(); });
+      const osc = osd.querySelector('#outseg-clear'); if (osc) osc.onclick = () => { ui.outSeg = []; ui.outSegOpen = true; render(); };
+    }
     const otr = $('#outtier'); if (otr) otr.onchange = () => { ui.outTier = otr.value; render(); };
     const on = $('#outn'); if (on) on.onchange = () => { ui.outN = on.value; render(); };
     const oq = $('#outq'); if (oq) oq.onchange = () => { ui.outQ = oq.value; render(); };
