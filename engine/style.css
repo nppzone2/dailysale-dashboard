@@ -576,3 +576,11 @@ table.trk thead th{vertical-align:bottom}
 /* Outlet Allocation: nhóm cột MTD / WTD */
 .oh{text-align:center}
 .ob{border-left:2px solid var(--line)}
+
+/* Cố định 3 cột đầu (NPP, Khu vực, Nhóm SKU) khi cuộn ngang */
+.sticky3{--s1:84px;--s2:96px}
+.sticky3 th:nth-child(1),.sticky3 td:nth-child(1){left:0;width:var(--s1);min-width:var(--s1);max-width:var(--s1)}
+.sticky3 th:nth-child(2),.sticky3 td:nth-child(2){left:var(--s1);width:var(--s2);min-width:var(--s2);max-width:var(--s2)}
+.sticky3 thead tr:first-child th:nth-child(-n+3),.sticky3 tbody td:nth-child(-n+3){position:sticky;background:var(--surface);z-index:2}
+.sticky3 thead tr:first-child th:nth-child(3),.sticky3 tbody td:nth-child(3){left:calc(var(--s1) + var(--s2));box-shadow:2px 0 0 var(--line)}
+.sticky3 tbody tr.grp td:nth-child(-n+3){background:var(--surface-2)}
