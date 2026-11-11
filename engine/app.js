@@ -709,7 +709,7 @@
     const skuOpts = [...new Set(L.filter(r => (r.t || r.si || r.so) && (!ui.bgG || grp(r.sc) === ui.bgG)).map(r => r.sc))].sort((a, b) => GROUPS.indexOf(grp(a)) - GROUPS.indexOf(grp(b)) || bi0(a) - bi0(b) || a.localeCompare(b));
     ui.bgS = new Set([...ui.bgS].filter(x => skuOpts.includes(x))); const selS = [...ui.bgS]; // SKU chọn nhiều
     const bgFilter = `<div class="minif"><div class="fld"><label for="bg-g">Group</label><select id="bg-g"><option value="">Tất cả</option>${gList.map(g => `<option value="${esc(g)}"${ui.bgG === g ? ' selected' : ''}>${esc(g)}</option>`).join('')}</select></div>
-      ${msHtml('bgS', 'SKU', skuOpts.map(sc => [sc, sc + (item(sc).b ? ' · ' + item(sc).b : '')]))}`;
+      ${msHtml('bgS', 'SKU', skuOpts.map(sc => [sc, sc + (item(sc).b ? ' · ' + item(sc).b : '')]))}</div>`;
     const fRows = L.filter(r => (!ui.bgG || grp(r.sc) === ui.bgG) && (!selS.length || selS.includes(r.sc)));
     const fT = sumBy(fRows, r => conv(r.t, r.sc)), fSI = sumBy(fRows, r => conv(r.si, r.sc)), fSO = sumBy(fRows, r => conv(r.so, r.sc));
     // Pending (SO chờ giao) theo cùng bộ lọc Group / SKU của bảng
