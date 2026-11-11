@@ -1130,6 +1130,18 @@
     return M.OL.filter(o => o[0] === ui.outN && (!q || String(o[1]).includes(q) || normTxt(o[2]).includes(qn)))
       .sort((a, b) => (b[6] + b[7] + b[8]) - (a[6] + a[7] + a[8]));
   }
+  // Bộ lọc nhiều lựa chọn (details + checkbox): chọn thoải mái trong danh sách, chỉ áp dụng khi đóng (bấm tóm tắt hoặc bấm ra ngoài)
+  function bindMulti(det, cls, key, openKey, clearId, unit, max) {
+    const sum = det.querySelector('summary'); const pick = () => [...det.querySelectorAll('.' + cls + ':checked')].map(x => x.value);
+    const label = v => v.length ? (v.length <= max ? v.join(', ') : v.length + ' ' + unit) : 'Tất cả';
+    det.addEventListener('toggle', () => { ui[openKey] = det.open; if (!det.open) { ui[key] = pick(); render(); } });
+    det.querySelectorAll('.' + cls).forEach(cb => cb.onchange = () => { sum.textContent = label(pick()); });
+    const c = det.querySelector('#' + clearId); if (c) c.onclick = () => { det.querySelectorAll('.' + cls).forEach(x => { x.checked = false; }); sum.textContent = 'Tất cả'; };
+    window.__msOut = window.__msOut || {};
+    if (window.__msOut[det.id]) document.removeEventListener('pointerdown', window.__msOut[det.id], true);
+    const out = e => { if (det.open && !det.contains(e.target)) det.open = false; };
+    window.__msOut[det.id] = out; document.addEventListener('pointerdown', out, true);
+  }
   function viewOutlet() {
     const cur = STATE.cur || {}; const A = (cur.alloc || []).filter(r => inScope(r[1]));
     const OL0 = (cur.outl || []).filter(o => inScope(o[0]));
@@ -1385,11 +1397,7 @@
     const aw = $('#aweek'); if (aw) aw.onchange = () => { ui.alW = aw.value; render(); }; const an = $('#al-npp'); if (an) an.onchange = () => { ui.alN = an.value; render(); };
     const tr = $('#trem'); if (tr) tr.onchange = () => { ui.trRem = tr.value; render(); };
     const tw = $('#tweek'); if (tw) tw.onchange = () => { ui.trW = tw.value; render(); };
-    const osd = $('#outseg-d'); if (osd) {
-      osd.addEventListener('toggle', () => { ui.outSegOpen = osd.open; });
-      osd.querySelectorAll('.outseg-cb').forEach(cb => cb.onchange = () => { ui.outSeg = [...osd.querySelectorAll('.outseg-cb:checked')].map(x => x.value); ui.outSegOpen = true; render(); });
-      const osc = osd.querySelector('#outseg-clear'); if (osc) osc.onclick = () => { ui.outSeg = []; ui.outSegOpen = true; render(); };
-    }
+    const osd = $('#outseg-d'); if (osd) bindMulti(osd, 'outseg-cb', 'outSeg', 'outSegOpen', 'outseg-clear', 'segment', 2);
     const otr = $('#outtier'); if (otr) otr.onchange = () => { ui.outTier = otr.value; render(); };
     const on = $('#outn'); if (on) on.onchange = () => { ui.outN = on.value; render(); };
     const oq = $('#outq'); if (oq) oq.onchange = () => { ui.outQ = oq.value; render(); };
@@ -1412,11 +1420,7 @@
     const xa = $('#xl-alloc'); if (xa) xa.onclick = ev => allocExport && allocExport(ev);
     const xt2 = $('#xl-track'); if (xt2) xt2.onclick = ev => trackExport && trackExport(ev);
     const bgg = $('#bg-g'); if (bgg) bgg.onchange = () => { ui.bgG = bgg.value; ui.bgS = []; render(); };
-    const bgs = $('#bg-s'); if (bgs) {
-      bgs.addEventListener('toggle', () => { ui.bgSOpen = bgs.open; });
-      bgs.querySelectorAll('.bg-sku').forEach(cb => cb.onchange = () => { ui.bgS = [...bgs.querySelectorAll('.bg-sku:checked')].map(x => x.value); ui.bgSOpen = true; render(); });
-      const bgc = bgs.querySelector('#bg-s-clear'); if (bgc) bgc.onclick = () => { ui.bgS = []; ui.bgSOpen = true; render(); };
-    }
+    const bgs = $('#bg-s'); if (bgs) bindMulti(bgs, 'bg-sku', 'bgS', 'bgSOpen', 'bg-s-clear', 'SKU', 3);
     const ra = $('#ref-apply'); if (ra) ra.onclick = () => { STATE.ref = { rows: readRefInputs(), at: 'draft' }; render(); };
     const rx2 = $('#ref-xl'); if (rx2) rx2.onclick = exportRef;
   }
