@@ -1153,7 +1153,7 @@
       `<td class="ob">${fmtC(sumR(r => r.wR))}</td><td>${fmtC(wAlT)}</td><td>${fmtC(wSoT)}</td><td>${pc(wSoT / wAlT)}</td><td>${fmtC(wAlT - wSoT)}</td></tr>`;
     const oRows = outDetailRows(M);
     const oHtml = oRows.map(o => { const k = o[0] + '|' + o[1]; const a = M.mtShare[k] || [0, 0, 0]; const m = M.mtdSO[k] || [0, 0, 0];
-      return `<tr><td>${esc(o[1])}</td><td>${esc(o[2])}</td><td>${esc(o[3])}</td><td>${esc(o[4])}</td>${[0, 1, 2].map(j => `<td>${fmtC(a[j])}</td><td>${fmtC(m[j])}</td>`).join('')}</tr>`; }).join('');
+      return `<tr><td>${esc(o[1])}</td><td>${esc(o[2])}</td><td>${esc(o[3])}</td><td>${esc(o[4])}</td>${[0, 1, 2].map(j => `<td class="ob">${fmtC(a[j])}</td><td>${fmtC(m[j])}</td>`).join('')}</tr>`; }).join('');
     const segSel = msHtml('outSeg', 'Segment', segs.map(x => [x, x]));
     const tierSel = `<div class="fld"><label for="outtier">Tier</label><select id="outtier"><option value="">Tất cả</option>${tiers.map(x => `<option value="${esc(x)}" ${x === ui.outTier ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></div>`;
     const nppSel = `<div class="fld"><label for="outn">NPP</label><select id="outn">${npps.map(n => `<option value="${esc(n)}" ${n === ui.outN ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></div>`;
@@ -1168,7 +1168,7 @@
       </thead><tbody>${rowsHtml}${totHtml}</tbody></table></div>
     </div>
     <div class="card c12"><div class="card-h"><div><h2>Chi tiết outlet · ${esc(ui.outN || '—')}</h2><p class="sub">Phân bổ và Sale Out MTD theo từng outlet · ${oRows.length} outlet</p></div><div class="btns trk-btns">${nppSel}${qIn}<button class="btn xl-r" id="xl-outdet">Tải Excel</button></div></div>
-      <div class="tw"><table class="sticky1 trk"><thead><tr><th>Outlet ID</th><th>Tên outlet</th><th>Segment</th><th>Tier</th><th>Phân bổ HS2</th><th>MTD HS2</th><th>Phân bổ TS25</th><th>MTD TS25</th><th>Phân bổ Other</th><th>MTD Other</th></tr></thead><tbody>${oHtml || '<tr><td colspan="10">Không có outlet</td></tr>'}</tbody></table></div>
+      <div class="tw"><table class="sticky1 trk outdet"><thead><tr><th rowspan="2">Outlet ID</th><th rowspan="2">Tên outlet</th><th rowspan="2">Segment</th><th rowspan="2">Tier</th><th colspan="2" class="oh ob">HS2</th><th colspan="2" class="oh ob">TS25</th><th colspan="2" class="oh ob">Other SKU</th></tr><tr><th class="ob">Phân bổ</th><th>MTD</th><th class="ob">Phân bổ</th><th>MTD</th><th class="ob">Phân bổ</th><th>MTD</th></tr></thead><tbody>${oHtml || '<tr><td colspan="10">Không có outlet</td></tr>'}</tbody></table></div>
     </div>`;
   }
   function exportDetail(btn) {
