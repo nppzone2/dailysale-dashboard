@@ -1007,6 +1007,12 @@
     const boList = [...BO].sort((a, b) => nppCmp(a[0], b[0]) || String(a[1]).localeCompare(String(b[1])));
     const nppRows = Object.entries(byN).sort((a, b) => nppCmp(a[0], b[0]));
     const list = [...P].sort((a, b) => nppCmp(a[0], b[0]) || String(a[1]).localeCompare(String(b[1])));
+    // Danh sách đơn: xen dòng Tổng theo từng NPP (Case, HL, số đơn)
+    const orderRow = o => `<tr><td>${esc(o[0])}</td><td>${esc(o[1])}</td><td>${esc(o[2])}</td><td>${esc(o[5])}</td><td>${esc(o[6])}</td><td><b>${esc(o[3])}</b></td><td>${fmtC(o[4])}</td><td>${nf1.format(o[4] * (item(o[3]).hl || 0))}</td></tr>`;
+    const withNppTotal = arr => { let out = ''; let i = 0; while (i < arr.length) { const c = arr[i][0]; const ords = new Set(); let cs = 0, hs = 0;
+        while (i < arr.length && arr[i][0] === c) { const o = arr[i]; out += orderRow(o); cs += o[4]; hs += o[4] * (item(o[3]).hl || 0); ords.add(o[1]); i++; }
+        out += `<tr class="tot"><td>${esc(c)} · Tổng</td><td>${ords.size} đơn</td><td></td><td></td><td></td><td></td><td>${fmtC(cs)}</td><td>${nf1.format(hs)}</td></tr>`; }
+      return out; };
     return `
     <section class="lead"><div><button class="linkback" data-go="progress">← Sale In-Out MTD</button><div class="eyebrow">SO Pending · chờ giao hàng</div><h1>${esc(scopeLabel())}</h1>
       <p>Online Order trừ ${nBo} đơn Backorder. Đơn Delivery: ${nInv} đơn đã có trong SO Invoice (loại), ${nDel} đơn chưa có (cộng vào Sale In). Pending là các đơn Order Approve / Schedule chưa giao.</p></div>
@@ -1022,9 +1028,9 @@
       <div class="card ${nppRows.length > 1 ? 'c6' : 'c12'}"><h2>Backorder theo NPP</h2><p class="sub">Các NPP đang có đơn Backorder · bấm để xem từng NPP</p>${bnRows.length ? `<div class="tw"><table class="pl"><thead><tr><th>Khu vực</th><th>NPP</th><th>Case</th><th>HL</th><th>Số đơn</th></tr></thead><tbody>${bnRows.map(([c, x]) => `<tr class="click" data-npp="${esc(c)}"><td style="text-align:left">${esc(areaOf(c))}</td><td style="text-align:left"><b>${esc(c)}</b></td><td>${fmtC(x.c)}</td><td>${nf1.format(x.h)}</td><td>${x.ord.size}</td></tr>`).join('')}<tr class="tot"><td colspan="2">Tổng</td><td>${fmtC(bc)}</td><td>${nf1.format(bh)}</td><td>${new Set(BO.map(o => o[1])).size}</td></tr></tbody></table></div>` : '<p class="note">Không có đơn Backorder trong phạm vi này.</p>'}</div>
       <div class="card c12"><h2>Backorder theo SKU</h2><p class="sub">Cộng vào SO Pending ở thẻ Landing</p>${brows.length ? `<div class="tw"><table class="sticky1 tgt pl"><thead><tr><th>BrandFamily</th><th>SKU</th><th>Case</th><th>HL</th><th>Số đơn</th></tr></thead><tbody>${brows.map(r => `<tr class="sku"><td>${esc(item(r.sc).b || '—')}</td><td class="skuc">${esc(r.sc)}</td><td>${fmtC(r.c)}</td><td>${nf1.format(r.h)}</td><td>${r.ord.size}</td></tr>`).join('')}<tr class="tot"><td colspan="2">Tổng</td><td>${fmtC(bc)}</td><td>${nf1.format(bh)}</td><td>${new Set(BO.map(o => o[1])).size}</td></tr></tbody></table></div>` : '<p class="note">Không có đơn Backorder trong phạm vi này.</p>'}</div>
       ${BO.length ? `<div class="card c12"><h2>Danh sách Backorder</h2><p class="sub">Ngày đặt · ngày hẹn giao · trạng thái</p><div class="tw"><table class="pl"><thead><tr><th>NPP</th><th>Số đơn</th><th>Trạng thái</th><th>Ngày đặt</th><th>Hẹn giao</th><th>SKU</th><th>Case</th><th>HL</th></tr></thead><tbody>
-        ${boList.map(o => `<tr><td>${esc(o[0])}</td><td>${esc(o[1])}</td><td>${esc(o[2])}</td><td>${esc(o[5])}</td><td>${esc(o[6])}</td><td><b>${esc(o[3])}</b></td><td>${fmtC(o[4])}</td><td>${nf1.format(o[4] * (item(o[3]).hl || 0))}</td></tr>`).join('')}</tbody></table></div></div>` : ''}
+        ${withNppTotal(boList)}</tbody></table></div></div>` : ''}
       ${P.length ? `<div class="card c12"><h2>Danh sách đơn</h2><p class="sub">Ngày đặt · ngày hẹn giao · trạng thái</p><div class="tw"><table class="pl"><thead><tr><th>NPP</th><th>Số đơn</th><th>Trạng thái</th><th>Ngày đặt</th><th>Hẹn giao</th><th>SKU</th><th>Case</th><th>HL</th></tr></thead><tbody>
-        ${list.map(o => `<tr><td>${esc(o[0])}</td><td>${esc(o[1])}</td><td>${esc(o[2])}</td><td>${esc(o[5])}</td><td>${esc(o[6])}</td><td><b>${esc(o[3])}</b></td><td>${fmtC(o[4])}</td><td>${nf1.format(o[4] * (item(o[3]).hl || 0))}</td></tr>`).join('')}</tbody></table></div></div>` : ''}
+        ${withNppTotal(list)}</tbody></table></div></div>` : ''}
     </div>
     ${conclusion([
       `Đang chờ giao <b>${fmtC(tc)} case</b> (${nf1.format(th)} HL) từ ${new Set(P.map(o => o[1])).size} đơn.`,
