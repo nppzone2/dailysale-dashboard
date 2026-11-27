@@ -418,7 +418,7 @@
     const RF = refMap(); const zero = { t: 0, si: 0, pd: 0, th: 0, sih: 0, pdh: 0 };
     const row = (c, g) => { const o = (by[c] || {})[g] || zero; const rc = o.t - o.si - o.pd, rh = o.th - o.sih - o.pdh;
       const rf = RF[c]; const on = !rf ? 0 : g === 'Group AA' ? rf.aa : g === 'Group BB' ? rf.bb : rf.aa + rf.bb;
-      const xe = rf && rf.hx ? Math.ceil((Math.max(0, rh) + on) / rf.hx - 1e-9) : null; // số xe làm tròn lên số nguyên
+      const xe = rf && rf.hx ? Math.max(0, Math.ceil((rh + on) / rf.hx - 1e-9)) : null; // số xe làm tròn lên số nguyên
       return { ...o, rc, rh, on, xe, hasRef: !!(rf && rf.hx) }; };
     const npps = Object.keys(by).filter(c => by[c]['Tổng'] && (by[c]['Tổng'].t || by[c]['Tổng'].si || by[c]['Tổng'].pd)).sort(nppCmp);
     const add = rows => { const o = { t: 0, si: 0, pd: 0, th: 0, sih: 0, pdh: 0, rc: 0, rh: 0, on: 0, xe: null };
