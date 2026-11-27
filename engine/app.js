@@ -436,22 +436,22 @@
     // Dòng Khác chỉ hiện với NPP có SKU ngoài AA/BB (Larue, Bivina, chưa có BrandGroup)
     const lgFor = c => { const k = row(c, 'Khác'); return (k.t || k.si || k.pd) ? ['Group AA', 'Group BB', 'Khác', 'Tổng'] : LG; };
     if (!M.m) return '<div class="card empty">Chưa có dữ liệu tháng hiện hành.</div>';
-    const remC = v => v >= 0 ? fmtC(v) : `<span class="ov">Vượt ${fmtC(-v)}</span>`;
+    const remC = v => v >= 0 ? fmtC(v) : `<span class="ov"><span class="ovw">Vượt </span>${fmtC(-v)}</span>`;
     const boL = backorderOrders(); const boC = sumBy(boL, o => o[4]), boH = sumBy(boL, o => o[4] * (item(o[3]).hl || 0));
-    const remH = v => v >= 0 ? nf2.format(v) : `<span class="ov">Vượt ${nf2.format(-v)}</span>`;
+    const remH = v => v >= 0 ? nf2.format(v) : `<span class="ov"><span class="ovw">Vượt </span>${nf2.format(-v)}</span>`;
     const hlZ = v => v >= 0 ? `${nf2.format(v)} HL` : `Vượt ${nf2.format(-v)} HL`; // thẻ Còn lại cần giao: hiện số vượt của zone
     const xeF = v => v == null ? '<span class="note">Chưa có</span>' : `<b>${fmtC(v)}</b>`;
     const cells = o => `<td class="gs">${fmtC(o.t)}</td><td>${fmtC(o.si)}</td><td class="pdc">${fmtC(o.pd)}</td><td>${o.t ? pctT((o.si + o.pd) / o.t, M.tgSi) : '—'}</td><td class="rem">${remC(o.rc)}</td><td class="gs">${remH(o.rh)}</td><td>${o.on ? nf2.format(o.on) : '<span class="note">–</span>'}</td><td class="xe">${xeF(o.xe)}</td>`;
     let body = ''; const totN = [];
     byArea(npps).forEach(([a, cs]) => { const ak = 'ld:a:' + a, op = isOpen(ak, true);
       const at = add(cs.map(c => row(c, 'Tổng')));
-      body += `<tr class="grp area click${op ? ' open' : ''}" data-fold="${esc(ak)}"><td><span class="caret">▸</span> ${esc(a)}</td><td>${cs.length} NPP</td><td>Tổng</td>${cells(at)}</tr>`;
+      body += `<tr class="grp area click${op ? ' open' : ''}" data-fold="${esc(ak)}"><td><span class="caret">▸</span> ${esc(a)}</td><td><span class="anm"><span class="caret">▸</span> ${esc(a)}</span><span class="ann">${cs.length} NPP</span></td><td>Tổng</td>${cells(at)}</tr>`;
       cs.forEach(c => { totN.push([c, row(c, 'Tổng')]); if (!op) return; const nk = 'ld:n:' + c, nOp = isOpen(nk, true);
         const nm = `<span class="caret fold${nOp ? ' on' : ''}" data-fold="${esc(nk)}" role="button" aria-label="Mở/thu gọn ${esc(c)}">▸</span> <span class="click-npp" data-npp="${esc(c)}">${esc(c)}</span>`;
         (nOp ? lgFor(c) : ['Tổng']).forEach((g, i) => { const o = row(c, g);
           body += `<tr class="${g === 'Tổng' ? 'ltot' : 'lsub'}${i === 0 ? ' first' : ''}"><td></td><td>${i === 0 ? nm : ''}</td><td>${g === 'Tổng' ? '<b>Tổng</b>' : esc(g.replace('Group ', ''))}</td>${cells(o)}</tr>`; }); }); });
     const T = add(totN.map(x => x[1]));
-    body += `<tr class="tot"><td>Tổng</td><td></td><td></td>${cells(T)}</tr>`;
+    body += `<tr class="tot"><td>Tổng</td><td><span class="anm">Tổng</span></td><td></td>${cells(T)}</tr>`;
     const gT = g => add(npps.map(c => row(c, g)));
     const AA = gT('Group AA'), BB = gT('Group BB');
     const missing = npps.filter(c => !row(c, 'Tổng').hasRef);

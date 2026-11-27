@@ -589,18 +589,34 @@ table.trk thead th{vertical-align:bottom}
 .sticky3 thead th{white-space:normal;line-height:1.3;vertical-align:bottom;padding-top:8px;padding-bottom:8px}
 .sticky3 .oh-d{display:block;font-weight:500;font-size:11px;color:var(--ink-3,#6b7a72);letter-spacing:0;text-transform:none;margin-top:2px}
 
-/* Landing · điện thoại: bảng vừa khung hình, không kéo ngang (cột Pending đã nằm trong % (SI + Pending)) */
-@media (max-width:640px){
-  .lnd{width:100%}
-  .lnd th,.lnd td{padding:6px 3px;font-size:10.5px;white-space:normal;overflow-wrap:anywhere}
-  .lnd th{font-size:8.5px;letter-spacing:0}
+/* Landing + danh sách đơn · máy tính bảng/điện thoại: bảng co vừa khung, không kéo ngang.
+   Cột Pending ẩn ở Landing (đã nằm trong % (SI + Pending)). Hai mức: ≤980px và ≤520px. */
+@media (max-width:980px){
+  .lnd th,.lnd td,table.pl th,table.pl td{padding:6px 4px;font-size:11.5px;white-space:normal}
+  .lnd th,table.pl th{font-size:9.5px;letter-spacing:.02em;line-height:1.25;vertical-align:bottom}
   .lnd td.pdc,.lnd th.pdc{display:none}
-  .lnd .caret{font-size:9px}
+  .lnd td .ov,.lnd td .hi,.lnd td .lo{padding-inline:4px}
 }
-
-/* Trang Pending/Backorder · điện thoại: bảng danh sách vừa khung, không kéo ngang */
-@media (max-width:640px){
-  table.pl th,table.pl td{padding:6px 3px;font-size:10.5px;white-space:normal;overflow-wrap:anywhere}
-  table.pl th{font-size:8.5px;letter-spacing:0}
+.lnd .anm{display:none}
+@media (max-width:980px){
+  .lnd.ag tr.area td{font-size:12px;padding-block:8px}
 }
-
+@media (max-width:600px){
+  .lnd .ovw{display:none}.lnd .ov::before{content:"+"}
+  /* Điện thoại: chữ "Vượt" thu thành dấu +, bỏ cột Khu vực, tên khu vực hiện ở cột NPP của dòng khu vực */
+  .lnd th:first-child,.lnd td:first-child{display:none}
+  .lnd .anm{display:inline}.lnd .ann{display:none}
+  .lnd.ag tr.area td{font-size:10.5px;padding-block:7px}
+  .lnd.ag td:nth-child(2){white-space:nowrap}
+  .lnd th,.lnd td,table.pl th,table.pl td{padding:5px 2px;font-size:10px}
+  .lnd th,table.pl th{font-size:8px;letter-spacing:0}
+  .lnd td .ov,.lnd td .hi,.lnd td .lo{padding-inline:2px}
+  .lnd .caret{font-size:8px}
+  .lnd td .ov,.lnd td .hi,.lnd td .lo{white-space:nowrap}
+}
+/* Điện thoại hẹp (≤480px): ẩn Target và Sale In, giữ % (SI + Pending), Còn lại, Ontop, số xe để bảng vừa khung */
+@media (max-width:480px){
+  .lnd th:nth-child(4),.lnd td:nth-child(4),.lnd th:nth-child(5),.lnd td:nth-child(5){display:none}
+  .lnd td:nth-child(7){border-left:2px solid var(--line)}
+  .card:has(> .tw > .lnd),.card:has(> .tw > table.pl){padding-inline:8px}
+}
