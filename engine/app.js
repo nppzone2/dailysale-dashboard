@@ -1012,8 +1012,7 @@
       <p>Online Order trừ ${nBo} đơn Backorder. Đơn Delivery: ${nInv} đơn đã có trong SO Invoice (loại), ${nDel} đơn chưa có (cộng vào Sale In). Pending là các đơn Order Approve / Schedule chưa giao.</p></div>
       <button class="btn" id="xl-pending">Tải Excel Pending</button></section>
     <div class="grid">
-      <div class="card c3 kpi"><div class="kpi-l">Pending (Case)</div><div class="kpi-v">${fmtC(tc)}<small>Case</small></div></div>
-      <div class="card c3 kpi"><div class="kpi-l">Pending (HL)</div><div class="kpi-v">${nf1.format(th)}<small>HL</small></div></div>
+      <div class="card c3 kpi"><div class="kpi-l">Pending</div><div class="kpi-v">${fmtC(tc)}<small>Case</small></div><div class="kpi-f">${nf1.format(th)} HL</div></div>
       <div class="card c3 kpi"><div class="kpi-l">Số đơn</div><div class="kpi-v">${new Set(P.map(o => o[1])).size}</div><div class="kpi-f">${Object.keys(byN).length} NPP</div></div>
       <div class="card c3 kpi"><div class="kpi-l">Số SKU</div><div class="kpi-v">${rows.length}</div></div>
       <div class="card c3 kpi"><div class="kpi-l">Backorder (Case)</div><div class="kpi-v">${fmtC(bc)}<small>Case</small></div><div class="kpi-f">${nf1.format(bh)} HL · ${new Set(BO.map(o => o[1])).size} đơn</div></div>
