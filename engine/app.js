@@ -410,6 +410,12 @@
   const LG = ['Group AA', 'Group BB', 'Tổng'];
   const nf2 = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 1, minimumFractionDigits: 1 });
   function refMap() { const m = {}; ((STATE.ref || {}).rows || []).forEach(([c, aa, bb, hx]) => { if (typeof aa === 'string') return; m[c] = { aa: +aa || 0, bb: +bb || 0, hx: +hx || 0 }; }); return m; }
+  // Số xe theo loại xe của từng NPP (HL tối đa / tối thiểu mỗi chuyến). Mặc định xe 16T.
+  const TRUCK = { P444: { max: 134, min: 72 }, P450: { max: 103, min: 55 } };
+  const TRUCK_DEF = { max: 144, min: 77 };
+  // Tải tối đa mỗi xe làm chuẩn; phần lẻ dưới tải tối thiểu làm tròn xuống (không tính thêm xe)
+  function truckCount(hl, c) { if (!(hl > 0)) return 0; const t = TRUCK[c] || TRUCK_DEF;
+    const k = Math.floor(hl / t.max + 1e-9); const r = hl - k * t.max; return k + (r >= t.min - 1e-9 ? 1 : 0); }
   function landingModel() {
     const M = curModel(); const P = pendingOrders(); const by = {};
     const R = (c, g) => { const n = by[c] || (by[c] = {}); return n[g] || (n[g] = { t: 0, si: 0, pd: 0, th: 0, sih: 0, pdh: 0 }); };
@@ -418,8 +424,8 @@
     const RF = refMap(); const zero = { t: 0, si: 0, pd: 0, th: 0, sih: 0, pdh: 0 };
     const row = (c, g) => { const o = (by[c] || {})[g] || zero; const rc = o.t - o.si - o.pd, rh = o.th - o.sih - o.pdh;
       const rf = RF[c]; const on = !rf ? 0 : g === 'Group AA' ? rf.aa : g === 'Group BB' ? rf.bb : rf.aa + rf.bb;
-      const xe = rf && rf.hx ? Math.max(0, Math.ceil((rh + on) / rf.hx - 1e-9)) : null; // số xe làm tròn lên số nguyên
-      return { ...o, rc, rh, on, xe, hasRef: !!(rf && rf.hx) }; };
+      const xe = truckCount(rh + on, c); // số xe làm tròn lên số nguyên
+      return { ...o, rc, rh, on, xe, hasRef: true }; };
     const npps = Object.keys(by).filter(c => by[c]['Tổng'] && (by[c]['Tổng'].t || by[c]['Tổng'].si || by[c]['Tổng'].pd)).sort(nppCmp);
     const add = rows => { const o = { t: 0, si: 0, pd: 0, th: 0, sih: 0, pdh: 0, rc: 0, rh: 0, on: 0, xe: null };
       rows.forEach(x => { ['t', 'si', 'pd', 'th', 'sih', 'pdh', 'rc', 'rh', 'on'].forEach(k => o[k] += x[k]); if (x.xe != null) o.xe = (o.xe || 0) + x.xe; }); return o; };
@@ -450,7 +456,7 @@
     const sk = !ROLE || ROLE.type !== 'admin' ? '' : `<button class="btn" data-go="ref">Tham chiếu xe</button>`;
     return `
     <section class="lead"><div><div class="eyebrow">Tổng quan · ${fM(M.m)} · cập nhật đến ${fD(M.lastSi)}</div><h1>${esc(scopeLabel())}</h1>
-      <p>Còn lại = Target − Sale In − Pending. Số xe còn lại = (Còn lại HL + Ontop HL) ÷ HL của 1 xe.</p></div>
+      <p>Còn lại = Target − Sale In − Pending. Số xe còn lại = (Còn lại HL + Ontop HL) chia theo tải xe: 16T tối đa 144 HL, P444 14T 134 HL, P450 10T 103 HL; phần lẻ dưới tải tối thiểu làm tròn xuống.</p></div>
       <div class="btns">${sk}<button class="btn" id="xl-landing">Tải Excel</button></div></section>
     <div class="grid">
       <div class="card c3 kpi"><div class="kpi-l">Target tháng</div><div class="kpi-v">${fmtC(T.t)}<small>Case</small></div><div class="kpi-f">${nf2.format(T.th)} HL</div></div>
@@ -478,7 +484,7 @@
     const title = `Distributor Sales Performance · Tổng quan ${fM(M.m)}`;
     put([title], [st({ bold: true, color: C.white, fill: C.band, h: 'left', border: false })], 30); merges.push([0, 0, N - 1]);
     put([`RTC - Future Fit · HCM Zone 2 · ${scopeLabel()} · cập nhật đến ${fD(M.lastSi)} · time gone ${pct(M.tgSi)}`], [st({ color: 'B9D3C2', fill: C.band, h: 'left', border: false })], 20); merges.push([1, 0, N - 1]);
-    put(['Còn lại = Target − Sale In − Pending · % = (Sale In + Pending) ÷ Target, xanh khi ≥ time gone · Số xe = (Còn lại HL + Ontop HL) ÷ HL của 1 xe, làm tròn lên'], [st({ color: C.muted, h: 'left', border: false })], 18); merges.push([2, 0, N - 1]);
+    put(['Còn lại = Target − Sale In − Pending · % = (Sale In + Pending) ÷ Target, xanh khi ≥ time gone · Số xe = (Còn lại HL + Ontop HL) theo tải xe (16T 144 HL; P444 14T 134 HL; P450 10T 103 HL), phần lẻ dưới tải tối thiểu làm tròn xuống'], [st({ color: C.muted, h: 'left', border: false })], 18); merges.push([2, 0, N - 1]);
     put([], [], 8);
     const hr = put(H, H.map((_, k) => st({ bold: true, color: C.muted, fill: C.soft, h: k < 3 ? 'left' : 'center', wrap: true })), 30);
     const line = (a, n, g, o, kind) => {
@@ -606,7 +612,7 @@
     const at = (STATE.ref || {}).at;
     return `
     <section class="lead"><div><div class="eyebrow">Tham chiếu xe · chỉ Admin</div><h1>Ontop HL và HL của 1 xe</h1>
-      <p>Dùng để tính cột Ontop HL và Số xe còn lại ở tab Tổng quan.</p></div>
+      <p>Dùng để tính cột Ontop HL ở tab Tổng quan. Số xe còn lại dùng tải xe theo NPP, không dùng cột HL của 1 xe.</p></div>
       <div class="btns"><button class="btn" id="ref-apply">Áp dụng xem thử</button><button class="btn primary" id="ref-xl">Tải file để upload</button></div></section>
     ${at === 'draft' ? '<div class="warnbox">Đang xem thử số vừa nhập, chưa lưu. Bấm <b>Tải file để upload</b> rồi tải file lên thư mục <b>input/</b> trên GitHub để lưu cho mọi tài khoản.</div>' : ''}
     <div class="grid"><div class="card c12"><div class="card-h"><div><h2>Bảng tham chiếu theo NPP</h2><p class="sub">${at === 'draft' ? 'Đang xem thử' : at ? 'Cập nhật ' + esc(fTs(at)) : 'Chưa có bảng tham chiếu'} · đơn vị HL</p></div></div>
