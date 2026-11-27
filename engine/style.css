@@ -597,3 +597,10 @@ table.trk thead th{vertical-align:bottom}
   .lnd td.pdc,.lnd th.pdc{display:none}
   .lnd .caret{font-size:9px}
 }
+
+/* Trang Pending/Backorder · điện thoại: bảng danh sách vừa khung, không kéo ngang */
+@media (max-width:640px){
+  table.pl th,table.pl td{padding:6px 3px;font-size:10.5px;white-space:normal;overflow-wrap:anywhere}
+  table.pl th{font-size:8.5px;letter-spacing:0}
+}
+
