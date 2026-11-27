@@ -5,7 +5,7 @@ const KINDS = {
   target:  { label: 'Target Current Month',     need: ['Ref', 'Alpha_Name', 'Unit'] },
   hist2:   { label: 'Target Total (lịch sử, dạng dài Sales_Target)', need: ['Sales_Target', ['Calendar_month', 'calendar_month'], 'Distributor_Name'] },
   sales:   { label: 'Sale In/Out theo tháng (Case, dạng dài)', need: ['Customer_Name', 'TypeName', 'Calendar_Month', 'ValueFormat'] },
-  si:      { label: 'SO Invoice (Sale In)',     need: ['InvoiceNumber', 'UOM_Invoice', 'Date_ID'] },
+  si:      { label: 'SO Invoice (Sale In)',     need: ['InvoiceNumber', ['UOM_Invoice', 'Sales_Volume'], 'Date_ID'] },
   so:      { label: 'SaleOut by Seller',        need: ['Seller_Name', 'Outlet_ID', 'UOM'] },
   alloc:   { label: 'Allocation Current Month', need: ['WEEK', 'Alpha_Name', 'Allocation'] },
   outl:    { label: 'Outlet Allocation (danh sách outlet + L3M)', need: ['OutletID', 'Supplier Name', 'HS2 (L3M)', 'TS25 (L3M)', 'Other SKU (L3M)'] },
@@ -135,13 +135,17 @@ function applyParsed(state, p, opts = {}) {
     // Nhận diện đơn vị UOM_Invoice: file có thể xuất theo Case hoặc theo HL.
     // Theo HL khi phần lớn giá trị là số lẻ và chia cho hệ số HL của SKU ra số Case chẵn.
     const hlOf = sc => { const it = state.items[cleanStr(sc)]; return it && it.hl ? it.hl : 0; };
-    const vals = p.rows.map(r => [num(g(r, 'UOM_Invoice')), hlOf(g(r, 'ShortCode'))]).filter(([v]) => v);
+    // Từ file SO Invoice Amount: Sales_Volume là số Case; dòng Sales_Amount = 0 là hàng Gratis, không tính vào Sale In.
+    const qcol = has('UOM_Invoice') ? 'UOM_Invoice' : 'Sales_Volume';
+    const paid = p.rows.filter(r => !(has('Sales_Amount') && num(g(r, 'Sales_Amount')) <= 0));
+    const gratisN = p.rows.length - paid.length;
+    const vals = paid.map(r => [num(g(r, qcol)), hlOf(g(r, 'ShortCode'))]).filter(([v]) => v);
     const nonInt = vals.filter(([v]) => Math.abs(v - Math.round(v)) > 1e-6).length;
     const fitHl = vals.filter(([v, h]) => h && Math.abs(v / h - Math.round(v / h)) < 0.02).length;
     const isHl = vals.length > 0 && nonInt / vals.length > 0.5 && fitHl / vals.length > 0.8;
     const noHl = new Set();
-    const qtyOf = r => { const v = num(g(r, 'UOM_Invoice')); if (!isHl) return v; const h = hlOf(g(r, 'ShortCode')); if (!h) { noHl.add(cleanStr(g(r, 'ShortCode'))); return 0; } return Math.round(v / h * 1000) / 1000; };
-    p.rows.forEach(r => {
+    const qtyOf = r => { const v = num(g(r, qcol)); if (!isHl) return v; const h = hlOf(g(r, 'ShortCode')); if (!h) { noHl.add(cleanStr(g(r, 'ShortCode'))); return 0; } return Math.round(v / h * 1000) / 1000; };
+    paid.forEach(r => {
       const d = cleanStr(g(r, 'Date_ID')).replace(/\D/g, '').slice(0, 8); const sc = cleanStr(g(r, 'ShortCode'));
       if (d.length !== 8 || !sc) return;
       if (d.slice(0, 6) > maxM) maxM = d.slice(0, 6);
@@ -169,7 +173,7 @@ function applyParsed(state, p, opts = {}) {
     state.cur.si = out; state.cur.inv = invOut;
     state.cur.lines = lines.filter(l => l[0].slice(0, 6) === state.cur.month).sort((a, b) => (a[0] + a[1] + a[2]).localeCompare(b[0] + b[1] + b[2])); state.cur.ship = ship;
     const days = Object.keys(out).sort();
-    msg.note = (days.length ? ('Ngày ' + fmtDate(days[0]) + ' → ' + fmtDate(days[days.length - 1])) : 'Không có dòng thuộc tháng hiện hành') + (isHl ? ' · UOM_Invoice theo HL, đã quy đổi sang Case' : ' · UOM_Invoice theo Case') + (noHl.size ? ' · thiếu hệ số HL: ' + [...noHl].join(', ') : '');
+    msg.note = (days.length ? ('Ngày ' + fmtDate(days[0]) + ' → ' + fmtDate(days[days.length - 1])) : 'Không có dòng thuộc tháng hiện hành') + (isHl ? ' · ' + qcol + ' theo HL, đã quy đổi sang Case' : ' · ' + qcol + ' theo Case') + (gratisN ? ' · bỏ qua ' + gratisN + ' dòng Gratis (Sales Amount = 0)' : '') + (noHl.size ? ' · thiếu hệ số HL: ' + [...noHl].join(', ') : '');
   }
 
   if (p.kind === 'so') {
