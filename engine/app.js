@@ -423,7 +423,7 @@
     P.forEach(o => { const h = item(o[3]).hl || 0; [grp(o[3]), 'Tổng'].forEach(g => { const x = R(o[0], g); x.pd += o[4]; x.pdh += o[4] * h; }); });
     const RF = refMap(); const zero = { t: 0, si: 0, pd: 0, th: 0, sih: 0, pdh: 0 };
     const row = (c, g) => { const o = (by[c] || {})[g] || zero; const rc = o.t - o.si - o.pd, rh = o.th - o.sih - o.pdh;
-      const rf = RF[c]; const on = !rf ? 0 : g === 'Group AA' ? rf.aa : g === 'Group BB' ? rf.bb : rf.aa + rf.bb;
+      const rf = RF[c]; const on = !rf ? 0 : g === 'Group AA' ? rf.aa : g === 'Group BB' ? rf.bb : g === 'Khác' ? 0 : rf.aa + rf.bb;
       const xe = truckCount(rh + on, c); // số xe làm tròn lên số nguyên
       return { ...o, rc, rh, on, xe, hasRef: true }; };
     const npps = Object.keys(by).filter(c => by[c]['Tổng'] && (by[c]['Tổng'].t || by[c]['Tổng'].si || by[c]['Tổng'].pd)).sort(nppCmp);
@@ -433,6 +433,8 @@
   }
   function viewLanding() {
     const L = landingModel(); const { M, npps, row, add } = L;
+    // Dòng Khác chỉ hiện với NPP có SKU ngoài AA/BB (Larue, Bivina, chưa có BrandGroup)
+    const lgFor = c => { const k = row(c, 'Khác'); return (k.t || k.si || k.pd) ? ['Group AA', 'Group BB', 'Khác', 'Tổng'] : LG; };
     if (!M.m) return '<div class="card empty">Chưa có dữ liệu tháng hiện hành.</div>';
     const remC = v => v >= 0 ? fmtC(v) : `<span class="ov">Vượt ${fmtC(-v)}</span>`;
     const boL = backorderOrders(); const boC = sumBy(boL, o => o[4]), boH = sumBy(boL, o => o[4] * (item(o[3]).hl || 0));
@@ -445,7 +447,7 @@
       body += `<tr class="grp area click${op ? ' open' : ''}" data-fold="${esc(ak)}"><td><span class="caret">▸</span> ${esc(a)}</td><td>${cs.length} NPP</td><td>Tổng</td>${cells(at)}</tr>`;
       cs.forEach(c => { totN.push([c, row(c, 'Tổng')]); if (!op) return; const nk = 'ld:n:' + c, nOp = isOpen(nk, true);
         const nm = `<span class="caret fold${nOp ? ' on' : ''}" data-fold="${esc(nk)}" role="button" aria-label="Mở/thu gọn ${esc(c)}">▸</span> <span class="click-npp" data-npp="${esc(c)}">${esc(c)}</span>`;
-        (nOp ? LG : ['Tổng']).forEach((g, i) => { const o = row(c, g);
+        (nOp ? lgFor(c) : ['Tổng']).forEach((g, i) => { const o = row(c, g);
           body += `<tr class="${g === 'Tổng' ? 'ltot' : 'lsub'}${i === 0 ? ' first' : ''}"><td></td><td>${i === 0 ? nm : ''}</td><td>${g === 'Tổng' ? '<b>Tổng</b>' : esc(g.replace('Group ', ''))}</td>${cells(o)}</tr>`; }); }); });
     const T = add(totN.map(x => x[1]));
     body += `<tr class="tot"><td>Tổng</td><td></td><td></td>${cells(T)}</tr>`;
